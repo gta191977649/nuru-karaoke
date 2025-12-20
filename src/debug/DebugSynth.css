@@ -1,0 +1,229 @@
+.debugSynth {
+  width: min(760px, 100%);
+  text-align: left;
+}
+
+.debugSynth h1 {
+  margin: 0 0 0.5rem;
+}
+
+.debugSynth__status {
+  margin: 0 0 1rem;
+  opacity: 0.9;
+}
+
+.debugSynth__panel {
+  display: grid;
+  gap: 1rem;
+  padding: 1rem;
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  border-radius: 12px;
+}
+
+.debugSynth__field {
+  display: grid;
+  gap: 0.5rem;
+}
+
+.debugSynth__field span {
+  font-weight: 600;
+}
+
+.debugSynth__fileHint {
+  font-size: 0.9rem;
+  opacity: 0.85;
+}
+
+.debugSynth__lyrics {
+  padding: 0.75rem;
+  border-radius: 12px;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  background: rgba(0, 0, 0, 0.12);
+}
+
+.debugSynth__lyricsControls {
+  display: grid;
+  gap: 0.5rem;
+  margin-bottom: 0.75rem;
+}
+
+.debugSynth__lyricsOffset {
+  display: grid;
+  grid-template-columns: 1fr 120px;
+  align-items: center;
+  gap: 0.75rem;
+}
+
+.debugSynth__lyricsOffset input[type='number'] {
+  width: 100%;
+  padding: 0.35rem 0.5rem;
+}
+
+.debugSynth__lyricsOffsetSlider {
+  width: 100%;
+}
+
+.debugSynth__lyricsViewport {
+  display: grid;
+  gap: 0.35rem;
+  align-content: center;
+  min-height: 140px;
+}
+
+.debugSynth__lyricLine {
+  text-align: center;
+  font-variant-numeric: tabular-nums;
+}
+
+.debugSynth__lyricLine--active {
+  font-size: 1.25rem;
+  font-weight: 750;
+  opacity: 1;
+}
+
+.debugSynth__lyricLine--dim {
+  opacity: 0.55;
+}
+
+.debugSynth__karaoke {
+  position: relative;
+  display: inline-block;
+  --karaoke-progress: 0;
+}
+
+.debugSynth__karaokeBase {
+  color: rgba(255, 255, 255, 0.92);
+}
+
+.debugSynth__karaokeFill {
+  position: absolute;
+  left: 0;
+  top: 0;
+  width: calc(var(--karaoke-progress) * 100%);
+  overflow: hidden;
+  color: rgba(255, 80, 80, 0.98);
+  text-shadow: 0 0 10px rgba(255, 80, 80, 0.25);
+  white-space: pre;
+}
+
+.debugSynth__buttons {
+  display: flex;
+  gap: 0.75rem;
+}
+
+.debugSynth__effects {
+  display: grid;
+  gap: 0.75rem;
+  padding: 0.75rem;
+  border-radius: 12px;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  background: rgba(0, 0, 0, 0.12);
+}
+
+.debugSynth__effectsTitle {
+  font-weight: 700;
+}
+
+.debugSynth__effect {
+  display: grid;
+  grid-template-columns: 90px 1fr 56px;
+  gap: 0.75rem;
+  align-items: center;
+}
+
+.debugSynth__effectValue {
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+  opacity: 0.9;
+}
+
+.debugSynth__channels {
+  display: grid;
+  gap: 0.75rem;
+  padding: 0.75rem;
+  border-radius: 12px;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  background: rgba(0, 0, 0, 0.12);
+}
+
+.debugSynth__channelsHeader {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+}
+
+.debugSynth__channelsTitle {
+  font-weight: 700;
+}
+
+.debugSynth__channelsActions {
+  display: flex;
+  gap: 0.5rem;
+}
+
+.debugSynth__channelsActions button {
+  padding: 0.4em 0.75em;
+}
+
+.debugSynth__channelsGrid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 0.5rem 0.75rem;
+}
+
+.debugSynth__channelToggle {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  user-select: none;
+}
+
+.debugSynth__channelLabel {
+  display: grid;
+  line-height: 1.1;
+}
+
+.debugSynth__channelNumber {
+  font-weight: 650;
+}
+
+.debugSynth__channelInstrument {
+  font-size: 0.9em;
+  opacity: 0.9;
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.debugSynth__channelToggle input {
+  transform: translateY(1px);
+}
+
+.debugSynth__progress {
+  display: grid;
+  gap: 0.35rem;
+}
+
+.debugSynth__time {
+  display: flex;
+  justify-content: space-between;
+  font-variant-numeric: tabular-nums;
+  opacity: 0.9;
+}
+
+.debugSynth__slider {
+  width: 100%;
+}
+
+.debugSynth__hint {
+  margin: 0;
+  font-size: 0.95rem;
+  opacity: 0.85;
+}
+
+.debugSynth__back {
+  display: inline-block;
+  margin-top: 1rem;
+}

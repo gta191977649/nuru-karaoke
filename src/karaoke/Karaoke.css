@@ -1,0 +1,353 @@
+.karaokePage {
+  --bg-color: #5052f5;
+  --pitch-bg: rgba(60, 40, 20, 0.8);
+  --pitch-line: #f1c40f;
+  --staff-line: #555;
+  --note-blue: #00a8ff;
+  --note-glow: rgba(0, 168, 255, 0.8);
+  --text-outline: #003366;
+  --score-pink: #ff00cc;
+
+  background-color: var(--bg-color);
+  font-family: 'Hiragino Sans', 'Meiryo', sans-serif;
+  color: white;
+  height: 100%;
+  width: 100%;
+  overflow: hidden;
+}
+
+.karaoke-stage {
+  height: 100%;
+  width: 100%;
+  display: flex;
+  align-items: stretch;
+  justify-content: flex-start;
+  overflow: hidden;
+}
+
+.karaoke-screen {
+  width: 100%;
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  position: relative;
+}
+
+.top-section {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  padding: 20px;
+}
+
+.pitch-monitor-bar {
+  height: 80px;
+  background: linear-gradient(to bottom, #4a3b2a, #2a1f15);
+  border: 2px solid #665544;
+  border-radius: 8px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 10px;
+  margin-bottom: 10px;
+  position: relative;
+}
+
+.pitch-label {
+  background: #005f7f;
+  padding: 5px 10px;
+  border-radius: 4px;
+  font-weight: bold;
+  font-size: 1.2rem;
+  margin-right: 10px;
+  box-shadow: 0 0 5px cyan;
+}
+
+.pitch-graph {
+  flex-grow: 1;
+  height: 100%;
+  position: relative;
+  overflow: hidden;
+  margin-right: 10px;
+}
+
+.pitch-graph svg {
+  width: 100%;
+  height: 100%;
+}
+
+.scoring-panel {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  min-width: 280px;
+}
+
+.score-status {
+  display: flex;
+  justify-content: flex-end;
+  align-items: center;
+  margin-bottom: 2px;
+}
+
+.score-percent {
+  font-size: 0.8rem;
+  margin-right: 5px;
+  color: #ccc;
+}
+
+.status-badge {
+  position: relative;
+  background: linear-gradient(90deg, #d63384, #a61e4d);
+  padding: 2px 15px;
+  border-radius: 15px;
+  font-size: 0.9rem;
+  font-weight: bold;
+  color: white;
+  border: 1px solid #fff;
+  overflow: hidden;
+  animation: karaokeBadgePulse 1.2s ease-in-out infinite;
+}
+
+.status-badge::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(120deg, transparent 40%, rgba(255, 255, 255, 0.35) 50%, transparent 60%);
+  transform: translateX(-140%);
+  animation: karaokeBadgeShine 1.6s linear infinite;
+}
+
+@keyframes karaokeBadgePulse {
+  0%,
+  100% {
+    filter: saturate(1);
+  }
+  50% {
+    filter: saturate(1.35);
+  }
+}
+
+@keyframes karaokeBadgeShine {
+  0% {
+    transform: translateX(-140%);
+  }
+  100% {
+    transform: translateX(140%);
+  }
+}
+
+.technique-counters {
+  display: flex;
+  gap: 5px;
+  background: rgba(0, 0, 0, 0.5);
+  padding: 5px;
+  border-radius: 5px;
+}
+
+.tech-item {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  background: #333;
+  border-radius: 4px;
+  padding: 2px;
+  font-size: 0.7rem;
+}
+
+.tech-item.blue {
+  border-bottom: 3px solid #00a8ff;
+}
+.tech-item.red {
+  border-bottom: 3px solid #ff4757;
+}
+.tech-item.yellow {
+  border-bottom: 3px solid #ffa502;
+}
+
+.tech-count {
+  font-size: 1.1rem;
+  font-weight: bold;
+  font-family: monospace;
+}
+
+.melody-guide {
+  flex: 2;
+  position: relative;
+  margin-top: 10px;
+  overflow: hidden;
+}
+
+.staff-lines {
+  width: 100%;
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-evenly;
+}
+
+.line {
+  width: 100%;
+  height: 1px;
+  background-color: var(--staff-line);
+}
+
+.note-bar {
+  position: absolute;
+  height: 12px;
+  background-color: var(--note-blue);
+  border-radius: 6px;
+  box-shadow: 0 0 10px var(--note-glow), inset 0 0 5px rgba(255, 255, 255, 0.5);
+  z-index: 2;
+}
+
+.note-bar--hot {
+  box-shadow: 0 0 20px white;
+}
+
+.sung-pitch-line {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  z-index: 3;
+  opacity: 0.8;
+}
+
+.playhead {
+  position: absolute;
+  left: 70%;
+  top: 0;
+  bottom: 0;
+  width: 2px;
+  background-color: rgba(255, 255, 255, 0.3);
+  z-index: 0;
+}
+
+.cursor-sparkle {
+  position: absolute;
+  left: 70%;
+  top: 45%;
+  width: 20px;
+  height: 20px;
+  background: radial-gradient(circle, #fff, transparent);
+  box-shadow: 0 0 15px cyan;
+  border-radius: 50%;
+  z-index: 10;
+  transform: translateX(-50%);
+  animation: karaokeSparkle 1.1s ease-in-out infinite;
+}
+
+@keyframes karaokeSparkle {
+  0%,
+  100% {
+    transform: translateX(-50%) scale(0.9);
+    opacity: 0.75;
+  }
+  50% {
+    transform: translateX(-50%) scale(1.08);
+    opacity: 1;
+  }
+}
+
+.bottom-section {
+  /* height: 35%; */
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  padding: 0 50px 40px 50px;
+  background: linear-gradient(to top, rgba(0, 0, 0, 0.8) 0%, transparent 100%);
+}
+
+.lyrics-container {
+  font-family: "Hiragino Mincho ProN", "MS PMincho", serif;
+  font-weight: bold;
+}
+
+.lyric-row {
+  margin-bottom: 25px;
+  position: relative;
+  line-height: 1.2;
+}
+
+.text {
+  font-size: 3.5rem;
+  color: #ffffff;
+  -webkit-text-stroke: 1px #000000;
+  text-shadow: 3px 3px 0px #000;
+  white-space: nowrap;
+  position: relative;
+  display: inline-block;
+}
+
+.karaokeTextWrap {
+  position: relative;
+  display: inline-block;
+  --karaoke-progress: 0%;
+}
+
+.karaokeTextBase {
+  color: #ffffff;
+  -webkit-text-stroke: 1px #000000;
+}
+
+.karaokeTextFill {
+  position: absolute;
+  left: 0;
+  top: 0;
+  width: var(--karaoke-progress);
+  overflow: hidden;
+  color: #e60000;
+  -webkit-text-stroke: 2px #ffffff;
+  white-space: nowrap;
+  pointer-events: none;
+}
+
+.text-right {
+  text-align: right;
+}
+
+.text-left {
+  text-align: left;
+}
+
+.lyric-row--indent {
+  margin-right: 10%;
+}
+
+@media (max-width: 980px) {
+  .top-section {
+    padding: 14px;
+  }
+  .bottom-section {
+    padding: 0 24px 24px;
+  }
+  .text {
+    font-size: 3rem;
+  }
+}
+
+@media (max-width: 720px) {
+  .pitch-monitor-bar {
+    height: auto;
+    padding: 10px;
+    gap: 10px;
+    align-items: stretch;
+  }
+  .pitch-graph {
+    height: 60px;
+    margin-right: 0;
+  }
+  .scoring-panel {
+    min-width: 0;
+  }
+  .technique-counters {
+    flex-wrap: wrap;
+  }
+  .text {
+    font-size: 2.4rem;
+    white-space: normal;
+  }
+}

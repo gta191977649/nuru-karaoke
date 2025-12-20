@@ -1,0 +1,117 @@
+:root {
+  --key-green-dark: #2d5a3e;
+  --key-green-mid: #4a8c66;
+  --key-green-light: #7cb897;
+  --key-dot-yellow: #fdd835;
+  --key-white-glow: rgba(255, 255, 255, 0.8);
+}
+
+.keyAlert {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.keyAlert__label {
+  color: #fff;
+  font-size: 28px;
+  font-weight: 700;
+  -webkit-text-stroke: 1.2px var(--key-green-dark);
+  text-shadow: 0 0 5px var(--key-green-dark);
+}
+
+.keyAlert__track {
+  display: flex;
+  align-items: center;
+  background: linear-gradient(to bottom, var(--key-green-dark), var(--key-green-mid) 50%, var(--key-green-dark));
+  border: 3px solid #f0f0f0;
+  border-radius: 50px;
+  padding: 4px 10px;
+  box-shadow: 0 4px 8px rgba(0, 0, 0, 0.5), inset 0 2px 4px rgba(0, 0, 0, 0.3);
+  position: relative;
+}
+
+.keyAlert__circle {
+  width: 40px;
+  height: 40px;
+  background: linear-gradient(135deg, #f0f0f0, #ccc);
+  border: 3px solid var(--key-green-mid);
+  border-radius: 50%;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  font-size: 22px;
+  font-weight: 700;
+  color: var(--key-green-dark);
+  box-shadow: 0 0 10px rgba(255, 255, 255, 0.2);
+  z-index: 2;
+}
+
+.keyAlert__dots {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 0 12px;
+  position: relative;
+}
+
+.keyAlert__dot {
+  width: 10px;
+  height: 10px;
+  background-color: var(--key-dot-yellow);
+  border-radius: 50%;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.5);
+  position: relative;
+}
+
+.keyAlert__dot--selected {
+  width: 20px;
+  height: 20px;
+  background: #fff;
+  border: 3px solid var(--key-dot-yellow);
+  box-shadow: 0 0 15px var(--key-white-glow);
+  z-index: 1;
+}
+
+.keyAlert__indicator {
+  position: absolute;
+  left: 50%;
+  top: -33px;
+  transform: translateX(-50%);
+  pointer-events: none;
+  z-index: 1;
+}
+
+.keyAlert__origin {
+  position: absolute;
+  left: 50%;
+  top: -10px;
+  transform: translateX(-50%);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  pointer-events: none;
+}
+
+.keyAlert__triangle {
+  width: 24px;
+  height: 20px;
+  filter: drop-shadow(0 2px 2px rgba(0, 0, 0, 0.3));
+  z-index: 3;
+}
+
+.keyAlert__originCircle {
+  width: 26px;
+  height: 26px;
+  background: #fff;
+  border: 2px solid #aaa;
+  border-radius: 50%;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  color: #d32f2f;
+  font-size: 14px;
+  font-weight: 700;
+  margin-top: 2px;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.3);
+}
