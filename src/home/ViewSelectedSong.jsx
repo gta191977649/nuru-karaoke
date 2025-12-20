@@ -1,6 +1,6 @@
 import { Button, Container, ListGroup, Tab, Tabs } from 'react-bootstrap'
-import { synthEngine } from '../synth/SynthEngine.js'
-import { useSynthEngine } from '../synth/useSynthEngine.js'
+import { synthEngine } from '../engine/SynthEngine.js'
+import { useSynthEngine } from '../engine/useSynthEngine.js'
 import useAlertStore from '../state/alertStore.js'
 
 function ViewSelectedSong({ onBack, onOpenKaraoke }) {

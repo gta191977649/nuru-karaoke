@@ -1,7 +1,7 @@
 import './Karaoke.css'
 import { useEffect, useMemo } from 'react'
-import { useSynthEngine } from '../synth/useSynthEngine.js'
-import { synthEngine } from '../synth/SynthEngine.js'
+import { useSynthEngine } from '../engine/useSynthEngine.js'
+import { synthEngine } from '../engine/SynthEngine.js'
 
 function splitRubySegments(text) {
   const raw = String(text ?? '')

@@ -1,7 +1,7 @@
 import { Button, Col, Row, Stack } from 'react-bootstrap'
 import FindSongs from './FindSongs.jsx'
 import ComfirnSong from './ComfirnSong.jsx'
-import { synthEngine } from '../synth/SynthEngine.js'
+import { synthEngine } from '../engine/SynthEngine.js'
 import ViewSelectedSong from './ViewSelectedSong.jsx'
 
 const SCREENS = {

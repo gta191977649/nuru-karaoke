@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import App from './App.jsx'
-import Synth from './synth/Synth.jsx'
-import SynthProvider from './synth/SynthProvider.jsx'
+import Synth from './engine/Synth.jsx'
+import SynthProvider from './engine/SynthProvider.jsx'
 
 function normalizePathname(pathname) {
   if (!pathname) return '/'

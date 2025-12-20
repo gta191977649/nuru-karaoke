@@ -1,8 +1,8 @@
 import { Button, Card, Col, Container, Row, Stack } from 'react-bootstrap'
 import { useEffect, useState } from 'react'
-import { synthEngine } from '../synth/SynthEngine.js'
-import { useSynthEngine } from '../synth/useSynthEngine.js'
-import { parseLrc } from '../synth/lrc.js'
+import { synthEngine } from '../engine/SynthEngine.js'
+import { useSynthEngine } from '../engine/useSynthEngine.js'
+import { parseLrc } from '../engine/lrc.js'
 import useAlertStore from '../state/alertStore.js'
 import WiiDialog from '../components/WiiDialog.jsx'
 
