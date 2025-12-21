@@ -268,6 +268,19 @@ class SynthEngine {
     await this._context.resume()
   }
 
+  getAudioContext() {
+    return this._context
+  }
+
+  async getMidiData() {
+    if (!this._seq) return null
+    try {
+      return await this._seq.getMIDI()
+    } catch {
+      return null
+    }
+  }
+
   async loadMidiFromUrl(url) {
     await this.ensureInitialized()
     this._setState({ status: `Loading MIDI: ${url}` })
@@ -291,6 +304,8 @@ class SynthEngine {
     } catch {
       // ignore
     }
+
+    return buffer
   }
 
   async loadMidiFromFile(file) {
@@ -311,6 +326,8 @@ class SynthEngine {
     } catch {
       // ignore
     }
+
+    return buffer
   }
 
   setPendingSong(song) {
