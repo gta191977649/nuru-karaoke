@@ -1,7 +1,10 @@
 import './Karaoke.css'
-import { useEffect, useMemo } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { useSynthEngine } from '../engine/useSynthEngine.js'
 import { synthEngine } from '../engine/SynthEngine.js'
+import { extractReferenceMelodyFromMidiData, getTargetMidiAtTime } from '../engine/audio/midi/referenceMelody.js'
+import { PitchEngine } from '../engine/audio/pitch/pitchEngine.js'
+import MelodyGuideCanvas from '../components/MelodyGuideCanvas.jsx'
 
 function splitRubySegments(text) {
   const raw = String(text ?? '')
@@ -49,6 +52,16 @@ function renderRubySegments(segments) {
 
 function Karaoke() {
   const state = useSynthEngine()
+  const [reference, setReference] = useState(null)
+  const pitchEngine = useMemo(
+    () => new PitchEngine({ getAudioContext: () => synthEngine.getAudioContext() }),
+    [],
+  )
+  const lastPitchRef = useRef(null)
+  const pitchHistoryRef = useRef([])
+  const currentTimeRef = useRef(0)
+  const transpositionRef = useRef(0)
+  const micRmsGate = 0.01
 
   const lines = useMemo(() => {
     const entries = state.lrcEntries || []
@@ -74,6 +87,82 @@ function Karaoke() {
       // ignore
     })
   }, [state.ready])
+
+  useEffect(() => {
+    currentTimeRef.current = state.currentTime ?? 0
+  }, [state.currentTime])
+
+  useEffect(() => {
+    transpositionRef.current = Number(state.transposition) || 0
+  }, [state.transposition])
+
+  useEffect(() => {
+    pitchHistoryRef.current = []
+    lastPitchRef.current = null
+  }, [state.midiName, state.queueIndex])
+
+  useEffect(() => {
+    if (!state.ready || !state.midiName) {
+      setReference(null)
+      return
+    }
+    let active = true
+    synthEngine
+      .getMidiData()
+      .then((midiData) => {
+        if (!active) return
+        if (midiData) setReference(extractReferenceMelodyFromMidiData(midiData, { channel: 0 }))
+        else setReference(null)
+      })
+      .catch(() => {
+        if (active) setReference(null)
+      })
+    return () => {
+      active = false
+    }
+  }, [state.ready, state.midiName, state.midiUrl, state.queueIndex])
+
+  useEffect(() => {
+    const unsubscribe = pitchEngine.onPitch((result) => {
+      lastPitchRef.current = result
+    })
+    return () => unsubscribe()
+  }, [pitchEngine])
+
+  useEffect(() => {
+    let cancelled = false
+    const start = async () => {
+      try {
+        await pitchEngine.startMic()
+      } catch (err) {
+        if (!cancelled) console.error(err)
+      }
+    }
+    start()
+    return () => {
+      cancelled = true
+      pitchEngine.stopMic()
+    }
+  }, [pitchEngine])
+
+  useEffect(() => {
+    const interval = window.setInterval(() => {
+      const songTimeSec = currentTimeRef.current
+      const rawTargetMidi = reference ? getTargetMidiAtTime(reference, songTimeSec) : null
+      const transposedTargetMidi =
+        rawTargetMidi != null ? rawTargetMidi + transpositionRef.current : null
+      const last = lastPitchRef.current
+      const userMidi =
+        Number.isFinite(last?.midi) && Number.isFinite(last?.rms) && last.rms >= micRmsGate
+          ? Number(last.midi)
+          : null
+      const history = pitchHistoryRef.current
+      history.push({ t: songTimeSec, userMidi, targetMidi: transposedTargetMidi, rms: last?.rms ?? null })
+      const cutoff = songTimeSec - 12
+      while (history.length && history[0].t < cutoff) history.shift()
+    }, 80)
+    return () => window.clearInterval(interval)
+  }, [reference])
 
   return (
     <div className="karaokePage">
@@ -138,31 +227,17 @@ function Karaoke() {
           </div>
 
           <div className="melody-guide">
-            <div className="playhead" />
-            <div className="cursor-sparkle" />
-
-            <div className="staff-lines" aria-hidden="true">
-              {Array.from({ length: 8 }, (_, i) => (
-                <div key={i} className="line" />
-              ))}
-            </div>
-
-            <div className="note-bar" style={{ top: '30%', left: '10%', width: '5%' }} />
-            <div className="note-bar" style={{ top: '25%', left: '16%', width: '8%' }} />
-            <div className="note-bar" style={{ top: '45%', left: '30%', width: '15%' }} />
-            <div className="note-bar" style={{ top: '50%', left: '48%', width: '10%' }} />
-            <div className="note-bar" style={{ top: '45%', left: '60%', width: '8%' }} />
-            <div className="note-bar note-bar--hot" style={{ top: '40%', left: '70%', width: '20%' }} />
-
-            <svg className="sung-pitch-line" viewBox="0 0 100 100" preserveAspectRatio="none" aria-hidden="true">
-              <path
-                d="M10,32 Q15,25 20,27 T35,46 T55,52 T70,42"
-                fill="none"
-                stroke="#7efff5"
-                strokeWidth="0.8"
-                strokeLinecap="round"
-              />
-            </svg>
+            <MelodyGuideCanvas
+              className="melodyGuideCanvas"
+              reference={reference}
+              historyRef={pitchHistoryRef}
+              currentTimeRef={currentTimeRef}
+              transpositionRef={transpositionRef}
+              rmsGate={micRmsGate}
+              gateUserByTarget
+              width={900}
+              height={220}
+            />
           </div>
         </div>
 

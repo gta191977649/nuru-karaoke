@@ -1527,6 +1527,12 @@
   color: rgba(0, 0, 0, 0.65) !important;
 }
 
+.melodyGuideCanvas {
+  --melody-miss-fill: #0b0b0b;
+  --melody-miss-stroke: #ffffff;
+  --melody-miss-shadow: rgba(0, 0, 0, 0.6);
+}
+
 @media (max-width: 575.98px) {
   .wiiFind__inputRow {
     grid-template-columns: 1fr;
@@ -1549,4 +1555,10 @@
   .wiiSuggest {
     min-height: 0;
   }
+}
+
+.synthDebug {
+  --synth-miss-note-fill: #0b0b0b;
+  --synth-miss-note-stroke: #ffffff;
+  --synth-miss-note-shadow: rgba(0, 0, 0, 0.6);
 }

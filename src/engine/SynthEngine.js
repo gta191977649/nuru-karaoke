@@ -281,7 +281,7 @@ class SynthEngine {
     }
   }
 
-  async loadMidiFromUrl(url) {
+  async loadMidiFromUrl(url, options = {}) {
     await this.ensureInitialized()
     this._setState({ status: `Loading MIDI: ${url}` })
     const response = await fetch(url)
@@ -305,10 +305,13 @@ class SynthEngine {
       // ignore
     }
 
+    const autoPlay = options.autoPlay !== false
+    if (autoPlay) this.play()
+
     return buffer
   }
 
-  async loadMidiFromFile(file) {
+  async loadMidiFromFile(file, options = {}) {
     await this.ensureInitialized()
     const buffer = await file.arrayBuffer()
     const midiName = file.name
@@ -326,6 +329,9 @@ class SynthEngine {
     } catch {
       // ignore
     }
+
+    const autoPlay = options.autoPlay !== false
+    if (autoPlay) this.play()
 
     return buffer
   }
@@ -394,8 +400,15 @@ class SynthEngine {
 
     await this.resumeAudio()
     this.setTransposition(0)
+    this._setState({
+      lrcName: '',
+      lrcEntries: [],
+      lyricOffsetMs: 0,
+      activeLyricIndex: -1,
+      karaokeProgress: 0,
+    })
     this._setState({ queueIndex: i })
-    await this.loadMidiFromUrl(song.url)
+    await this.loadMidiFromUrl(song.url, { autoPlay: false })
 
     if (song.lrc) {
       try {

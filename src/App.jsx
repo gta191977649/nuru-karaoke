@@ -235,7 +235,7 @@ function App({ onNavigate }) {
                 className="wiiFooterBtn wiiFooterBtn--red"
                 type="button"
                 onClick={async () => {
-                  if (!synth.isPlaying) return
+                  if (!synth.midiName) return
                   showAlert({
                     message: '演奏を停止しました',
                     variant: 'warning',

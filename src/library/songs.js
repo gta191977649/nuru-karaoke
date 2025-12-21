@@ -42,6 +42,14 @@ const SONG_LIBRARY = [
     lrc: assetUrl(lrcAssetMap, '月光花.lrc'),
     lrc_offset: 3000,
   },
+  {
+    id: 'sheiming',
+    title: '谁明浪子心',
+    artist: '王杰',
+    url: assetUrl(midiAssetMap, '誰明浪子心.MID'),
+    lrc: assetUrl(lrcAssetMap, '誰明浪子心.lrc'),
+    lrc_offset: -1760,
+  },
 ]
 
 export { SONG_LIBRARY }

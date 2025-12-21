@@ -5,6 +5,7 @@ import { PitchEngine } from './audio/pitch/pitchEngine.js'
 import { centsError } from './audio/pitch/utils/dspUtils.js'
 import { synthEngine } from './SynthEngine.js'
 import { useSynthEngine } from './useSynthEngine.js'
+import MelodyGuideCanvas from '../components/MelodyGuideCanvas.jsx'
 
 function Synth({ onNavigateHome }) {
   const state = useSynthEngine()
@@ -15,6 +16,7 @@ function Synth({ onNavigateHome }) {
   const [hopSize, setHopSize] = useState(128)
   const [rmsGate, setRmsGate] = useState(0.003)
   const [latencyCompMs, setLatencyCompMs] = useState(0)
+  const [userPitchOffsetMs, setUserPitchOffsetMs] = useState(0)
   const [smoothing, setSmoothing] = useState(true)
   const [algoId, setAlgoId] = useState('pitchy')
   const [debugInfo, setDebugInfo] = useState({
@@ -31,9 +33,7 @@ function Synth({ onNavigateHome }) {
   })
 
   const lastPitchRef = useRef(null)
-  const chromaCanvasRef = useRef(null)
   const fullPitchCanvasRef = useRef(null)
-  const chromaHistoryRef = useRef([])
   const fullPitchHistoryRef = useRef([])
   const currentTimeRef = useRef(0)
   const transpositionRef = useRef(0)
@@ -42,6 +42,28 @@ function Synth({ onNavigateHome }) {
     [],
   )
   const detectorOptions = useMemo(() => pitchEngine.listDetectors(), [pitchEngine])
+
+  const getCssVar = (el, name, fallback) => {
+    if (!el) return fallback
+    const value = getComputedStyle(el).getPropertyValue(name)
+    return value ? value.trim() : fallback
+  }
+
+  const normalizeMidiToTarget = (userMidi, targetMidi, minMidi, maxMidi) => {
+    const u = Number(userMidi)
+    if (!Number.isFinite(u)) return null
+    const t = Number(targetMidi)
+    let next = u
+    if (Number.isFinite(t)) {
+      const shift = Math.round((t - u) / 12)
+      next = u + shift * 12
+    } else {
+      while (next < minMidi) next += 12
+      while (next > maxMidi) next -= 12
+    }
+    if (!Number.isFinite(next)) return null
+    return Math.max(minMidi, Math.min(maxMidi, next))
+  }
 
   const canPlay = useMemo(() => Boolean(state.midiName) && state.ready, [state.midiName, state.ready])
 
@@ -77,7 +99,11 @@ function Synth({ onNavigateHome }) {
       const transposedTargetMidi =
         rawTargetMidi != null ? rawTargetMidi + transpositionRef.current : null
       const last = lastPitchRef.current
-      const userMidi = last?.midi ?? null
+      const userMidiRaw = last?.midi ?? null
+      const userMidi =
+        Number.isFinite(userMidiRaw) && Number.isFinite(last?.rms) && last.rms >= rmsGate
+          ? Number(userMidiRaw)
+          : null
       const pitchErrorCents =
         transposedTargetMidi != null && userMidi != null ? centsError(userMidi, transposedTargetMidi) : null
       const algoName =
@@ -96,95 +122,19 @@ function Synth({ onNavigateHome }) {
         algoName,
       })
 
-      const history = chromaHistoryRef.current
-      history.push({
-        t: songTimeSec,
-        targetMidi: transposedTargetMidi,
-        userMidi,
-      })
-      const maxLen = 240
-      if (history.length > maxLen) history.splice(0, history.length - maxLen)
-
       const fullHistory = fullPitchHistoryRef.current
       fullHistory.push({
         t: songTimeSec,
         userMidi,
         targetMidi: transposedTargetMidi,
+        rms: last?.rms ?? null,
       })
+      const maxLen = 240
       if (fullHistory.length > maxLen) fullHistory.splice(0, fullHistory.length - maxLen)
     }, 150)
 
     return () => window.clearInterval(interval)
   }, [reference, latencyCompMs, detectorOptions, algoId])
-
-  useEffect(() => {
-    let raf = 0
-
-    const draw = () => {
-      const canvas = chromaCanvasRef.current
-      if (!canvas) {
-        raf = window.requestAnimationFrame(draw)
-        return
-      }
-      const ctx = canvas.getContext('2d')
-      if (!ctx) {
-        raf = window.requestAnimationFrame(draw)
-        return
-      }
-
-      const width = canvas.width
-      const height = canvas.height
-      ctx.clearRect(0, 0, width, height)
-
-      ctx.fillStyle = '#0d0f12'
-      ctx.fillRect(0, 0, width, height)
-
-      const padLeft = 28
-      const padRight = 4
-      const chromaLabels = ['C', 'C#', 'D', 'D#', 'E', 'F', 'F#', 'G', 'G#', 'A', 'A#', 'B']
-      ctx.strokeStyle = 'rgba(255,255,255,0.08)'
-      ctx.lineWidth = 1
-      for (let i = 1; i < 12; i += 1) {
-        const y = (height / 12) * i
-        ctx.beginPath()
-        ctx.moveTo(padLeft, y)
-        ctx.lineTo(width - padRight, y)
-        ctx.stroke()
-      }
-
-      ctx.fillStyle = 'rgba(160, 200, 255, 0.9)'
-      ctx.font = '11px system-ui'
-      for (let i = 0; i < 12; i += 1) {
-        const y = height - (i + 0.5) * (height / 12)
-        ctx.fillText(chromaLabels[i], 6, y + 4)
-      }
-
-      const history = chromaHistoryRef.current
-      const maxLen = 240
-      const plotWidth = width - padLeft - padRight
-      const stepX = plotWidth / Math.max(1, maxLen - 1)
-
-      const drawRow = (midi, x, color) => {
-        if (midi == null) return
-        const pitchClass = ((Math.round(midi) % 12) + 12) % 12
-        const rowHeight = height / 12
-        const y = height - (pitchClass + 1) * rowHeight
-        ctx.fillStyle = color
-        ctx.fillRect(padLeft + x, y + 1, Math.max(1, stepX), rowHeight - 2)
-      }
-
-      history.forEach((entry, idx) => {
-        const x = idx * stepX
-        drawRow(entry.targetMidi, x, 'rgba(70, 210, 120, 0.7)')
-        drawRow(entry.userMidi, x, 'rgba(255, 255, 255, 0.8)')
-      })
-
-      raf = window.requestAnimationFrame(draw)
-    }
-
-    raf = window.requestAnimationFrame(draw)
-    return () => window.cancelAnimationFrame(raf)
-  }, [])
 
   useEffect(() => {
     let raf = 0
@@ -214,6 +164,9 @@ function Synth({ onNavigateHome }) {
       const range = maxMidi - minMidi
       const rowHeight = height / Math.max(1, range)
       const labelEvery = Math.max(1, Math.ceil(14 / Math.max(1, rowHeight)))
+      const missFill = getCssVar(canvas, '--synth-miss-note-fill', '#090909')
+      const missStroke = getCssVar(canvas, '--synth-miss-note-stroke', '#ffffff')
+      const missShadow = getCssVar(canvas, '--synth-miss-note-shadow', 'rgba(0,0,0,0.45)')
 
       ctx.lineWidth = 1
       for (let m = minMidi; m <= maxMidi; m += 1) {
@@ -240,21 +193,39 @@ function Synth({ onNavigateHome }) {
       const maxLen = 240
       const stepX = width / Math.max(1, maxLen - 1)
 
-      const drawPoint = (midi, x, color) => {
+      const drawPoint = (midi, x, color, useMissStyle = false) => {
         if (midi == null) return
         const m = Number(midi)
         if (!Number.isFinite(m)) return
         const clamped = Math.max(minMidi, Math.min(maxMidi, m))
         const y = height - (clamped - minMidi + 0.5) * rowHeight
-        ctx.fillStyle = color
-        ctx.beginPath()
-        ctx.arc(x, y, 2, 0, Math.PI * 2)
-        ctx.fill()
+        if (useMissStyle) {
+          const w = Math.max(6, stepX * 0.6)
+          const h = Math.max(4, rowHeight * 0.45)
+          const rx = Math.min(6, h / 2)
+          ctx.save()
+          ctx.fillStyle = missFill
+          ctx.strokeStyle = missStroke
+          ctx.lineWidth = 1
+          ctx.shadowColor = missShadow
+          ctx.shadowBlur = 6
+          ctx.beginPath()
+          ctx.roundRect(x - w / 2, y - h / 2, w, h, rx)
+          ctx.fill()
+          ctx.shadowBlur = 0
+          ctx.stroke()
+          ctx.restore()
+        } else {
+          ctx.fillStyle = color
+          ctx.beginPath()
+          ctx.arc(x, y, 2, 0, Math.PI * 2)
+          ctx.fill()
+        }
       }
 
       history.forEach((entry, idx) => {
         const x = idx * stepX
-        drawPoint(entry.targetMidi, x, 'rgba(70, 210, 120, 0.6)')
+        drawPoint(entry.targetMidi, x, 'rgba(70, 210, 120, 0.6)', entry.userMidi == null)
         drawPoint(entry.userMidi, x, 'rgba(255, 255, 255, 0.9)')
       })
 
@@ -304,7 +275,7 @@ function Synth({ onNavigateHome }) {
   }
 
   return (
-    <Container className="py-3" style={{ maxWidth: 860 }}>
+    <Container className="py-3 synthDebug" style={{ maxWidth: 860 }}>
       <div className="d-flex justify-content-between align-items-center mb-3">
         <h1 className="h4 m-0">SynthEngine</h1>
         <div className="d-flex gap-2">
@@ -600,6 +571,14 @@ function Synth({ onNavigateHome }) {
                   value={latencyCompMs}
                   onChange={(e) => setLatencyCompMs(Number(e.currentTarget.value))}
                 />
+                <Form.Label className="small mt-2">User Pitch Offset (ms): {userPitchOffsetMs}</Form.Label>
+                <Form.Range
+                  min={-300}
+                  max={300}
+                  step={1}
+                  value={userPitchOffsetMs}
+                  onChange={(e) => setUserPitchOffsetMs(Number(e.currentTarget.value))}
+                />
                 <Form.Check
                   type="switch"
                   id="pitch-smoothing"
@@ -611,12 +590,19 @@ function Synth({ onNavigateHome }) {
               </Col>
             </Row>
 
-            <div className="small text-muted mt-3">Chromagram (target vs mic)</div>
-            <canvas
-              ref={chromaCanvasRef}
+            <div className="small text-muted mt-3">Melody Guide (target vs mic)</div>
+            <MelodyGuideCanvas
+              className="melodyGuideCanvas"
+              reference={reference}
+              historyRef={fullPitchHistoryRef}
+              currentTimeRef={currentTimeRef}
+              transpositionRef={transpositionRef}
+              rmsGate={rmsGate}
+              gateUserByTarget
+              userOffsetSec={userPitchOffsetMs / 1000}
               width={760}
-              height={120}
-              style={{ width: '100%', height: 120, borderRadius: 8, background: '#0d0f12' }}
+              height={180}
+              style={{ width: '100%', height: 180, borderRadius: 8 }}
             />
             <div className="small text-muted mt-3">Full Pitch Trace (target vs mic)</div>
             <canvas
