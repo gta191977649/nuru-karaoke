@@ -1,4 +1,4 @@
-import { Button, Col, Row, Stack } from 'react-bootstrap'
+import { Button, Col, Row } from 'react-bootstrap'
 import FindSongs from './FindSongs.jsx'
 import ComfirnSong from './ComfirnSong.jsx'
 import { synthEngine } from '../engine/SynthEngine.js'
@@ -110,60 +110,88 @@ function WiiHomeMain({ screen, onNavigate, onOpenKaraoke, karaokeTargetRef, main
   }
 
   return (
-    <main className="wiiHome__main" ref={mainRef}>
-      <Row className="g-3 g-md-4 align-items-stretch">
+    <main className="wiiHome__main joyHome" ref={mainRef}>
+      <div className="joyHeader">
+        <div className="joyBrand">
+          <span className="joyBrand__main">NURUSOUND WEB GO</span>
+          <span className="joyBrand__sub">v1.231</span>
+        </div>
+      </div>
+
+      <Row className="g-3 joyHero">
         <Col xs={12} lg={8}>
-          <Stack gap={3}>
-            <Button className="wiiBig wiiBig--findSongs" type="button" onClick={() => onNavigate(SCREENS.findSongs)}>
-              <span className="wiiBig__magnifier" aria-hidden="true">
-                <span className="wiiBig__lens" />
-              </span>
-              <span className="wiiBig__label">
-                <span className="wiiBig__title">Find Songs</span>
-                <span className="wiiBig__note" aria-hidden="true" />
-              </span>
-            </Button>
+          <Row className="g-3">
+            <Col xs={12} md={6}>
+              <Button className="joyCard joyCard--artist w-100" type="button" onClick={() => onNavigate(SCREENS.findSongs)}>
+                <div className="joyCard__icon">🎤</div>
+                <div className="joyCard__title">歌手名</div>
+                <div className="joyCard__sub">ARTIST</div>
+              </Button>
+            </Col>
+            <Col xs={12} md={6}>
+              <Button className="joyCard joyCard--song w-100" type="button" onClick={() => onNavigate(SCREENS.findSongs)}>
+                <div className="joyCard__icon">🎵</div>
+                <div className="joyCard__title">曲 名</div>
+                <div className="joyCard__sub">SONG</div>
+              </Button>
+            </Col>
+          </Row>
 
-            <Row className="g-3">
-              <Col xs={12} sm={6}>
-                <Button className="wiiTile wiiTile--red w-100" type="button" onClick={() => onNavigate(SCREENS.myRoom)}>
-                  My Room
-                  <span className="wiiTile__corner wiiTile__corner--red" aria-hidden="true" />
-                </Button>
-              </Col>
-              <Col xs={12} sm={6}>
-                <Button className="wiiTile wiiTile--green w-100" type="button" onClick={() => onNavigate(SCREENS.moreModes)}>
-                  <span className="wiiTile__stack">
-                    <span>More</span>
-                    <span>Modes</span>
-                  </span>
-                </Button>
-              </Col>
-            </Row>
-          </Stack>
+          <Row className="g-3 joyTiles mt-1">
+            <Col xs={6} md={6} lg={3}>
+              <Button className="joyTile w-100" type="button">
+                ジャンル
+                <span className="joyTile__sub">GENRE</span>
+              </Button>
+            </Col>
+            <Col xs={6} md={6} lg={3}>
+              <Button className="joyTile w-100" type="button">
+                ランキング
+                <span className="joyTile__sub">RANKING</span>
+              </Button>
+            </Col>
+            <Col xs={6} md={6} lg={3}>
+              <Button className="joyTile w-100" type="button">
+                りれき
+                <span className="joyTile__sub">HISTORY</span>
+              </Button>
+            </Col>
+            <Col xs={6} md={6} lg={3}>
+              <Button className="joyTile w-100" type="button">
+                選曲番号
+                <span className="joyTile__sub">SONG NUMBER</span>
+              </Button>
+            </Col>
+          </Row>
         </Col>
-
         <Col xs={12} lg={4}>
-          <div className="wiiRight">
-            <div className="wiiRight__mii" aria-hidden="true" ref={karaokeTargetRef} />
-            <Stack gap={3}>
-              <Button className="wiiCard wiiCard--sing" type="button" onClick={() => onNavigate(SCREENS.singWithGamepad)}>
-                <div className="wiiCard__singIcons" aria-hidden="true">
-                  ♪ ♫ ♬
-                </div>
-                <div className="wiiCard__singText">
-                  <div className="wiiCard__singTitle">Sing with the</div>
-                  <div className="wiiCard__singTitle">Wii U GamePad!</div>
-                </div>
-              </Button>
-
-              <Button className="wiiCard wiiCard--ticket" type="button" onClick={() => onNavigate(SCREENS.ticket)}>
-                <div className="wiiCard__ticketTop">Ticket</div>
-                <div className="wiiCard__ticketMid">23</div>
-                <div className="wiiCard__ticketBot">Hours Left</div>
-              </Button>
-            </Stack>
+          <div className="joyInfo">
+            <div className="joyInfo__label">お知らせ</div>
+            <div className="joyInfo__media" ref={karaokeTargetRef}>
+              <div className="joyInfo__overlay">ARENA SOUND</div>
+            </div>
           </div>
+        </Col>
+      </Row>
+
+      <Row className="g-3 joyBottom">
+        <Col xs={12} md={6}>
+          <button className="willInfoBtn" type="button">
+            <span className="willInfoBtn__top">FOREIGN</span>
+            <span className="willInfoBtn__bottom">中文 / 한글 / English / Others</span>
+          </button>
+        </Col>
+        <Col xs={12} md={3}>
+          <Button className="willInfoBtn" type="button">
+            <span className="willInfoBtn__top">NURU ENGINE</span>
+            <span className="willInfoBtn__bottom">最新搭载音源情报</span>
+          </Button>
+        </Col>
+        <Col xs={12} md={3}>
+          <Button className="willInfoBtn" type="button">
+            <span className="willInfoBtn__top">APPID</span>
+            <span className="willInfoBtn__bottom">システム更新履歴ー覧</span>
+          </Button>
         </Col>
       </Row>
     </main>

@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { Button, Col, Container, Row } from 'react-bootstrap'
+import { Button, Col, Container, Row, Tab, Tabs } from 'react-bootstrap'
 import WiiHomeMain, { SCREENS } from './home/WiiHomeMain.jsx'
 import Karaoke from './karaoke/Karaoke.jsx'
 import { synthEngine } from './engine/SynthEngine.js'
@@ -117,31 +117,37 @@ function App({ onNavigate }) {
         ref={frameRef}
       >
         <header className={`wiiHome__top ${chromeVisible ? '' : 'wiiHome__top--hidden'}`}>
-          <div className="wiiTopBar">
-            <Button className="wiiBtn wiiBtn--addMii" type="button">
-              <span className="wiiBtn__plus" aria-hidden="true">
-                +
-              </span>
-              <span className="wiiBtn__twoLine">
-                <span>Add</span>
-                <span>Mii</span>
-              </span>
-            </Button>
+          <div className="wiiTopBar joyTopBar">
+            <Tabs
+              className="joyTopNav"
+              variant="tabs"
+              activeKey={screen}
+              onSelect={(key) => {
+                if (!key) return
+                if (key === SCREENS.home) setScreen(SCREENS.home)
+                if (key === SCREENS.moreModes) setScreen(SCREENS.moreModes)
+                if (key === SCREENS.ticket) setScreen(SCREENS.ticket)
+                if (key === SCREENS.singWithGamepad) setScreen(SCREENS.singWithGamepad)
+              }}
+              id="joy-top-tabs"
+            >
+              <Tab eventKey={SCREENS.home} title="曲を選ぶ" />
+              <Tab eventKey={SCREENS.moreModes} title="採点" />
+              <Tab eventKey={SCREENS.ticket} title="🎤 うたスキ" />
+              <Tab eventKey={SCREENS.singWithGamepad} title="遊ぶ♪" />
+            </Tabs>
 
-            <div className="wiiTopBar__nav">
-              <Button className="wiiBtn wiiBtn--nav" type="button" aria-label="Previous profile" />
-              <div className="wiiTopBar__faces" aria-label="Profiles">
-                <Button className="wiiFace wiiFace--active" type="button" aria-label="Profile 1" />
-                <Button className="wiiFace" type="button" aria-label="Profile 2" />
-                <Button className="wiiFace" type="button" aria-label="Profile 3" />
-                <Button className="wiiFace" type="button" aria-label="Profile 4" />
+            <div className="joyTopStatus">
+              <div className="joyTopUser">
+                <div className="joyTopUser__icon" aria-hidden="true" />
+                <div className="joyTopUser__name">Nurupo</div>
               </div>
-            </div>
-
-            <div className="wiiTopBar__name">
-              <div className="wiiTopBar__nameIcon" aria-hidden="true" />
-              <div className="wiiTopBar__nameText">Nurupo</div>
-             
+              <div className="joyTopSignal" aria-hidden="true">
+                <span />
+                <span />
+                <span />
+                <span />
+              </div>
             </div>
           </div>
         </header>
@@ -184,110 +190,107 @@ function App({ onNavigate }) {
         ) : null}
 
         <footer className={`wiiHome__footer ${chromeVisible ? '' : 'wiiHome__footer--hidden'}`}>
-          <Row className="g-2 g-md-3 align-items-center">
-            <Col xs={12} md="auto">
-              <Button className="wiiBottomBtn wiiBottomBtn--blue w-100" type="button">
-                Karaoke
-                <br />
-                Settings
+          <div className="wiiFooterBar">
+            <div className="wiiFooterGroup">
+              <Button className="wiiFooterBtn wiiFooterBtn--dark" type="button">
+                ◀ 遅
               </Button>
-            </Col>
-
-            
-
-            <Col xs={12} md="auto">
-              <Button className="wiiBottomBtn wiiBottomBtn--disabled w-100" type="button" disabled>
-                Skip Song
+              <Button className="wiiFooterBtn wiiFooterBtn--dark" type="button">
+                速 ▶
               </Button>
-            </Col>
-
-             <Col xs={12} md="auto">
-               <Button className="wiiBtn wiiTopBar__synth" type="button" onClick={() => go('/synth')}>
-                Synth Debug
+              <Button
+                className="wiiFooterBtn wiiFooterBtn--dark"
+                type="button"
+                onClick={async () => {
+                  await synthEngine.resumeAudio()
+                  synthEngine.shiftTransposition(-1)
+                  showKeyChangeAlert((synth.transposition || 0) - 1)
+                }}
+              >
+                ♭
               </Button>
-            </Col>
+              <Button
+                className="wiiFooterBtn wiiFooterBtn--dark"
+                type="button"
+                onClick={async () => {
+                  await synthEngine.resumeAudio()
+                  synthEngine.shiftTransposition(1)
+                  showKeyChangeAlert((synth.transposition || 0) + 1)
+                }}
+              >
+                ♯
+              </Button>
+              <Button
+                className="wiiFooterBtn wiiFooterBtn--dark"
+                type="button"
+                onClick={async () => {
+                  await synthEngine.resumeAudio()
+                  synthEngine.setTransposition(0)
+                  showKeyChangeAlert(0)
+                }}
+              >
+                原曲キー
+              </Button>
+              <Button
+                className="wiiFooterBtn wiiFooterBtn--red"
+                type="button"
+                onClick={async () => {
+                  if (!synth.isPlaying) return
+                  showAlert({
+                    message: '演奏を停止しました',
+                    variant: 'warning',
+                    timeoutMs: 3000,
+                  })
+                  await synthEngine.stopAndAdvance()
+                }}
+              >
+                演奏停止
+              </Button>
+            </div>
 
-            
-            <Col xs={12} md>
-              <div className="wiiPills">
-                <div className="wiiHex" aria-hidden="true">
-                  <div className="wiiHex__grid">
-                    <div className="wiiHex__cell" onClick={async () => {
-                      await synthEngine.resumeAudio()
-                      synthEngine.shiftTransposition(1)
-                      showKeyChangeAlert((synth.transposition || 0) + 1)
-                    }}>▲</div>
-                    <div className="wiiHex__cell">♯</div>
-                    <div className="wiiHex__cell" onClick={async () => {
-                      await synthEngine.resumeAudio()
-                      synthEngine.shiftTransposition(-1)
-                      showKeyChangeAlert((synth.transposition || 0) - 1)
-                    }}>▼</div>
-                    <div className="wiiHex__cell">♭</div>
-                  </div>
-                </div>
-                <div className="wiiOriginalKey" aria-label="Transposition">
-                  Key {synth.transposition > 0 ? `+${synth.transposition}` : String(synth.transposition)}
-                </div>
-                <div className="wiiTransport" aria-label="Transport">
-                  <Button
-                    className="wiiTransport__btn"
-                    type="button"
-                   
-                  />
-                  <Button
-                    className="wiiTransport__btn wiiTransport__btn--play"
-                    type="button"
-                    aria-label={synth.isPlaying ? 'Pause' : 'Play'}
-                    onClick={async () => {
-                      await synthEngine.resumeAudio()
-                      if (synth.isPlaying) synthEngine.pause()
-                      else synthEngine.play()
-                    }}
-                    disabled={!synth.midiName}
-                  />
-                  <Button
-                    className="wiiTransport__btn"
-                    type="button"
+            <div className="wiiFooterKaraokeControl" aria-label="Transport">
+              <Button
+                className="wiiFooterKaraokeControl__btn"
+                type="button"
+                onClick={() => synthEngine.seek(Math.max(0, synth.currentTime - 5))}
+                disabled={!synth.midiName}
+              >
+                ◀◀
+                <span>巻戻し</span>
+              </Button>
+              <Button
+                className="wiiFooterKaraokeControl__btn"
+                type="button"
+                onClick={async () => {
+                  await synthEngine.resumeAudio()
+                  if (synth.isPlaying) synthEngine.pause()
+                  else synthEngine.play()
+                }}
+                disabled={!synth.midiName}
+              >
+                {synth.isPlaying ? 'Ⅱ' : '▶'}
+                <span>一時停止</span>
+              </Button>
+              <Button
+                className="wiiFooterKaraokeControl__btn"
+                type="button"
+                onClick={() => synthEngine.seek(Math.min(synth.duration || 0, synth.currentTime + 5))}
+                disabled={!synth.midiName}
+              >
+                ▶▶
+                <span>早送り</span>
+              </Button>
+            </div>
 
-                    
-                  />
-                </div>
-              </div>
-            </Col>
-              <Col xs={12} md="auto">
-                <Button
-                  className="wiiReserveBtn"
-                  type="button"
-                  onClick={async () => {
-                    if (!synth.isPlaying) return
-                    showAlert({
-                      message: '演奏を停止しました',
-                      variant: 'warning',
-                      timeoutMs: 3000,
-                    })
-                    await synthEngine.stopAndAdvance()
-                  }}
-                >
-                  演奏停止
-                </Button>
-              </Col>
-            <Col xs={12} md="auto">
-              <div className="wiiFooterRight">
-                
-                <Button
-                  className="wiiReserveBtn w-100"
-                  type="button"
-                  onClick={() => navigateScreen(SCREENS.queue)}
-                >
-                  現在の予約<hr className="wiiReserveBtn__hr" />
-                  <span className="wiiReserveBtn__count">
-                    <span className="wiiReserveBtn__num">{synth.queue.length}</span>曲
-                  </span>
-                </Button>
-              </div>
-            </Col>
-          </Row>
+            <div className="wiiFooterRight">
+              <Button className="wiiFooterAction wiiFooterBtn--green" type="button" onClick={() => navigateScreen(SCREENS.queue)}>
+                予約確認 <span className="wiiFooterAction__count">({synth.queue.length}曲)</span>
+              </Button>
+              <Button className="wiiFooterAction wiiFooterBtn--blue" type="button" onClick={() => go('/synth')}>
+                音量/操作
+              </Button>
+            </div>
+          </div>
         </footer>
       </Container>
     </div>

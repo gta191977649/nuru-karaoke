@@ -17,9 +17,8 @@
 }
 
 .wiiHome__top {
-  background: linear-gradient(#f0f0f0, #d4d4d4);
-  border-bottom: 3px solid rgba(0, 0, 0, 0.35);
-  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.9);
+  background: linear-gradient(#3a3a3a, #2a2a2a) !important;
+  border-bottom: 3px solid #b01010;
   overflow: hidden;
   max-height: 140px;
   transition:
@@ -44,7 +43,48 @@
   grid-template-columns: auto 1fr auto;
   align-items: center;
   gap: 0.75rem;
-  padding: 0.35rem 0.55rem;
+}
+
+.joyTopBar {
+  grid-template-columns: 1fr auto;
+  padding-top: 0.4rem;
+  padding-left: 0.4rem;
+  padding-right: 0.4rem;
+}
+
+.joyTopNav {
+  border-bottom: none;
+  gap: 0;
+  justify-content: flex-start;
+}
+
+.joyTopNav .nav-item {
+  flex: 0 0 auto;
+}
+
+.joyTopNav .nav-link {
+  width: 100%;
+  text-align: center;
+  border: 1px solid rgba(0, 0, 0, 0.35) !important;
+  border-radius: 3px 3px 0 0 !important;
+  background: linear-gradient(#3a3a3a, #2a2a2a) !important;
+  color: #efefef !important;
+  font-weight: 700 !important;
+  padding: 0.45rem 1.1rem !important;
+  margin-right: 0 !important;
+}
+
+.joyTopNav .nav-item + .nav-item .nav-link {
+  border-left: 1px solid rgba(255, 255, 255, 0.08) !important;
+}
+
+.joyTopNav .nav-link.active {
+  background: linear-gradient(#d21818, #b01010) !important;
+  color: #ffffff !important;
+}
+
+.joyTopBar .tab-content {
+  display: none;
 }
 
 .wiiBtn {
@@ -247,15 +287,305 @@
   content: '';
   position: absolute;
   inset: 0;
-  background:
+  /* background:
     linear-gradient(90deg, rgba(255, 255, 255, 0.35), rgba(255, 255, 255, 0) 55%),
     linear-gradient(180deg, rgba(0, 0, 0, 0.05), rgba(0, 0, 0, 0) 35%);
-  pointer-events: none;
+   */
+    pointer-events: none;
 }
 
 .karaokeDock {
   position: absolute;
   z-index: 10;
+}
+
+.joyHome {
+  background: #e9e9ea;
+  padding: 1rem 1.2rem 1.1rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.85rem;
+  overflow: hidden;
+}
+
+.joyTabs {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr)) auto;
+  gap: 0.45rem;
+}
+
+.joyTab {
+  border-radius: 6px !important;
+  background: linear-gradient(#909396, #6f7478) !important;
+  color: #f4f4f4 !important;
+  border: 1px solid rgba(0, 0, 0, 0.35) !important;
+  font-weight: 700 !important;
+  letter-spacing: 0.02em;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.35);
+}
+
+.joyTab--active {
+  background: linear-gradient(#ff7d7d, #e95a5a) !important;
+}
+
+.joyTab--monitor {
+  background: linear-gradient(#ffb44a, #f08b2f) !important;
+  color: #fff !important;
+}
+
+.joyTopStatus {
+  display: flex;
+  align-items: center;
+  gap: 0.8rem;
+}
+
+.joyTopUser {
+  display: flex;
+  align-items: center;
+  gap: 0.45rem;
+  padding: 0.25rem 0.6rem;
+  border-radius: 999px;
+  background: linear-gradient(#f5f5f5, #dfdfdf);
+  border: 1px solid rgba(0, 0, 0, 0.2);
+  font-weight: 800;
+}
+
+.joyTopUser__icon {
+  width: 20px;
+  height: 20px;
+  border-radius: 999px;
+  background: radial-gradient(circle at 30% 30%, rgba(255, 255, 255, 0.9), rgba(0, 0, 0, 0.15));
+  border: 1px solid rgba(0, 0, 0, 0.18);
+}
+
+.joyTopUser__name {
+  font-size: 0.85rem;
+  letter-spacing: 0.02em;
+}
+
+.joyTopSignal {
+  display: flex;
+  align-items: flex-end;
+  gap: 2px;
+  padding: 0.15rem 0.25rem;
+}
+
+.joyTopSignal span {
+  display: block;
+  width: 5px;
+  border-radius: 2px;
+  background: greenyellow;
+}
+
+.joyTopSignal span:nth-child(1) {
+  height: 8px;
+  opacity: 0.55;
+}
+
+.joyTopSignal span:nth-child(2) {
+  height: 12px;
+  opacity: 0.7;
+}
+
+.joyTopSignal span:nth-child(3) {
+  height: 16px;
+  opacity: 0.85;
+}
+
+.joyTopSignal span:nth-child(4) {
+  height: 20px;
+}
+
+.joyHeader {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0.15rem 0.3rem;
+  gap: 0.6rem;
+}
+
+.joyBrand {
+  display: flex;
+  align-items: baseline;
+  gap: 0.6rem;
+  font-weight: 800;
+}
+
+.joyBrand__main {
+  font-size: 1.1rem;
+  letter-spacing: 0.06em;
+}
+
+.joyBrand__sub {
+  color: #d44;
+  font-size: 0.85rem;
+  font-weight: 700;
+}
+
+.joyHelp {
+  border-radius: 999px !important;
+  padding: 0.35rem 1rem !important;
+  background: linear-gradient(#41d16c, #29a854) !important;
+  color: #fff !important;
+  border: 2px solid rgba(0, 0, 0, 0.15) !important;
+  font-weight: 800 !important;
+}
+
+.joyHero {
+  align-items: stretch;
+}
+
+.joyCard {
+  min-height: 170px;
+  border-radius: 14px !important;
+  border: 2px solid rgba(0, 0, 0, 0.18) !important;
+  color: #fff !important;
+  display: flex !important;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 0.4rem;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.45), 0 2px 0 rgba(0, 0, 0, 0.2);
+}
+
+.joyCard--artist {
+  background: linear-gradient(#d21818, #b01010);
+}
+
+.joyCard--song {
+  background: linear-gradient(135deg, #2d63c7, #1654c7) ;
+}
+
+.joyCard__icon {
+  font-size: 2.4rem;
+  opacity: 0.8;
+}
+
+.joyCard__title {
+  font-size: 3.5rem;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+}
+
+.joyCard__sub {
+  font-size: 0.9rem;
+  letter-spacing: 0.3em;
+  opacity: 0.85;
+}
+
+.joyInfo {
+  height: 100%;
+  background: #d7d7d8;
+  border-radius: 12px;
+  border: 2px solid rgba(0, 0, 0, 0.12);
+  padding: 0.5rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+}
+
+.joyInfo__label {
+  background: linear-gradient(#3a3a3a, #2a2a2a) !important;
+  color: #f2f2f2;
+  font-weight: 800;
+  padding: 0.3rem 0.5rem;
+  border-radius: 6px;
+  text-align: center;
+}
+
+.joyInfo__media {
+  flex: 1;
+  border-radius: 8px;
+  background: linear-gradient(120deg, #1b1f3a, #2b5b8d 55%, #7b2e5f);
+  position: relative;
+  overflow: hidden;
+}
+
+.joyInfo__overlay {
+  position: absolute;
+  inset: 0;
+  
+  display: grid;
+  place-items: center;
+  font-weight: 900;
+  letter-spacing: 0.12em;
+  color: rgba(255, 255, 255, 0.75);
+  text-shadow: 0 2px 8px rgba(0, 0, 0, 0.4);
+}
+
+.joyTiles .joyTile {
+  min-height: 78px;
+  background: linear-gradient(#3a3a3a, #2a2a2a) !important;
+  color: #f1f1f1 !important;
+  border-radius: 10px !important;
+  border: 2px solid rgba(0, 0, 0, 0.25) !important;
+  font-weight: 700 !important;
+  display: flex !important;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 0.2rem;
+  text-align: center;
+}
+
+.joyTile__sub {
+  font-size: 0.7rem;
+  letter-spacing: 0.12em;
+  color: rgba(255, 255, 255, 0.7);
+}
+
+.joyBottom {
+  align-items: center;
+}
+
+.joyLang {
+  background: linear-gradient(#aab6d2, #93a3c7);
+  color: #f4f5f8;
+  padding: 0.6rem 0.9rem;
+  border-radius: 10px;
+  border: 2px solid rgba(0, 0, 0, 0.15);
+  font-weight: 700;
+}
+
+.willInfoBtn {
+  width: 100%;
+  border-radius: 10px;
+  border: 2px solid rgb(174, 174, 174);
+  background: linear-gradient(#fdfdfd, #cccccc);
+  /* box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.9), 0 3px 0 rgba(0, 0, 0, 0.297); */
+  padding: 0.55rem 0.9rem;
+  text-align: left;
+  color: black;
+  font-weight: 800;
+  display: grid;
+  gap: 0.15rem;
+  
+}
+
+.willInfoBtn__top {
+  font-size: 0.75rem;
+  letter-spacing: 0.08em;
+  color: #7b7b7b;
+}
+
+.willInfoBtn__bottom {
+  font-size: 1.05rem;
+  font-weight: 900;
+}
+
+.joyBadge {
+  background: #f3f3f3 !important;
+  border-radius: 10px !important;
+  border: 2px solid rgba(0, 0, 0, 0.2) !important;
+  color: #2d62c7 !important;
+  font-weight: 800 !important;
+  min-height: 52px;
+}
+
+@media (max-width: 992px) {
+  .joyTabs {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
 }
 
 .karaokeDock--full {
@@ -600,10 +930,10 @@
 }
 
 .wiiHome__footer {
-  background: linear-gradient(#f0f0f0, #d4d4d4);
-  border-top: 3px solid rgba(0, 0, 0, 0.35);
-  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.9);
-  padding: 0.35rem 0.55rem;
+  background: linear-gradient(#5d79a1, #6989b2);
+  border-top: 1px solid rgba(0, 0, 0, 0.4);
+   box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.4); 
+  padding: 0.4rem 0.6rem;
   overflow: hidden;
   max-height: 140px;
   transition:
@@ -612,6 +942,124 @@
     max-height 520ms ease,
     padding 520ms ease,
     border-color 520ms ease;
+}
+
+.wiiFooterBar {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  justify-content: space-between;
+  flex-wrap: nowrap;
+}
+
+.wiiFooterGroup {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  flex-wrap: wrap;
+}
+
+.wiiFooterBtn {
+  height: 48px;
+  min-width: 78px;
+  border-radius: 8px !important;
+  font-weight: 900 !important;
+  border: 1px solid rgba(0, 0, 0, 0.45) !important;
+  border-bottom: none !important;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.35), 0 3px 0 rgb(23, 23, 23) !important;
+  padding: 0 0.6rem !important;
+  font-size: 0.95rem !important;
+}
+
+.wiiFooterBtn--dark {
+  background: linear-gradient(#3a3a3a, #2a2a2a) !important;
+  color: #f3f3f3 !important;
+}
+
+.wiiFooterBtn--blue {
+  background: linear-gradient(135deg, #2d63c7, #1654c7) !important;
+  color: #eef4ff !important;
+}
+
+.wiiFooterBtn--red {
+  background: linear-gradient(#d21818, #b01010) !important;
+  color: #eef4ff !important;
+}
+
+.wiiFooterBtn--green {
+  background: linear-gradient(#2f755b, #26604a) !important;
+  color: #eef4ff !important;
+}
+
+.wiiFooterKaraokeControl {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  border: 2px solid #d94d4d;
+  border-radius: 2px;
+  overflow: hidden;
+  background: #f7f7f7;
+}
+
+.wiiFooterKaraokeControl__btn {
+  border: none !important;
+  background: #f7f7f7 !important;
+  color: #c83737 !important;
+  font-weight: 900 !important;
+  height: 48px;
+  min-width: 78px;
+  display: grid !important;
+  align-content: center;
+  border-radius: 0px;
+  gap: 0.1rem;
+  padding: 0 0.6rem !important;
+  border-right: 2px solid #d94d4d !important;
+  font-size: 0.9rem !important;
+}
+
+.wiiFooterKaraokeControl__btn:last-child {
+  border-right: none !important;
+}
+
+.wiiFooterKaraokeControl__btn span {
+  font-size: 0.78rem;
+  letter-spacing: 0.08em;
+}
+
+.wiiFooterRight {
+  display: flex;
+  gap: 0.45rem;
+  align-items: center;
+  flex-direction: row;
+  flex-wrap: nowrap;
+  margin-left: auto;
+}
+
+.wiiFooterAction {
+  height: 48px;
+  min-width: 78px;
+  border-radius: 8px !important;
+  font-weight: 900 !important;
+  border: 1px solid rgba(0, 0, 0, 0.45) !important;
+  border-bottom: none !important;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.35), 0 3px 0 rgb(23, 23, 23) !important;
+  padding: 0 0.6rem !important;
+  font-size: 0.95rem !important;
+}
+
+.wiiFooterAction__count {
+  font-size: 0.85em;
+  margin-left: 0.2rem;
+  opacity: 0.9;
+}
+
+.wiiFooterAction--green {
+  background: linear-gradient(#2f6f5a, #1f4f40) !important;
+  color: #e8fff2 !important;
+}
+
+.wiiFooterAction--blue {
+  background: linear-gradient(135deg, #2d63c7, #1654c7) !important;
+  color: #eef4ff !important;
 }
 
 .wiiHome__footer--hidden {
@@ -766,11 +1214,6 @@
   border-left: 12px solid rgba(120, 120, 120, 0.75);
 }
 
-.wiiFooterRight {
-  display: grid;
-  gap: 0.25rem;
-  justify-items: stretch;
-}
 
 .wiiReserveBtn {
   border-radius: 10px !important;
