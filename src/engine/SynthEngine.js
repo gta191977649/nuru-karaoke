@@ -287,23 +287,18 @@ class SynthEngine {
     const response = await fetch(url)
     if (!response.ok) throw new Error(`MIDI HTTP ${response.status}`)
     const buffer = await response.arrayBuffer()
+    console.log({ status: `Loading MIDI: ${url}` })
 
     this._seq.pause()
     this._seq.currentTime = 0
     this._synth.stopAll(true)
     this._seq.loadNewSongList([{ binary: buffer, fileName: url.split('/').pop() }])
-
     const midiName = url.split('/').pop() || url
     this._setState({ midiUrl: url, midiName, status: `MIDI loaded: ${midiName}` })
 
-    try {
-      const midi = await this._seq.getMIDI()
-      const patches = extractChannelPatchesFromMIDI(midi)
-      const channelInstrumentNames = patches.map((patch, idx) => resolvePatchName(this._synth.presetList, patch, idx))
-      this._setState({ channelInstrumentNames })
-    } catch {
+    this._updateChannelInstrumentNames().catch(() => {
       // ignore
-    }
+    })
 
     const autoPlay = options.autoPlay !== false
     if (autoPlay) this.play()
@@ -321,14 +316,9 @@ class SynthEngine {
     this._seq.loadNewSongList([{ binary: buffer, fileName: midiName }])
     this._setState({ midiUrl: '', midiName, status: `MIDI loaded: ${midiName}` })
 
-    try {
-      const midi = await this._seq.getMIDI()
-      const patches = extractChannelPatchesFromMIDI(midi)
-      const channelInstrumentNames = patches.map((patch, idx) => resolvePatchName(this._synth.presetList, patch, idx))
-      this._setState({ channelInstrumentNames })
-    } catch {
+    this._updateChannelInstrumentNames().catch(() => {
       // ignore
-    }
+    })
 
     const autoPlay = options.autoPlay !== false
     if (autoPlay) this.play()
@@ -397,7 +387,6 @@ class SynthEngine {
     if (!Number.isInteger(i) || i < 0 || i >= this._state.queue.length) return
     const song = this._state.queue[i]
     if (!song?.url) return
-
     await this.resumeAudio()
     this.setTransposition(0)
     this._setState({
@@ -426,6 +415,7 @@ class SynthEngine {
     }
     if (Number.isFinite(song.lrc_offset)) this.setLyricOffsetMs(song.lrc_offset)
     this.play()
+    
   }
 
   async playQueueIfIdle() {
@@ -460,6 +450,7 @@ class SynthEngine {
     await this.ensureInitialized()
     if (!this._synth || !this._seq) return
     if (this._isStopping) return
+
     this._isStopping = true
     const fadeMs = Math.max(0, Number(options.fadeMs ?? PLAYER_CONFIG.stopFadeMs))
     const startGain = Number(this._synth.getMasterParameter('masterGain')) || 1
@@ -476,6 +467,7 @@ class SynthEngine {
             else requestAnimationFrame(step)
           }
           requestAnimationFrame(step)
+
         })
       } else {
         this._synth.setMasterParameter('masterGain', 0)
@@ -566,6 +558,17 @@ class SynthEngine {
   setLyricOffsetMs(ms) {
     const value = Math.max(-30000, Math.min(30000, Number(ms) || 0))
     this._setState({ lyricOffsetMs: value })
+  }
+
+  async _updateChannelInstrumentNames(timeoutMs = 1500) {
+    if (!this._seq || !this._synth) return
+    const timeout = new Promise((_, reject) => {
+      setTimeout(() => reject(new Error('getMIDI timeout')), timeoutMs)
+    })
+    const midi = await Promise.race([this._seq.getMIDI(), timeout])
+    const patches = extractChannelPatchesFromMIDI(midi)
+    const channelInstrumentNames = patches.map((patch, idx) => resolvePatchName(this._synth.presetList, patch, idx))
+    this._setState({ channelInstrumentNames })
   }
 }
 
