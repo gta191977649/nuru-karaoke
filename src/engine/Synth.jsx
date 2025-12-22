@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import { Button, Col, Container, Form, Row } from 'react-bootstrap'
 import { extractReferenceMelodyFromMidiData, getTargetMidiAtTime } from './audio/midi/referenceMelody.js'
 import { sharedPitchEngine, startSharedMic, stopSharedMic } from './audio/pitch/sharedPitchEngine.js'
+import { DEFAULT_CONFIG } from './audio/pitch/pitchEngine.js'
 import { centsError } from './audio/pitch/utils/dspUtils.js'
 import { synthEngine } from './SynthEngine.js'
 import { useSynthEngine } from './useSynthEngine.js'
@@ -14,10 +15,10 @@ function Synth({ onNavigateHome }) {
   const [micActive, setMicActive] = useState(false)
   const [windowSize, setWindowSize] = useState(2048)
   const [hopSize, setHopSize] = useState(128)
-  const [rmsGate, setRmsGate] = useState(0.003)
+  const [rmsGate, setRmsGate] = useState(DEFAULT_CONFIG.rmsGate)
   const [latencyCompMs, setLatencyCompMs] = useState(0)
   const [userPitchOffsetMs, setUserPitchOffsetMs] = useState(0)
-  const [smoothing, setSmoothing] = useState(false)
+  const [smoothing, setSmoothing] = useState(true)
   const [algoId, setAlgoId] = useState('pitchy')
   const [debugInfo, setDebugInfo] = useState({
     songTimeSec: 0,
@@ -82,7 +83,7 @@ function Synth({ onNavigateHome }) {
   }, [state.transposition])
 
   useEffect(() => {
-    pitchEngine.configureDetector({ windowSize, hopSize, rmsGate, smoothing })
+    pitchEngine.configureDetector({ windowSize, hopSize, rmsGate,  })
   }, [pitchEngine, windowSize, hopSize, rmsGate, smoothing])
 
   useEffect(() => {

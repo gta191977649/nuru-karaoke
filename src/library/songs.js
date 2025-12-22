@@ -50,6 +50,14 @@ const SONG_LIBRARY = [
     lrc: assetUrl(lrcAssetMap, '誰明浪子心.lrc'),
     lrc_offset: -1760,
   },
+  {
+    id: 'gudanbeibanqiu',
+    title: '孤单北半球',
+    artist: '欧得洋',
+    url: assetUrl(midiAssetMap, '孤单北半球.MID'),
+    lrc: assetUrl(lrcAssetMap, '孤单北半球.lrc'),
+    lrc_offset: -1760,
+  },
 ]
 
 export { SONG_LIBRARY }

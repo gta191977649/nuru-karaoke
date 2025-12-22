@@ -4,7 +4,8 @@ const DEFAULT_CONFIG = {
   windowSize: 2048,
   hopSize: 128,
   rmsGate: 0.01,
-  smoothing: false,
+  clarityGate: 0.3,
+  smoothing: true,
 }
 
 class PitchEngine {
@@ -77,7 +78,7 @@ class PitchEngine {
     const stream = await navigator.mediaDevices.getUserMedia({
       audio: {
         echoCancellation: false,
-        noiseSuppression: false,
+        noiseSuppression: true,
         autoGainControl: false,
       },
     })
@@ -105,6 +106,7 @@ class PitchEngine {
 
     this.configureDetector(this._config)
     this.setDetector(this._algoId)
+    console.log("startMic ...")
   }
 
   stopMic() {
@@ -178,4 +180,4 @@ class PitchEngine {
   }
 }
 
-export { PitchEngine }
+export { PitchEngine, DEFAULT_CONFIG }

@@ -1,5 +1,4 @@
 import { createDefaultPitchRegistry } from '../registry.js'
-import { smoothValue } from '../utils/dspUtils.js'
 
 const registry = createDefaultPitchRegistry()
 let currentPlugin = registry.get('pitchy')
@@ -7,11 +6,13 @@ let config = {
   windowSize: 2048,
   hopSize: 128,
   rmsGate: 0.01,
-  smoothing: false,
+  clarityGate: 0.3,
+  smoothing: true,
 }
 
-let prevMidi = null
-let prevF0 = null
+const smoothWindowSize = 5
+let recentMidi = []
+let recentF0 = []
 
 function applyConfig(nextCfg) {
   config = { ...config, ...nextCfg }
@@ -24,8 +25,8 @@ function setAlgo(algoId) {
   currentPlugin = next
   if (currentPlugin?.configure) currentPlugin.configure(config)
   if (currentPlugin?.reset) currentPlugin.reset()
-  prevMidi = null
-  prevF0 = null
+  recentMidi = []
+  recentF0 = []
 }
 
 self.onmessage = (event) => {
@@ -51,15 +52,17 @@ self.onmessage = (event) => {
 
     if (config.smoothing) {
       if (midi == null || f0Hz == null) {
-        prevMidi = null
-        prevF0 = null
+        recentMidi = []
+        recentF0 = []
       } else {
-        const smoothedMidi = smoothValue(prevMidi, midi, 0.35)
-        const smoothedF0 = smoothValue(prevF0, f0Hz, 0.35)
-        prevMidi = smoothedMidi
-        prevF0 = smoothedF0
-        midi = smoothedMidi
-        f0Hz = smoothedF0
+        recentMidi.push(midi)
+        recentF0.push(f0Hz)
+        if (recentMidi.length > smoothWindowSize) recentMidi.shift()
+        if (recentF0.length > smoothWindowSize) recentF0.shift()
+        const sumMidi = recentMidi.reduce((sum, value) => sum + value, 0)
+        const sumF0 = recentF0.reduce((sum, value) => sum + value, 0)
+        midi = sumMidi / recentMidi.length
+        f0Hz = sumF0 / recentF0.length
       }
     }
 
