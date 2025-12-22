@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { Button, Col, Container, Form, Row } from 'react-bootstrap'
 import { extractReferenceMelodyFromMidiData, getTargetMidiAtTime } from './audio/midi/referenceMelody.js'
-import { PitchEngine } from './audio/pitch/pitchEngine.js'
+import { sharedPitchEngine, startSharedMic, stopSharedMic } from './audio/pitch/sharedPitchEngine.js'
 import { centsError } from './audio/pitch/utils/dspUtils.js'
 import { synthEngine } from './SynthEngine.js'
 import { useSynthEngine } from './useSynthEngine.js'
@@ -37,10 +37,7 @@ function Synth({ onNavigateHome }) {
   const fullPitchHistoryRef = useRef([])
   const currentTimeRef = useRef(0)
   const transpositionRef = useRef(0)
-  const pitchEngine = useMemo(
-    () => new PitchEngine({ getAudioContext: () => synthEngine.getAudioContext() }),
-    [],
-  )
+  const pitchEngine = sharedPitchEngine
   const detectorOptions = useMemo(() => pitchEngine.listDetectors(), [pitchEngine])
 
   const getCssVar = (el, name, fallback) => {
@@ -258,8 +255,29 @@ function Synth({ onNavigateHome }) {
   }, [])
 
   useEffect(() => {
-    return () => pitchEngine.stopMic()
+    return () => stopSharedMic()
   }, [pitchEngine])
+
+  useEffect(() => {
+    if (!state.ready || !state.midiName) {
+      setReference(null)
+      return
+    }
+    let active = true
+    synthEngine
+      .getMidiData()
+      .then((midiData) => {
+        if (!active) return
+        if (midiData) setReference(extractReferenceMelodyFromMidiData(midiData, { channel: 0 }))
+        else setReference(null)
+      })
+      .catch(() => {
+        if (active) setReference(null)
+      })
+    return () => {
+      active = false
+    }
+  }, [state.ready, state.midiName, state.midiUrl, state.queueIndex])
 
   const noteNames = ['C', 'C#', 'D', 'D#', 'E', 'F', 'F#', 'G', 'G#', 'A', 'A#', 'B']
   const formatNumber = (value, digits = 2) => (Number.isFinite(value) ? value.toFixed(digits) : 'n/a')
@@ -504,7 +522,7 @@ function Synth({ onNavigateHome }) {
                   disabled={!state.ready || micActive}
                   onClick={async () => {
                     try {
-                      await pitchEngine.startMic()
+                      await startSharedMic()
                       setMicActive(true)
                     } catch (err) {
                       console.error(err)
@@ -520,7 +538,7 @@ function Synth({ onNavigateHome }) {
                   variant="secondary"
                   disabled={!micActive}
                   onClick={() => {
-                    pitchEngine.stopMic()
+                    stopSharedMic()
                     setMicActive(false)
                   }}
                 >

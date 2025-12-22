@@ -3,7 +3,7 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import { useSynthEngine } from '../engine/useSynthEngine.js'
 import { synthEngine } from '../engine/SynthEngine.js'
 import { extractReferenceMelodyFromMidiData, getTargetMidiAtTime } from '../engine/audio/midi/referenceMelody.js'
-import { PitchEngine } from '../engine/audio/pitch/pitchEngine.js'
+import { sharedPitchEngine, startSharedMic, stopSharedMic } from '../engine/audio/pitch/sharedPitchEngine.js'
 import MelodyGuideCanvas from '../components/MelodyGuideCanvas.jsx'
 
 function splitRubySegments(text) {
@@ -53,10 +53,7 @@ function renderRubySegments(segments) {
 function Karaoke() {
   const state = useSynthEngine()
   const [reference, setReference] = useState(null)
-  const pitchEngine = useMemo(
-    () => new PitchEngine({ getAudioContext: () => synthEngine.getAudioContext() }),
-    [],
-  )
+  const pitchEngine = sharedPitchEngine
   const lastPitchRef = useRef(null)
   const pitchHistoryRef = useRef([])
   const currentTimeRef = useRef(0)
@@ -133,7 +130,7 @@ function Karaoke() {
     let cancelled = false
     const start = async () => {
       try {
-        await pitchEngine.startMic()
+        await startSharedMic()
       } catch (err) {
         if (!cancelled) console.error(err)
       }
@@ -141,7 +138,7 @@ function Karaoke() {
     start()
     return () => {
       cancelled = true
-      pitchEngine.stopMic()
+      stopSharedMic()
     }
   }, [pitchEngine])
 

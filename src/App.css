@@ -1558,7 +1558,7 @@
 }
 
 .synthDebug {
-  --synth-miss-note-fill: #0b0b0b;
+  --synth-miss-note-fill: #b01212;
   --synth-miss-note-stroke: #ffffff;
-  --synth-miss-note-shadow: rgba(0, 0, 0, 0.6);
+  --synth-miss-note-shadow: rgba(120, 0, 0, 0.55);
 }
