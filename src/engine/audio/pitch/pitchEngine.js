@@ -36,6 +36,8 @@ class PitchEngine {
     this._source = null
     this._processor = null
     this._monitorGain = null
+    this._starting = null
+    this._stopRequested = false
   }
 
   listDetectors() {
@@ -63,53 +65,75 @@ class PitchEngine {
 
   async startMic() {
     if (this._stream) return
-    let audioContext = this._audioContext
-    if (!audioContext && this._getAudioContext) {
-      audioContext = this._getAudioContext()
+    if (this._starting) {
+      this._stopRequested = false
+      return this._starting
     }
-    if (!audioContext) {
-      audioContext = new AudioContext()
-      this._audioContext = audioContext
-      this._ownsContext = true
+    this._stopRequested = false
+    this._starting = (async () => {
+      let audioContext = this._audioContext
+      if (!audioContext && this._getAudioContext) {
+        audioContext = this._getAudioContext()
+      }
+      if (!audioContext) {
+        audioContext = new AudioContext()
+        this._audioContext = audioContext
+        this._ownsContext = true
+      }
+
+      await audioContext.resume()
+
+      const stream = await navigator.mediaDevices.getUserMedia({
+        audio: {
+          echoCancellation: false,
+          noiseSuppression: true,
+          autoGainControl: false,
+        },
+      })
+
+      const source = audioContext.createMediaStreamSource(stream)
+      const processor = audioContext.createScriptProcessor(1024, 1, 1)
+      const monitorGain = audioContext.createGain()
+      monitorGain.gain.value = 0
+
+      processor.onaudioprocess = (event) => {
+        const input = event.inputBuffer.getChannelData(0)
+        if (!input?.length) return
+        this._appendSamples(input)
+        this._flushFrames(audioContext.sampleRate, audioContext.currentTime)
+      }
+
+      source.connect(processor)
+      processor.connect(monitorGain)
+      monitorGain.connect(audioContext.destination)
+
+      this._stream = stream
+      this._source = source
+      this._processor = processor
+      this._monitorGain = monitorGain
+
+      this.configureDetector(this._config)
+      this.setDetector(this._algoId)
+
+      if (this._stopRequested) {
+        this._stopMicInternal()
+      }
+    })()
+
+    try {
+      await this._starting
+    } finally {
+      this._starting = null
     }
-
-    await audioContext.resume()
-
-    const stream = await navigator.mediaDevices.getUserMedia({
-      audio: {
-        echoCancellation: false,
-        noiseSuppression: true,
-        autoGainControl: false,
-      },
-    })
-
-    const source = audioContext.createMediaStreamSource(stream)
-    const processor = audioContext.createScriptProcessor(1024, 1, 1)
-    const monitorGain = audioContext.createGain()
-    monitorGain.gain.value = 0
-
-    processor.onaudioprocess = (event) => {
-      const input = event.inputBuffer.getChannelData(0)
-      if (!input?.length) return
-      this._appendSamples(input)
-      this._flushFrames(audioContext.sampleRate, audioContext.currentTime)
-    }
-
-    source.connect(processor)
-    processor.connect(monitorGain)
-    monitorGain.connect(audioContext.destination)
-
-    this._stream = stream
-    this._source = source
-    this._processor = processor
-    this._monitorGain = monitorGain
-
-    this.configureDetector(this._config)
-    this.setDetector(this._algoId)
-    console.log("startMic ...")
   }
 
   stopMic() {
+    this._stopRequested = true
+    if (this._starting && !this._stream) return
+    this._stopMicInternal()
+  }
+
+  _stopMicInternal() {
     if (!this._stream) return
     this._processor?.disconnect()
     this._source?.disconnect()
@@ -128,6 +152,7 @@ class PitchEngine {
       this._audioContext = null
       this._ownsContext = false
     }
+    this._stopRequested = false
   }
 
   _resetPending() {

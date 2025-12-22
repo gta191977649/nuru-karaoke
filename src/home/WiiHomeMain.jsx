@@ -184,7 +184,7 @@ function WiiHomeMain({ screen, onNavigate, onOpenKaraoke, karaokeTargetRef, main
         <Col xs={12} md={3}>
           <Button className="willInfoBtn" type="button">
             <span className="willInfoBtn__top">NURU ENGINE</span>
-            <span className="willInfoBtn__bottom">最新搭载音源情报</span>
+            <span className="willInfoBtn__bottom">最新音源情報</span>
           </Button>
         </Col>
         <Col xs={12} md={3}>

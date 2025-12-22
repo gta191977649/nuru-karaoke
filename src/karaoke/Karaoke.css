@@ -269,8 +269,8 @@
 }
 
 .lyrics-container {
-  font-family: "Hiragino Mincho ProN", "MS PMincho", serif;
-  font-weight: bold;
+  font-family: Meiryo, 'ＭＳ Ｐゴシック', serif;
+  font-weight: bolder;
 }
 
 .lyric-row {

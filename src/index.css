@@ -1,12 +1,13 @@
-@import url('https://fonts.googleapis.com/css2?family=M+PLUS+Rounded+1c&display=swap');
-.m-plus-rounded-1c-regular {
-  font-family: "M PLUS Rounded 1c", sans-serif;
+@import url('https://fonts.googleapis.com/css2?family=Chiron+GoRound+TC:wght@200..900&family=M+PLUS+Rounded+1c&family=Zen+Kaku+Gothic+Antique&display=swap');
+.zen-kaku-gothic-antique-regular {
+  font-family: "Zen Kaku Gothic Antique", sans-serif;
   font-weight: 400;
   font-style: normal;
 }
 
+
 body {
-  font-family: "Hiragino Kaku Gothic ProN", "Meiryo", sans-serif;
+  font-family: 'ヒラギノ丸ゴ Pro W3', 'Hiragino Maru Gothic Pro', 'メイリオ', Meiryo, 'ＭＳ Ｐゴシック',"Zen Kaku Gothic Antique";
   margin: 0;
   min-width: 320px;
   min-height: 100vh;
