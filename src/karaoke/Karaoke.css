@@ -10,7 +10,8 @@
   --text-outline: #003366;
   --score-pink: #ff00cc;
 
-  background-color: var(--bg-color);
+  /* background-color: var(--bg-color); */
+  background-image: url("../assets/bg/bg.jpg");
   font-family: 'Hiragino Sans', 'Meiryo', sans-serif;
   color: white;
   height: 100%;
@@ -271,7 +272,7 @@
 }
 
 .lyrics-container {
-  /* font-family: "Zen Old Mincho", serif; */
+  font-family: "YuMinCho", serif;
   font-weight: bold;
   font-style: normal;
 }

@@ -63,14 +63,20 @@ function Karaoke() {
   const lines = useMemo(() => {
     const entries = state.lrcEntries || []
     const i = state.activeLyricIndex ?? -1
-    const current = i >= 0 ? splitRubySegments(entries[i]?.text) : { segments: [{ text: '…', ruby: '' }], hasRuby: false }
+    const pairStart = i >= 0 ? i - (i % 2) : -1
+    const current =
+      pairStart >= 0 ? splitRubySegments(entries[pairStart]?.text) : { segments: [{ text: '…', ruby: '' }], hasRuby: false }
     const next =
-      i + 1 < entries.length
-        ? splitRubySegments(entries[i + 1]?.text)
+      pairStart + 1 < entries.length
+        ? splitRubySegments(entries[pairStart + 1]?.text)
         : { segments: [{ text: '…', ruby: '' }], hasRuby: false }
+    const activeInPair = i >= 0 ? i % 2 : 0
     return {
       current,
       next,
+      currentAlign: 'text-left',
+      nextAlign: 'text-right lyric-row--indent',
+      activeInPair,
     }
   }, [state.activeLyricIndex, state.lrcEntries])
 
@@ -240,9 +246,14 @@ function Karaoke() {
 
         <div className="bottom-section">
           <div className="lyrics-container">
-            <div className="lyric-row text-left">
+            <div className={`lyric-row ${lines.currentAlign}`}>
               <span className="text">
-                <span className="karaokeTextWrap" style={{ '--karaoke-progress': `${progressPercent}%` }}>
+                <span
+                  className="karaokeTextWrap"
+                  style={{
+                    '--karaoke-progress': `${lines.activeInPair === 0 ? progressPercent : 100}%`,
+                  }}
+                >
                   <span className="karaokeTextBase">{renderRubySegments(lines.current.segments)}</span>
                   <span className="karaokeTextFill" aria-hidden="true">
                     {renderRubySegments(lines.current.segments)}
@@ -251,9 +262,19 @@ function Karaoke() {
               </span>
             </div>
 
-            <div className="lyric-row text-right lyric-row--indent">
+            <div className={`lyric-row ${lines.nextAlign}`}>
               <span className="text">
-                {renderRubySegments(lines.next.segments)}
+                <span
+                  className="karaokeTextWrap"
+                  style={{
+                    '--karaoke-progress': `${lines.activeInPair === 1 ? progressPercent : 0}%`,
+                  }}
+                >
+                  <span className="karaokeTextBase">{renderRubySegments(lines.next.segments)}</span>
+                  <span className="karaokeTextFill" aria-hidden="true">
+                    {renderRubySegments(lines.next.segments)}
+                  </span>
+                </span>
               </span>
             </div>
           </div>
