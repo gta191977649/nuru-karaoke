@@ -187,7 +187,7 @@ class SynthEngine {
 
     this._initializing = (async () => {
       this._setState({ status: 'Loading SynthEngine…' })
-      const context = new AudioContext()
+      const context = new AudioContext({ sampleRate:44100  })
       await context.audioWorklet.addModule(processorUrl)
 
       const synth = new WorkletSynthesizer(context, { initializeChorusProcessor: true, initializeReverbProcessor: true })

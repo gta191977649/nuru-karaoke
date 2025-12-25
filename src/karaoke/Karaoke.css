@@ -269,8 +269,9 @@
 }
 
 .lyrics-container {
-  font-family: Meiryo, 'ＭＳ Ｐゴシック', serif;
-  font-weight: bolder;
+  font-family: 'Yu Mincho', 'Hiragino Mincho ProN', 'Hiragino Mincho Pro', 'MS Mincho', 'Noto Serif CJK JP',
+    'Source Han Serif', 'IPAexMincho', serif;
+  font-weight: bold;
 }
 
 .lyric-row {
@@ -280,6 +281,7 @@
 }
 
 .text {
+  
   font-size: 3.5rem;
   color: #ffffff;
   -webkit-text-stroke: 1px #000000;

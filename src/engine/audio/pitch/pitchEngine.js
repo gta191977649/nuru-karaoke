@@ -6,6 +6,7 @@ const DEFAULT_CONFIG = {
   rmsGate: 0.01,
   clarityGate: 0.3,
   smoothing: true,
+  sampleRate: 44100,
 }
 
 class PitchEngine {
@@ -76,12 +77,14 @@ class PitchEngine {
         audioContext = this._getAudioContext()
       }
       if (!audioContext) {
-        audioContext = new AudioContext()
+        const sr = Number(this._config.sampleRate) || 44100
+        audioContext = new AudioContext({ sampleRate:sr  })
         this._audioContext = audioContext
         this._ownsContext = true
       }
 
       await audioContext.resume()
+      console.log('[PitchEngine] sampleRate', audioContext.sampleRate)
 
       const stream = await navigator.mediaDevices.getUserMedia({
         audio: {
