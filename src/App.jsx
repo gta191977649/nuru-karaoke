@@ -207,7 +207,7 @@ function App({ onNavigate }) {
                   showKeyChangeAlert((synth.transposition || 0) - 1)
                 }}
               >
-                ♭
+                ▼ ♭
               </Button>
               <Button
                 className="wiiFooterBtn wiiFooterBtn--dark"
@@ -218,7 +218,7 @@ function App({ onNavigate }) {
                   showKeyChangeAlert((synth.transposition || 0) + 1)
                 }}
               >
-                ♯
+                ▲ ♯
               </Button>
               <Button
                 className="wiiFooterBtn wiiFooterBtn--dark"

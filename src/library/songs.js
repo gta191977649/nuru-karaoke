@@ -58,6 +58,14 @@ const SONG_LIBRARY = [
     lrc: assetUrl(lrcAssetMap, '孤单北半球.lrc'),
     lrc_offset: -1760,
   },
+  {
+    id: 'kimihamelody',
+    title: '君はメロディー',
+    artist: 'AKB48',
+    url: assetUrl(midiAssetMap, 'kimihamelody.MID'),
+    lrc: assetUrl(lrcAssetMap, 'kimihamelody.lrc'),
+    lrc_offset: 1600,
+  },
 ]
 
 export { SONG_LIBRARY }

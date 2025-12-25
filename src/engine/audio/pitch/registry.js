@@ -2,6 +2,7 @@ import { PitchfinderYinPlugin } from './plugins/pitchfinderYinPlugin.js'
 import { EssentiaMelodiaPlugin } from './plugins/essentiaMelodiaPlugin.js'
 import { PitchyPlugin } from './plugins/pitchyPlugin.js'
 import { EssentiaYinPlugin } from './plugins/essentiaYinPlugin.js'
+import { PyinPlugin } from './plugins/pyinPlugin.js'
 
 class PitchDetectorRegistry {
   constructor() {
@@ -26,6 +27,7 @@ function createDefaultPitchRegistry() {
   const registry = new PitchDetectorRegistry()
   registry.register(new PitchyPlugin())
   registry.register(new PitchfinderYinPlugin())
+  registry.register(new PyinPlugin())
   registry.register(new EssentiaYinPlugin())
   registry.register(new EssentiaMelodiaPlugin())
   return registry
