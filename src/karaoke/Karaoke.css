@@ -2,16 +2,18 @@
 
 .karaokePage {
   --bg-color: #5052f5;
-  --pitch-bg: rgba(60, 40, 20, 0.8);
+  --pitch-bg: rgba(60, 40, 20, 0.1);
   --pitch-line: #f1c40f;
   --staff-line: #555;
   --note-blue: #00a8ff;
   --note-glow: rgba(0, 168, 255, 0.8);
   --text-outline: #003366;
   --score-pink: #ff00cc;
+  --karaoke-visual-opacity: 0.5;
 
   /* background-color: var(--bg-color); */
   background-image: url("../assets/bg/bg.jpg");
+  background-size: cover;
   font-family: 'Hiragino Sans', 'Meiryo', sans-serif;
   color: white;
   height: 100%;
@@ -41,12 +43,18 @@
   display: flex;
   flex-direction: column;
   padding: 20px;
+
 }
 
 .pitch-monitor-bar {
   height: 80px;
-  background: linear-gradient(to bottom, #4a3b2a, #2a1f15);
-  border: 2px solid #665544;
+  background: linear-gradient(
+    to bottom,
+    rgba(0, 0, 0, 0.3),
+    rgba(0, 0, 0, 0.3)
+  );  
+  
+  /* border: 2px solid #665544; */
   border-radius: 8px;
   display: flex;
   align-items: center;
@@ -77,6 +85,14 @@
 .pitch-graph svg {
   width: 100%;
   height: 100%;
+}
+
+.karaokeVisual {
+  opacity: var(--karaoke-visual-opacity);
+}
+
+.melody-guide svg {
+  opacity: var(--karaoke-visual-opacity);
 }
 
 .scoring-panel {
@@ -272,7 +288,7 @@
 }
 
 .lyrics-container {
-  font-family: "YuMinCho", serif;
+  /* font-family: "YuMinCho", serif; */
   font-weight: bold;
   font-style: normal;
 }

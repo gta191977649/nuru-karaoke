@@ -76,8 +76,8 @@ function MelodyGuideCanvas({
       ctx.clearRect(0, 0, w, h)
 
       const gradient = ctx.createLinearGradient(0, 0, 0, h)
-      gradient.addColorStop(0, '#1b2638')
-      gradient.addColorStop(1, '#0d131c')
+      gradient.addColorStop(0, 'rgba(0, 0, 0, 0.3)');
+      gradient.addColorStop(1, 'rgba(0, 0, 0, 0.3)');
       ctx.fillStyle = gradient
       ctx.fillRect(0, 0, w, h)
 

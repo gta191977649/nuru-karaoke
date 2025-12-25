@@ -176,7 +176,7 @@ function Karaoke() {
             <div className="pitch-label">音程</div>
 
             <div className="pitch-graph">
-              <svg preserveAspectRatio="none" viewBox="0 0 300 50" aria-hidden="true">
+              <svg className="karaokeVisual" preserveAspectRatio="none" viewBox="0 0 300 50" aria-hidden="true">
                 <path
                   d="M0,10 L300,10 M0,20 L300,20 M0,30 L300,30 M0,40 L300,40"
                   stroke="rgba(255,255,255,0.1)"
