@@ -32,7 +32,7 @@ const SONG_LIBRARY = [
     artist: '石川さゆり',
     url: assetUrl(midiAssetMap, '津軽海峡_冬景色.MID'),
     lrc: assetUrl(lrcAssetMap, '津軽海峡_冬景色.lrc'),
-    lrc_offset: -1200,
+    lrc_offset: 6000,
   },
   {
     id: 'getuhana',
@@ -64,7 +64,15 @@ const SONG_LIBRARY = [
     artist: 'AKB48',
     url: assetUrl(midiAssetMap, 'kimihamelody.MID'),
     lrc: assetUrl(lrcAssetMap, 'kimihamelody.lrc'),
-    lrc_offset: 1600,
+    lrc_offset: -1760,
+  },
+  {
+    id: 'zenkutenshi',
+    title: '残酷な天使のテーゼ',
+    artist: '高橋洋子',
+    url: assetUrl(midiAssetMap, 'zangoku.MID'),
+    lrc: assetUrl(lrcAssetMap, 'zangoku.lrc'),
+    lrc_offset: 0,
   },
 ]
 

@@ -5,6 +5,8 @@ import { synthEngine } from '../engine/SynthEngine.js'
 import { extractReferenceMelodyFromMidiData, getTargetMidiAtTime } from '../engine/audio/midi/referenceMelody.js'
 import { sharedPitchEngine, startSharedMic, stopSharedMic } from '../engine/audio/pitch/sharedPitchEngine.js'
 import MelodyGuideCanvas from '../components/MelodyGuideCanvas.jsx'
+import KeyChangeAlert from '../components/KeyChangeAlert.jsx'
+import useKeyChangeAlertStore from '../state/keyChangeAlertStore.js'
 
 function splitRubySegments(text) {
   const raw = String(text ?? '')
@@ -53,12 +55,15 @@ function renderRubySegments(segments) {
 function Karaoke() {
   const state = useSynthEngine()
   const [reference, setReference] = useState(null)
+  const [showSongInfo, setShowSongInfo] = useState(false)
+  const [songInfo, setSongInfo] = useState({ title: '', artist: '' })
   const pitchEngine = sharedPitchEngine
   const lastPitchRef = useRef(null)
   const pitchHistoryRef = useRef([])
   const currentTimeRef = useRef(0)
   const transpositionRef = useRef(0)
   const micRmsGate = 0.01
+  const showKeyChangeAlert = useKeyChangeAlertStore((store) => store.showKeyChangeAlert)
 
   const lines = useMemo(() => {
     const entries = state.lrcEntries || []
@@ -102,7 +107,20 @@ function Karaoke() {
   useEffect(() => {
     pitchHistoryRef.current = []
     lastPitchRef.current = null
-  }, [state.midiName, state.queueIndex])
+  }, [state.midiName, state.midiUrl, state.queueIndex])
+  
+  useEffect(() => {
+    console.log(state.midiName, state.midiUrl)
+    const currentSong = state.queueIndex >= 0 ? state.queue?.[state.queueIndex] : null
+    const title = currentSong?.title || state.midiName || ''
+    if (!title) return
+    setSongInfo({ title, artist: currentSong?.artist || '' })
+    showKeyChangeAlert(state.transposition ?? 0, 8000)
+    setShowSongInfo(true)
+
+    const timer = setTimeout(() => setShowSongInfo(false), 8000)
+    return () => clearTimeout(timer)
+  }, [state.midiName, state.midiUrl])
 
   useEffect(() => {
     if (!state.ready || !state.midiName) {
@@ -169,6 +187,13 @@ function Karaoke() {
 
   return (
     <div className="karaokePage">
+      <KeyChangeAlert />
+      {showSongInfo ? (
+        <div className="karaokeSongIntro">
+          <div className="karaokeSongIntro__title">{songInfo.title}</div>
+          {songInfo.artist ? <div className="karaokeSongIntro__artist">♪{songInfo.artist}</div> : null}
+        </div>
+      ) : null}
       <div className="karaoke-stage">
         <div className="karaoke-screen">
         <div className="top-section">

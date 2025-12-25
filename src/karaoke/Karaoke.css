@@ -30,6 +30,34 @@
   overflow: hidden;
 }
 
+.karaokeSongIntro {
+  position: absolute;
+  top: 120px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 900;
+  text-align: center;
+  text-shadow: 0 6px 0 rgba(0, 0, 0, 0.55);
+  color: #ffffff;
+  pointer-events: none;
+}
+
+.karaokeSongIntro__title {
+  font-weight: bolder;
+  font-size: 5.5rem;
+  letter-spacing: 0.08em;
+  -webkit-text-stroke: 2px #000000;
+  white-space: nowrap;
+}
+
+.karaokeSongIntro__artist {
+  font-weight: bold;
+  margin-top: 6px;
+  font-size: 3.5rem;
+  -webkit-text-stroke: 2px #000000;
+  white-space: nowrap;
+}
+
 .karaoke-screen {
   width: 100%;
   height: 100%;
