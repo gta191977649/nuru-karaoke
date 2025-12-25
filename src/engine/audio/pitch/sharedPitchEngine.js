@@ -1,7 +1,7 @@
-import { synthEngine } from '../../SynthEngine.js'
+import { getKaraokeAudioEngine } from '../../audioEngine.js'
 import { PitchEngine } from './pitchEngine.js'
 
-const sharedPitchEngine = new PitchEngine({ getAudioContext: () => synthEngine.getAudioContext() })
+const sharedPitchEngine = new PitchEngine({ getAudioContext: () => getKaraokeAudioEngine().getAudioContext() })
 let activeUsers = 0
 
 const startSharedMic = async () => {

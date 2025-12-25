@@ -24,7 +24,7 @@ const SONG_LIBRARY = [
     artist: '石川さゆり',
     url: assetUrl(midiAssetMap, '天城越え.MID'),
     lrc: assetUrl(lrcAssetMap, '天城越え.lrc'),
-    lrc_offset: 0,
+    lrc_offset: 4000,
   },
   {
     id: 'fuyou-kesiki',
@@ -32,7 +32,7 @@ const SONG_LIBRARY = [
     artist: '石川さゆり',
     url: assetUrl(midiAssetMap, '津軽海峡_冬景色.MID'),
     lrc: assetUrl(lrcAssetMap, '津軽海峡_冬景色.lrc'),
-    lrc_offset: 200,
+    lrc_offset: -1200,
   },
   {
     id: 'getuhana',

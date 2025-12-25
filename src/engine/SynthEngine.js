@@ -3,6 +3,7 @@ import processorUrl from 'spessasynth_lib/dist/spessasynth_processor.min.js?url'
 import defaultSoundFontUrl from '../soundfont/gmplus.sf2'
 //import defaultSoundFontUrl from '../soundfont/sc55.sf2'
 import { findActiveLyricIndex, parseLrc } from './lrc.js'
+import { getKaraokeAudioEngine } from './audioEngine.js'
 import { PLAYER_CONFIG } from '../config.js'
 
 function extractChannelPatchesFromMIDI(midi) {
@@ -187,7 +188,8 @@ class SynthEngine {
 
     this._initializing = (async () => {
       this._setState({ status: 'Loading SynthEngine…' })
-      const context = new AudioContext({ sampleRate:44100  })
+      const audioEngine = getKaraokeAudioEngine()
+      const context = audioEngine.ensureAudioContext()
       await context.audioWorklet.addModule(processorUrl)
 
       const synth = new WorkletSynthesizer(context, { initializeChorusProcessor: true, initializeReverbProcessor: true })
@@ -265,7 +267,8 @@ class SynthEngine {
 
   async resumeAudio() {
     await this.ensureInitialized()
-    await this._context.resume()
+    const audioEngine = getKaraokeAudioEngine()
+    await audioEngine.resumeAudio()
   }
 
   getAudioContext() {

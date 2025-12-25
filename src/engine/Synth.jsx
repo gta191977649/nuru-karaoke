@@ -17,7 +17,7 @@ function Synth({ onNavigateHome }) {
   const [hopSize, setHopSize] = useState(128)
   const [rmsGate, setRmsGate] = useState(DEFAULT_CONFIG.rmsGate)
   const [latencyCompMs, setLatencyCompMs] = useState(0)
-  const [userPitchOffsetMs, setUserPitchOffsetMs] = useState(0)
+  const [userPitchOffsetMs, setUserPitchOffsetMs] = useState(300)
   const [smoothing, setSmoothing] = useState(true)
   const [algoId, setAlgoId] = useState('pitchy')
   const [debugInfo, setDebugInfo] = useState({
