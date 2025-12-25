@@ -4,6 +4,7 @@ let requestedSampleRate = 44100
 function ensureAudioContext() {
   if (!sharedContext) {
     sharedContext = new AudioContext({ sampleRate: requestedSampleRate })
+    console.log("Engine: created audio context")
   }
   return sharedContext
 }

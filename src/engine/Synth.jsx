@@ -13,8 +13,8 @@ function Synth({ onNavigateHome }) {
   const [midiUrl, setMidiUrl] = useState('')
   const [reference, setReference] = useState(null)
   const [micActive, setMicActive] = useState(false)
-  const [windowSize, setWindowSize] = useState(2048)
-  const [hopSize, setHopSize] = useState(128)
+  const [windowSize, setWindowSize] = useState(4096)
+  const [hopSize, setHopSize] = useState(512)
   const [rmsGate, setRmsGate] = useState(DEFAULT_CONFIG.rmsGate)
   const [latencyCompMs, setLatencyCompMs] = useState(0)
   const [userPitchOffsetMs, setUserPitchOffsetMs] = useState(300)
@@ -569,6 +569,7 @@ function Synth({ onNavigateHome }) {
                 <Form.Select value={hopSize} onChange={(e) => setHopSize(Number(e.currentTarget.value))}>
                   <option value={128}>128</option>
                   <option value={256}>256</option>
+                  <option value={512}>512</option>
                 </Form.Select>
 
                 <Form.Label className="small mt-2">RMS Gate ({rmsGate.toFixed(3)})</Form.Label>
