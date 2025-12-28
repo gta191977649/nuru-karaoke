@@ -1,7 +1,7 @@
 import * as tf from '@tensorflow/tfjs'
 import { hzToMidi, rms } from '../utils/dspUtils.js'
 
-const MODEL_URL = new URL('../model/crepe/model.json', import.meta.url).toString()
+const MODEL_URL = '/crepe/model.json'
 const CREPE_SAMPLE_RATE = 16000
 const CREPE_FRAME_SIZE = 1024
 const CREPE_CENT_MIN = 1997.3794084376191
@@ -49,8 +49,7 @@ class CrepeTfPlugin {
       return null
     }
 
-    const resampled = this._resampleToCrepe(samples, sampleRate)
-    const frameRms = rms(resampled)
+    const frameRms = rms(samples)
     if (frameRms < this._rmsGate) {
       return {
         f0Hz: null,
@@ -59,6 +58,7 @@ class CrepeTfPlugin {
         rms: frameRms,
       }
     }
+    const resampled = this._resampleToCrepe(samples, sampleRate)
 
     const { f0Hz, confidence } = this._predict(resampled)
     if (!Number.isFinite(f0Hz) || confidence < this._confidenceGate) {
