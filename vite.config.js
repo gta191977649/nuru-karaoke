@@ -12,5 +12,6 @@ export default defineConfig({
     '**/*.midi',
     '**/*.MID',
     '**/*.MIDI',
+    '**/engine/audio/pitch/model/crepe/*',
   ],
 })

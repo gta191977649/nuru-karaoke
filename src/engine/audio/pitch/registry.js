@@ -3,6 +3,7 @@ import { EssentiaMelodiaPlugin } from './plugins/essentiaMelodiaPlugin.js'
 import { PitchyPlugin } from './plugins/pitchyPlugin.js'
 import { EssentiaYinPlugin } from './plugins/essentiaYinPlugin.js'
 import { PyinPlugin } from './plugins/pyinPlugin.js'
+import { CrepeTfPlugin } from './plugins/crepeTfPlugin.js'
 
 class PitchDetectorRegistry {
   constructor() {
@@ -28,6 +29,7 @@ function createDefaultPitchRegistry() {
   registry.register(new PitchyPlugin())
   registry.register(new PitchfinderYinPlugin())
   registry.register(new PyinPlugin())
+  registry.register(new CrepeTfPlugin())
   registry.register(new EssentiaYinPlugin())
   registry.register(new EssentiaMelodiaPlugin())
   return registry
