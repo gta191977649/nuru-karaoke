@@ -90,6 +90,14 @@ const SONG_LIBRARY = [
     lrc: assetUrl(lrcAssetMap, 'konayuki.lrc'),
     lrc_offset: 5000,
   },
+  {
+    id: '7_orange',
+    title: 'オレンジ',
+    artist: '7!!(Seven Oops)',
+    url: assetUrl(midiAssetMap, '7_orange.MID'),
+    lrc: assetUrl(lrcAssetMap, '7_orange.lrc'),
+    lrc_offset: 3500,
+  },
 ]
 
 export { SONG_LIBRARY }
