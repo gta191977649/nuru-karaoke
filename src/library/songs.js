@@ -12,8 +12,8 @@ function assetUrl(map, name) {
 const SONG_LIBRARY = [
   {
     id: 'bakamitai',
-    title: 'BAKAMITAI',
-    artist: 'Yakuza',
+    title: 'ばかみたい',
+    artist: '桐生一馬',
     url: assetUrl(midiAssetMap, 'BAKAMITAI.MID'),
     lrc: assetUrl(lrcAssetMap, 'BAKAMITAI.lrc'),
     lrc_offset: 2700,
@@ -64,7 +64,7 @@ const SONG_LIBRARY = [
     artist: 'AKB48',
     url: assetUrl(midiAssetMap, 'kimihamelody.MID'),
     lrc: assetUrl(lrcAssetMap, 'kimihamelody.lrc'),
-    lrc_offset: -1760,
+    lrc_offset: 2100,
   },
   {
     id: 'zenkutenshi',
@@ -73,6 +73,22 @@ const SONG_LIBRARY = [
     url: assetUrl(midiAssetMap, 'zangoku.MID'),
     lrc: assetUrl(lrcAssetMap, 'zangoku.lrc'),
     lrc_offset: 0,
+  },
+  {
+    id: 'braveheart',
+    title: 'Brave Heart',
+    artist: '宫崎步',
+    url: assetUrl(midiAssetMap, 'brave heart.MID'),
+    lrc: assetUrl(lrcAssetMap, 'brave heart.lrc'),
+    lrc_offset: 1200,
+  },
+  {
+    id: 'konayuki',
+    title: '粉雪',
+    artist: 'レミオロメン',
+    url: assetUrl(midiAssetMap, 'konayuki.MID'),
+    lrc: assetUrl(lrcAssetMap, 'konayuki.lrc'),
+    lrc_offset: 5000,
   },
 ]
 

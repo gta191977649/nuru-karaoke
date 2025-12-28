@@ -1,14 +1,9 @@
 import { createDefaultPitchRegistry } from '../registry.js'
+import { DEFAULT_CONFIG } from '../../../audioEngine.js'
 
 const registry = createDefaultPitchRegistry()
 let currentPlugin = registry.get('pitchy')
-let config = {
-  windowSize: 2048,
-  hopSize: 128,
-  rmsGate: 0.01,
-  clarityGate: 0.3,
-  smoothing: true,
-}
+let config = { ...DEFAULT_CONFIG }
 
 const smoothWindowSize = 5
 let recentMidi = []

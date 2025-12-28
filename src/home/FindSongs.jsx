@@ -18,7 +18,7 @@ function normalize(text) {
 }
 
 function FindSongs({ onBack, onSelectSong }) {
-  const [term, setTerm] = useState('ALWAYS')
+  const [term, setTerm] = useState('ばか')
   const [isComposing, setIsComposing] = useState(false)
   const [mode, setMode] = useState('title') // 'title' | 'artist'
 

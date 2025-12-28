@@ -1,14 +1,5 @@
 import { createDefaultPitchRegistry } from './registry.js'
-import { getKaraokeAudioEngine } from '../../audioEngine.js'
-
-const DEFAULT_CONFIG = {
-  windowSize: 2048,
-  hopSize: 128,
-  rmsGate: 0.01,
-  clarityGate: 0.3,
-  smoothing: true,
-  sampleRate: 44100,
-}
+import { DEFAULT_CONFIG, getKaraokeAudioEngine } from '../../audioEngine.js'
 
 class PitchEngine {
   constructor(options = {}) {
@@ -80,7 +71,7 @@ class PitchEngine {
       const stream = await navigator.mediaDevices.getUserMedia({
         audio: {
           echoCancellation: false,
-          noiseSuppression: true,
+          noiseSuppression: false,
           autoGainControl: false,
         },
       })
@@ -193,4 +184,4 @@ class PitchEngine {
   }
 }
 
-export { PitchEngine, DEFAULT_CONFIG }
+export { PitchEngine }

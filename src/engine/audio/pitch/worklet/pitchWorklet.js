@@ -1,8 +1,10 @@
+import { DEFAULT_CONFIG } from '../../../audioEngine.js'
+
 class PitchFrameProcessor extends AudioWorkletProcessor {
   constructor() {
     super()
-    this._windowSize = 2048
-    this._hopSize = 128
+    this._windowSize = DEFAULT_CONFIG.windowSize
+    this._hopSize = DEFAULT_CONFIG.hopSize
     this._buffer = new Float32Array(this._windowSize * 4)
     this._bufferLength = 0
 

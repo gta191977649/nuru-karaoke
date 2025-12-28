@@ -1,5 +1,14 @@
+const DEFAULT_CONFIG = {
+  windowSize: 2048,
+  hopSize: 256,
+  rmsGate: 0.01,
+  clarityGate: 0.3,
+  smoothing: true,
+  sampleRate: 44100,
+}
+
 let sharedContext = null
-let requestedSampleRate = 44100
+let requestedSampleRate = DEFAULT_CONFIG.sampleRate
 
 function ensureAudioContext() {
   if (!sharedContext) {
@@ -56,3 +65,4 @@ function getKaraokeAudioEngine() {
 }
 
 export { createKaraokeAudioEngine, getKaraokeAudioEngine }
+export { DEFAULT_CONFIG }
