@@ -5,7 +5,6 @@ class PitchfinderYinPlugin {
   constructor() {
     this.id = 'pitchfinder-yin'
     this.name = 'Pitchfinder YIN'
-    this._rmsGate = 0.01
     this._yinThreshold = 0.1
     this._probabilityThreshold = 0.1
     this._sampleRate = 0
@@ -13,8 +12,6 @@ class PitchfinderYinPlugin {
   }
 
   configure(cfg) {
-    const gate = Number(cfg?.rmsGate)
-    if (Number.isFinite(gate)) this._rmsGate = gate
     const threshold = Number(cfg?.yinThreshold)
     if (Number.isFinite(threshold)) this._yinThreshold = threshold
     const probability = Number(cfg?.yinProbabilityThreshold)
@@ -37,14 +34,6 @@ class PitchfinderYinPlugin {
     if (!samples || !Number.isFinite(sampleRate)) return null
 
     const frameRms = rms(samples)
-    if (frameRms < this._rmsGate) {
-      return {
-        f0Hz: null,
-        midi: null,
-        confidence: 0,
-        rms: frameRms,
-      }
-    }
     
     this._ensureDetector(sampleRate)
     const f0Hz = this._detector ? this._detector(samples) : null

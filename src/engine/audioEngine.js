@@ -2,9 +2,10 @@ const DEFAULT_CONFIG = {
   windowSize: 2048,
   hopSize: 256,
   rmsGate: 0.01,
-  clarityGate: 0.3,
-  smoothing: true,
+  clarityGate: 0.5,
+  smoothing: false, //Do Moving Average on f0
   sampleRate: 44100,
+  pitchAlgoId: 'pitchy',
 }
 
 let sharedContext = null

@@ -1,7 +1,6 @@
 import { hzToMidi, rms } from '../utils/dspUtils.js'
 
 const DEFAULTS = {
-  rmsGate: 0.01,
   pyinMu: 0.1,
   pyinPs: 0.99,
   pyinSpacing: Math.pow(2, 1 / 120),
@@ -84,9 +83,6 @@ class PyinPlugin {
     this._sampleRate = sampleRate
 
     const frameRms = rms(samples)
-    if (frameRms < this._config.rmsGate) {
-      return { f0Hz: null, midi: null, confidence: 0, rms: frameRms }
-    }
 
     const candidates = this._getYinCandidates(samples)
     const voicedResult = this._updateCausalStates(candidates)

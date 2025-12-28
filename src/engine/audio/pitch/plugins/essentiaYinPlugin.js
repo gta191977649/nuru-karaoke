@@ -22,13 +22,10 @@ class EssentiaYinPlugin {
   constructor() {
     this.id = 'essentia-yin'
     this.name = 'Essentia YIN'
-    this._rmsGate = 0.01
     this._confidenceGate = 0.5
   }
 
   configure(cfg) {
-    const gate = Number(cfg?.rmsGate)
-    if (Number.isFinite(gate)) this._rmsGate = gate
     const confidenceGate = Number(cfg?.yinConfidenceGate)
     if (Number.isFinite(confidenceGate)) this._confidenceGate = confidenceGate
   }
@@ -39,14 +36,6 @@ class EssentiaYinPlugin {
     if (!samples || !Number.isFinite(sampleRate)) return null
 
     const frameRms = rms(samples)
-    if (frameRms < this._rmsGate) {
-      return {
-        f0Hz: null,
-        midi: null,
-        confidence: 0,
-        rms: frameRms,
-      }
-    }
 
     const essentia = getEssentia()
     if (!essentia) return null

@@ -31,4 +31,20 @@ function smoothValue(prev, next, alpha = 0.3) {
   return p + (n - p) * a
 }
 
-export { rms, hzToMidi, centsError, smoothValue }
+function smoothMovingAverage(state, value, windowSize = 5) {
+  if (!state) return { value: Number.isFinite(value) ? value : null, window: [] }
+  const nextValue = Number.isFinite(value) ? value : null
+  if (nextValue == null) {
+    return { value: null, window: [] }
+  }
+  const nextWindow = Array.isArray(state.window) ? state.window.slice() : []
+  nextWindow.push(nextValue)
+  while (nextWindow.length > windowSize) nextWindow.shift()
+  const sum = nextWindow.reduce((acc, v) => acc + v, 0)
+  return {
+    value: sum / nextWindow.length,
+    window: nextWindow,
+  }
+}
+
+export { rms, hzToMidi, centsError, smoothValue, smoothMovingAverage }

@@ -5,15 +5,12 @@ class PitchyPlugin {
   constructor() {
     this.id = 'pitchy'
     this.name = 'Pitchy'
-    this._rmsGate = 0.01
-    this._clarityGate = 0.3
+    this._clarityGate = 0.1
     this._detector = null
     this._inputLength = 0
   }
 
   configure(cfg) {
-    const gate = Number(cfg?.rmsGate)
-    if (Number.isFinite(gate)) this._rmsGate = gate
     const clarityGate = Number(cfg?.clarityGate)
     if (Number.isFinite(clarityGate)) this._clarityGate = clarityGate
   }
@@ -30,14 +27,6 @@ class PitchyPlugin {
     if (!samples || !Number.isFinite(sampleRate)) return null
 
     const frameRms = rms(samples)
-    if (frameRms < this._rmsGate) {
-      return {
-        f0Hz: null,
-        midi: null,
-        confidence: 0,
-        rms: frameRms,
-      }
-    }
 
     this._ensureDetector(samples.length)
     const [f0Hz, clarity] = this._detector.findPitch(samples, sampleRate)

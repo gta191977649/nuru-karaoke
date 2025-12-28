@@ -26,15 +26,12 @@ class CrepeTfPlugin {
   constructor() {
     this.id = 'crepe-tf'
     this.name = 'CREPE (TF)'
-    this._rmsGate = 0.01
     this._confidenceGate = 0.5
     this._model = null
     this._modelPromise = null
   }
 
   configure(cfg) {
-    const gate = Number(cfg?.rmsGate)
-    if (Number.isFinite(gate)) this._rmsGate = gate
     const confGate = Number(cfg?.crepeConfidenceThreshold)
     if (Number.isFinite(confGate)) this._confidenceGate = confGate
   }
@@ -50,14 +47,6 @@ class CrepeTfPlugin {
     }
 
     const frameRms = rms(samples)
-    if (frameRms < this._rmsGate) {
-      return {
-        f0Hz: null,
-        midi: null,
-        confidence: 0,
-        rms: frameRms,
-      }
-    }
     const resampled = this._resampleToCrepe(samples, sampleRate)
 
     const { f0Hz, confidence } = this._predict(resampled)

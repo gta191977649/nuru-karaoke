@@ -19,7 +19,7 @@ class PitchEngine {
     this._detectors = registry.list().map((plugin) => ({ id: plugin.id, name: plugin.name }))
 
     this._config = { ...DEFAULT_CONFIG }
-    this._algoId = 'pitchy'
+    this._algoId = DEFAULT_CONFIG.pitchAlgoId || 'pitchy'
 
     this._stream = null
     this._source = null

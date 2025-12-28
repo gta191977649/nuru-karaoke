@@ -22,7 +22,6 @@ class EssentiaMelodiaPlugin {
   constructor() {
     this.id = 'essentia-melodia'
     this.name = 'Essentia Melodia'
-    this._rmsGate = 0.01
     this._buffer = new Float32Array(0)
     this._bufferStart = 0
     this._bufferLength = 0
@@ -92,9 +91,6 @@ class EssentiaMelodiaPlugin {
   }
 
   configure(cfg) {
-    const gate = Number(cfg?.rmsGate)
-    if (Number.isFinite(gate)) this._rmsGate = gate
-
     const updateNumber = (key) => {
       const value = Number(cfg?.[key])
       if (Number.isFinite(value)) this._params[key] = value
@@ -129,14 +125,6 @@ class EssentiaMelodiaPlugin {
     if (!samples || !Number.isFinite(sampleRate)) return null
 
     const frameRms = rms(samples)
-    if (frameRms < this._rmsGate) {
-      return {
-        f0Hz: null,
-        midi: null,
-        confidence: 0,
-        rms: frameRms,
-      }
-    }
 
     this._appendSamples(samples)
     this._samplesSinceLast += samples.length

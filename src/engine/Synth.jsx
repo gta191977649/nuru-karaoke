@@ -19,7 +19,7 @@ function Synth({ onNavigateHome }) {
   const [latencyCompMs, setLatencyCompMs] = useState(0)
   const [userPitchOffsetMs, setUserPitchOffsetMs] = useState(300)
   const [smoothing, setSmoothing] = useState(DEFAULT_CONFIG.smoothing)
-  const [algoId, setAlgoId] = useState('pitchy')
+  const [algoId, setAlgoId] = useState(DEFAULT_CONFIG.pitchAlgoId || 'essentia-yin')
   const [debugInfo, setDebugInfo] = useState({
     songTimeSec: 0,
     targetMidi: null,
