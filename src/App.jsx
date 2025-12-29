@@ -283,11 +283,15 @@ function App({ onNavigate }) {
             </div>
 
             <div className="wiiFooterRight">
+              <Button className="wiiFooterAction wiiFooterBtn--dark" type="button" onClick={() => go('/synth')}>
+                DEBUG
+              </Button>
+              <Button className="wiiFooterAction wiiFooterBtn--blue" type="button">
+                音量/操作
+              </Button>
+              
               <Button className="wiiFooterAction wiiFooterBtn--green" type="button" onClick={() => navigateScreen(SCREENS.queue)}>
                 予約確認 <span className="wiiFooterAction__count">({synth.queue.length}曲)</span>
-              </Button>
-              <Button className="wiiFooterAction wiiFooterBtn--blue" type="button" onClick={() => go('/synth')}>
-                音量/操作
               </Button>
             </div>
           </div>

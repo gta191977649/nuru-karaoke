@@ -3,8 +3,9 @@ import { synthEngine } from './SynthEngine.js'
 
 function SynthProvider({ children }) {
   useEffect(() => {
-    synthEngine.ensureInitialized().catch(() => {
+    synthEngine.ensureInitialized().catch((e) => {
       // handled via engine status; avoid throwing during render
+      console.error(e)
     })
   }, [])
 

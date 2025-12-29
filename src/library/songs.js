@@ -98,6 +98,14 @@ const SONG_LIBRARY = [
     lrc: assetUrl(lrcAssetMap, '7_orange.lrc'),
     lrc_offset: 3500,
   },
+  {
+    id: 'ikimodekinai',
+    title: '息もできない',
+    artist: 'Zard',
+    url: assetUrl(midiAssetMap, 'ikimodekinai.MID'),
+    lrc: assetUrl(lrcAssetMap, 'ikimodekinai.lrc'),
+    lrc_offset: 2500,
+  },
 ]
 
 export { SONG_LIBRARY }

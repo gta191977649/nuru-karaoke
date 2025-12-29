@@ -8,10 +8,80 @@ import { synthEngine } from './SynthEngine.js'
 import { useSynthEngine } from './useSynthEngine.js'
 import MelodyGuideCanvas from '../components/MelodyGuideCanvas.jsx'
 
+const DEMO_MIDI_URL = new URL('../library/demo/sc55.mid', import.meta.url).toString()
+
+const isSysExStatus = (status) => status === 0xf0 || status === 0xf7
+
+const toHex = (value) => Number(value).toString(16).padStart(2, '0').toUpperCase()
+
+const formatSysExMessage = (msg) => [msg.status, ...msg.data].map(toHex).join(' ')
+
+const getSysExOperationName = (msg) => {
+  const data = Array.isArray(msg?.data) ? msg.data.slice() : []
+  if (!data.length) return 'SysEx'
+  if (data[data.length - 1] === 0xf7) data.pop()
+
+  if (data.length >= 4 && data[0] === 0x7e && data[1] === 0x7f && data[2] === 0x09) {
+    if (data[3] === 0x01) return 'GM System On'
+    if (data[3] === 0x02) return 'GM System Off'
+    if (data[3] === 0x03) return 'GM2 System On'
+  }
+
+  const gsReset =
+    data.length >= 9 &&
+    data[0] === 0x41 &&
+    data[2] === 0x42 &&
+    data[3] === 0x12 &&
+    data[4] === 0x40 &&
+    data[5] === 0x00 &&
+    data[6] === 0x7f &&
+    data[7] === 0x00
+  if (gsReset) return 'GS Reset'
+
+  const xgReset =
+    data.length >= 7 &&
+    data[0] === 0x43 &&
+    data[2] === 0x4c &&
+    data[3] === 0x00 &&
+    data[4] === 0x00 &&
+    data[5] === 0x7e &&
+    data[6] === 0x00
+  if (xgReset) return 'XG System On'
+
+  if (data[0] === 0x41) return 'Roland SysEx'
+  if (data[0] === 0x43) return 'Yamaha SysEx'
+  if (data[0] === 0x7e) return 'Universal SysEx'
+  if (data[0] === 0x7f) return 'Universal Real-Time SysEx'
+
+  return 'SysEx'
+}
+
+const extractSysExMessages = (midiData) => {
+  if (!midiData?.tracks?.length) return []
+  const messages = []
+  midiData.tracks.forEach((track, trackIndex) => {
+    const events = track?.events || []
+    if (!Array.isArray(events)) return
+    events.forEach((event) => {
+      const status = Number(event?.statusByte)
+      if (!Number.isFinite(status) || !isSysExStatus(status)) return
+      const data = event?.data ? Array.from(event.data) : []
+      messages.push({
+        trackIndex,
+        ticks: Number(event?.ticks) || 0,
+        status,
+        data,
+      })
+    })
+  })
+  return messages
+}
+
 function Synth({ onNavigateHome }) {
   const state = useSynthEngine()
   const [midiUrl, setMidiUrl] = useState('')
   const [reference, setReference] = useState(null)
+  const [sysExMessages, setSysExMessages] = useState([])
   const [micActive, setMicActive] = useState(false)
   const [windowSize, setWindowSize] = useState(DEFAULT_CONFIG.windowSize)
   const [hopSize, setHopSize] = useState(DEFAULT_CONFIG.hopSize)
@@ -85,6 +155,26 @@ function Synth({ onNavigateHome }) {
   useEffect(() => {
     pitchEngine.configureDetector({ windowSize, hopSize, rmsGate, smoothing })
   }, [pitchEngine, windowSize, hopSize, rmsGate, smoothing])
+
+  useEffect(() => {
+    if (!state.midiName) {
+      setSysExMessages([])
+      return
+    }
+    let active = true
+    synthEngine
+      .getMidiData()
+      .then((midiData) => {
+        if (!active) return
+        setSysExMessages(midiData ? extractSysExMessages(midiData) : [])
+      })
+      .catch(() => {
+        if (active) setSysExMessages([])
+      })
+    return () => {
+      active = false
+    }
+  }, [state.midiName, state.midiUrl, state.queueIndex])
 
   useEffect(() => {
     pitchEngine.setDetector(algoId)
@@ -348,14 +438,37 @@ function Synth({ onNavigateHome }) {
                     const midiData = await synthEngine.getMidiData()
                     if (midiData) {
                       setReference(extractReferenceMelodyFromMidiData(midiData, { channel: 0 }))
+                      setSysExMessages(extractSysExMessages(midiData))
                     } else {
                       setReference(null)
+                      setSysExMessages([])
                     }
                   }}
                   disabled={!midiUrl || !state.ready}
                   type="button"
                 >
                   Load URL
+                </Button>
+              </Col>
+              <Col xs="auto">
+                <Button
+                  variant="outline-secondary"
+                  onClick={async () => {
+                    await synthEngine.resumeAudio()
+                    await synthEngine.loadMidiFromUrl(DEMO_MIDI_URL)
+                    const midiData = await synthEngine.getMidiData()
+                    if (midiData) {
+                      setReference(extractReferenceMelodyFromMidiData(midiData, { channel: 0 }))
+                      setSysExMessages(extractSysExMessages(midiData))
+                    } else {
+                      setReference(null)
+                      setSysExMessages([])
+                    }
+                  }}
+                  disabled={!state.ready}
+                  type="button"
+                >
+                  TEST
                 </Button>
               </Col>
               <Col xs={12} md="auto">
@@ -370,8 +483,10 @@ function Synth({ onNavigateHome }) {
                     const midiData = await synthEngine.getMidiData()
                     if (midiData) {
                       setReference(extractReferenceMelodyFromMidiData(midiData, { channel: 0 }))
+                      setSysExMessages(extractSysExMessages(midiData))
                     } else {
                       setReference(null)
+                      setSysExMessages([])
                     }
                   }}
                   disabled={!state.ready}
@@ -379,6 +494,19 @@ function Synth({ onNavigateHome }) {
               </Col>
             </Row>
             <div className="small text-muted mt-2">Loaded: {state.midiName || '—'}</div>
+            <div className="small text-muted mt-2">SysEx ({sysExMessages.length})</div>
+            {sysExMessages.length ? (
+              <div className="small mt-1" style={{ maxHeight: 140, overflowY: 'auto' }}>
+                {sysExMessages.map((msg, idx) => (
+                  <div key={`${msg.trackIndex}-${msg.ticks}-${idx}`}>
+                    T{msg.trackIndex + 1} @ {msg.ticks}: {getSysExOperationName(msg)} ·{' '}
+                    {formatSysExMessage(msg)}
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <div className="small text-muted mt-1">SysEx: none</div>
+            )}
           </div>
         </Col>
 
