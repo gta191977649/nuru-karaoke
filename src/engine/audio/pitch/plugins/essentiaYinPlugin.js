@@ -23,11 +23,17 @@ class EssentiaYinPlugin {
     this.id = 'essentia-yin'
     this.name = 'Essentia YIN'
     this._confidenceGate = 0.5
+    this._maxFrequency = null
+    this._minFrequency = null
   }
 
   configure(cfg) {
     const confidenceGate = Number(cfg?.yinConfidenceGate)
     if (Number.isFinite(confidenceGate)) this._confidenceGate = confidenceGate
+    const maxFrequency = Number(cfg?.f0MaxHz)
+    if (Number.isFinite(maxFrequency)) this._maxFrequency = maxFrequency
+    const minFrequency = Number(cfg?.f0MinHz)
+    if (Number.isFinite(minFrequency)) this._minFrequency = minFrequency
   }
 
   detect(frame) {
@@ -45,10 +51,21 @@ class EssentiaYinPlugin {
       signalVec = essentia.arrayToVector(samples)
       let res = null
       if (typeof essentia.PitchYin === 'function') {
-        res =
-          essentia.PitchYin.length >= 3
-            ? essentia.PitchYin(signalVec, samples.length, sampleRate)
-            : essentia.PitchYin(signalVec)
+        const maxFrequency = Number.isFinite(this._maxFrequency) ? this._maxFrequency : undefined
+        const minFrequency = Number.isFinite(this._minFrequency) ? this._minFrequency : undefined
+        if (essentia.PitchYin.length >= 6) {
+          res = essentia.PitchYin(signalVec, samples.length, false, maxFrequency, minFrequency, sampleRate)
+        } else if (essentia.PitchYin.length >= 5) {
+          res = essentia.PitchYin(signalVec, samples.length, false, maxFrequency, minFrequency)
+        } else if (essentia.PitchYin.length >= 4) {
+          res = essentia.PitchYin(signalVec, samples.length, false, maxFrequency)
+        } else if (essentia.PitchYin.length >= 3) {
+          res = essentia.PitchYin(signalVec, samples.length, sampleRate)
+        } else if (essentia.PitchYin.length >= 2) {
+          res = essentia.PitchYin(signalVec, samples.length)
+        } else {
+          res = essentia.PitchYin(signalVec)
+        }
       }
 
       const f0Hz = Number.isFinite(res?.pitch) && res.pitch > 0 ? res.pitch : null
