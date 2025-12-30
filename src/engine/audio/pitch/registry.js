@@ -1,5 +1,6 @@
 import { PitchyPlugin } from './plugins/pitchyPlugin.js'
 import { EssentiaYinPlugin } from './plugins/essentiaYinPlugin.js'
+import { EssentiaProbabilisticYinPlugin } from './plugins/essentiaProbabilisticYinPlugin.js'
 import { PyinPlugin } from './plugins/pyinPlugin.js'
 import { CrepeTfPlugin } from './plugins/crepeTfPlugin.js'
 
@@ -27,6 +28,7 @@ function createDefaultPitchRegistry() {
   registry.register(new PitchyPlugin())
   registry.register(new PyinPlugin())
   registry.register(new EssentiaYinPlugin())
+  registry.register(new EssentiaProbabilisticYinPlugin())
   registry.register(new CrepeTfPlugin())
   return registry
 }
