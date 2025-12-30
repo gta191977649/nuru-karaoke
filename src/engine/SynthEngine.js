@@ -8,6 +8,7 @@ import defaultSoundFontUrl from '../soundfont/gmex.sf2'
 import { findActiveLyricIndex, parseLrc } from './lrc.js'
 import { getKaraokeAudioEngine } from './audioEngine.js'
 import { PLAYER_CONFIG } from '../config.js'
+import { getSynthUiState, setSynthUiState } from '../state/synthUiStore.js'
 
 function extractChannelPatchesFromMIDI(midi) {
   if (!midi?.tracks?.length) return Array.from({ length: 16 }, () => null)
@@ -156,14 +157,8 @@ class SynthEngine {
       queue: [],
       queueIndex: -1,
       history: [],
-      pendingSong: null,
       enabledChannels: Array.from({ length: 16 }, () => true),
       channelInstrumentNames: Array.from({ length: 16 }, (_, i) => (i === 9 ? 'Drums' : '—')),
-      lrcName: '',
-      lrcEntries: [],
-      lyricOffsetMs: 0,
-      activeLyricIndex: -1,
-      karaokeProgress: 0,
     }
   }
 
@@ -242,18 +237,21 @@ class SynthEngine {
         const currentTime = seq.currentHighResolutionTime ?? seq.currentTime ?? 0
         const duration = seq.duration || 0
 
-        const t = currentTime - this._state.lyricOffsetMs / 1000
-        const activeLyricIndex = findActiveLyricIndex(this._state.lrcEntries, t)
+        const uiState = getSynthUiState()
+        const t = currentTime - (uiState.lyricOffsetMs || 0) / 1000
+        const activeLyricIndex = findActiveLyricIndex(uiState.lrcEntries || [], t)
         let karaokeProgress = 0
         if (activeLyricIndex >= 0) {
-          const start = this._state.lrcEntries[activeLyricIndex].time
-          const end = this._state.lrcEntries[activeLyricIndex + 1]?.time ?? Math.max(start + 1, duration || start + 1)
+          const start = uiState.lrcEntries[activeLyricIndex].time
+          const end =
+            uiState.lrcEntries[activeLyricIndex + 1]?.time ?? Math.max(start + 1, duration || start + 1)
           const denom = Math.max(0.001, end - start)
           karaokeProgress = Math.min(1, Math.max(0, (t - start) / denom))
         }
 
         const isPlaying = !seq.paused && !seq.isFinished
-        this._setState({ currentTime, duration, isPlaying, activeLyricIndex, karaokeProgress })
+        this._setState({ currentTime, duration, isPlaying })
+        setSynthUiState({ activeLyricIndex, karaokeProgress })
 
         if (seq.isFinished && !this._prevFinished) {
           this._prevFinished = true
@@ -333,11 +331,11 @@ class SynthEngine {
   }
 
   setPendingSong(song) {
-    this._setState({ pendingSong: song || null })
+    setSynthUiState({ pendingSong: song || null })
   }
 
   clearPendingSong() {
-    this._setState({ pendingSong: null })
+    setSynthUiState({ pendingSong: null })
   }
 
   enqueueSong(song) {
@@ -348,8 +346,9 @@ class SynthEngine {
   }
 
   enqueuePendingSong() {
-    if (!this._state.pendingSong) return
-    this.enqueueSong(this._state.pendingSong)
+    const pending = getSynthUiState().pendingSong
+    if (!pending) return
+    this.enqueueSong(pending)
     this.clearPendingSong()
   }
 
@@ -395,7 +394,7 @@ class SynthEngine {
     if (!song?.url) return
     await this.resumeAudio()
     this.setTransposition(0)
-    this._setState({
+    setSynthUiState({
       lrcName: '',
       lrcEntries: [],
       lyricOffsetMs: 0,
@@ -410,10 +409,10 @@ class SynthEngine {
         const res = await fetch(song.lrc)
         if (res.ok) {
           const text = await res.text()
-          this._setState({
-            lrcName: song.lrcName || song.lrc.split('/').pop() || 'lyrics.lrc',
-            lrcEntries: parseLrc(text),
-          })
+            setSynthUiState({
+              lrcName: song.lrcName || song.lrc.split('/').pop() || 'lyrics.lrc',
+              lrcEntries: parseLrc(text),
+            })
         }
       } catch {
         // ignore
@@ -558,12 +557,12 @@ class SynthEngine {
   async loadLrcFromFile(file) {
     const text = await file.text()
     const entries = parseLrc(text)
-    this._setState({ lrcName: file.name, lrcEntries: entries })
+    setSynthUiState({ lrcName: file.name, lrcEntries: entries })
   }
 
   setLyricOffsetMs(ms) {
     const value = Math.max(-30000, Math.min(30000, Number(ms) || 0))
-    this._setState({ lyricOffsetMs: value })
+    setSynthUiState({ lyricOffsetMs: value })
   }
 
   async _updateChannelInstrumentNames(timeoutMs = 1500) {

@@ -6,6 +6,7 @@ import { DEFAULT_CONFIG } from './audioEngine.js'
 import { centsError } from './audio/pitch/utils/dspUtils.js'
 import { synthEngine } from './SynthEngine.js'
 import { useSynthEngine } from './useSynthEngine.js'
+import { useSynthUi } from './useSynthUi.js'
 import MelodyGuideCanvas from '../components/MelodyGuideCanvas.jsx'
 
 const DEMO_MIDI_URL = new URL('../library/demo/sc55.mid', import.meta.url).toString()
@@ -79,6 +80,7 @@ const extractSysExMessages = (midiData) => {
 
 function Synth({ onNavigateHome }) {
   const state = useSynthEngine()
+  const uiState = useSynthUi()
   const [midiUrl, setMidiUrl] = useState('')
   const [reference, setReference] = useState(null)
   const [sysExMessages, setSysExMessages] = useState([])
@@ -101,6 +103,7 @@ function Synth({ onNavigateHome }) {
     confidence: 0,
     rms: 0,
     algoName: 'n/a',
+    micSampleRate: null,
   })
 
   const lastPitchRef = useRef(null)
@@ -197,7 +200,8 @@ function Synth({ onNavigateHome }) {
       const algoName =
         detectorOptions.find((option) => option.id === (last?.algoId ?? algoId))?.name || 'n/a'
 
-      setDebugInfo({
+      setDebugInfo((prev) => ({
+        ...prev,
         songTimeSec,
         targetMidi: transposedTargetMidi,
         targetPitchClass: midiToPitchClass(transposedTargetMidi),
@@ -208,7 +212,7 @@ function Synth({ onNavigateHome }) {
         confidence: last?.confidence ?? 0,
         rms: last?.rms ?? 0,
         algoName,
-      })
+      }))
 
       const fullHistory = fullPitchHistoryRef.current
       fullHistory.push({
@@ -628,13 +632,13 @@ function Synth({ onNavigateHome }) {
                 await synthEngine.loadLrcFromFile(file)
               }}
             />
-            <div className="small text-muted mt-2">Loaded: {state.lrcName || '—'}</div>
-            <Form.Label className="small mt-2">Offset (ms): {state.lyricOffsetMs}</Form.Label>
+            <div className="small text-muted mt-2">Loaded: {uiState.lrcName || '—'}</div>
+            <Form.Label className="small mt-2">Offset (ms): {uiState.lyricOffsetMs}</Form.Label>
             <Form.Range
               min={-3000}
               max={3000}
               step={10}
-              value={state.lyricOffsetMs}
+              value={uiState.lyricOffsetMs}
               disabled={!state.ready}
               onChange={(e) => synthEngine.setLyricOffsetMs(Number(e.currentTarget.value))}
             />
@@ -652,6 +656,11 @@ function Synth({ onNavigateHome }) {
                   onClick={async () => {
                     try {
                       await startSharedMic()
+                      const audioContext = pitchEngine.getAudioContext?.()
+                      setDebugInfo((prev) => ({
+                        ...prev,
+                        micSampleRate: audioContext?.sampleRate ?? null,
+                      }))
                       setMicActive(true)
                     } catch (err) {
                       console.error(err)
@@ -668,6 +677,10 @@ function Synth({ onNavigateHome }) {
                   disabled={!micActive}
                   onClick={() => {
                     stopSharedMic()
+                    setDebugInfo((prev) => ({
+                      ...prev,
+                      micSampleRate: null,
+                    }))
                     setMicActive(false)
                   }}
                 >
@@ -771,6 +784,7 @@ function Synth({ onNavigateHome }) {
               <div>confidence: {formatNumber(debugInfo.confidence, 3)}</div>
               <div>rms: {formatNumber(debugInfo.rms, 4)}</div>
               <div>algoName: {debugInfo.algoName || 'n/a'}</div>
+              <div>micSampleRate: {formatNumber(debugInfo.micSampleRate, 0)}</div>
             </div>
           </div>
         </Col>

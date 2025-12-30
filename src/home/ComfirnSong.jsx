@@ -1,10 +1,10 @@
 import { Button, Card, Col, Container, Row, Stack } from 'react-bootstrap'
 import { useEffect, useState } from 'react'
-import { synthEngine } from '../engine/SynthEngine.js'
-import { useSynthEngine } from '../engine/useSynthEngine.js'
+import { useSynthUi } from '../engine/useSynthUi.js'
 import { parseLrc } from '../engine/lrc.js'
 import useAlertStore from '../state/alertStore.js'
 import WiiDialog from '../components/WiiDialog.jsx'
+import { enqueueSongAndPlay } from '../engine/playerController.js'
 
 function InfoRow({ icon, label, value }) {
   return (
@@ -25,8 +25,8 @@ function InfoRow({ icon, label, value }) {
 }
 
 export default function ComfirmSong({ onBack, onConfirm }) {
-  const synth = useSynthEngine()
-  const song = synth.pendingSong
+  const uiState = useSynthUi()
+  const song = uiState.pendingSong
   const showAlert = useAlertStore((state) => state.showAlert)
   const [previewText, setPreviewText] = useState('—')
   const [showLyrics, setShowLyrics] = useState(false)
@@ -182,15 +182,12 @@ export default function ComfirmSong({ onBack, onConfirm }) {
                   disabled={!song}
                   onClick={async () => {
                     if (!song) return
-                    await synthEngine.resumeAudio()
-                    synthEngine.enqueueSong(song)
-                    synthEngine.clearPendingSong()
+                    await enqueueSongAndPlay(song)
                     showAlert({
                       message: `${song.title} を予約しました`,
                       variant: 'success',
                       timeoutMs: 2500,
                     })
-                    await synthEngine.playQueueIfIdle()
                     if (onConfirm) onConfirm()
                   }}
                 >

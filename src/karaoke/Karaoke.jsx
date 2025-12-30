@@ -1,12 +1,15 @@
 import './Karaoke.css'
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useEffect, useMemo, useRef } from 'react'
 import { useSynthEngine } from '../engine/useSynthEngine.js'
+import { useSynthUi } from '../engine/useSynthUi.js'
 import { synthEngine } from '../engine/SynthEngine.js'
-import { extractReferenceMelodyFromMidiData, getTargetMidiAtTime } from '../engine/audio/midi/referenceMelody.js'
 import { sharedPitchEngine, startSharedMic, stopSharedMic } from '../engine/audio/pitch/sharedPitchEngine.js'
 import MelodyGuideCanvas from '../components/MelodyGuideCanvas.jsx'
 import KeyChangeAlert from '../components/KeyChangeAlert.jsx'
 import useKeyChangeAlertStore from '../state/keyChangeAlertStore.js'
+import { useKaraokeReference } from './hooks/useKaraokeReference.js'
+import { useKaraokePitchHistory } from './hooks/useKaraokePitchHistory.js'
+import { useKaraokeSongIntro } from './hooks/useKaraokeSongIntro.js'
 
 function splitRubySegments(text) {
   const raw = String(text ?? '')
@@ -54,20 +57,38 @@ function renderRubySegments(segments) {
 
 function Karaoke() {
   const state = useSynthEngine()
-  const [reference, setReference] = useState(null)
-  const [showSongInfo, setShowSongInfo] = useState(false)
-  const [songInfo, setSongInfo] = useState({ title: '', artist: '' })
+  const uiState = useSynthUi()
   const pitchEngine = sharedPitchEngine
-  const lastPitchRef = useRef(null)
-  const pitchHistoryRef = useRef([])
   const currentTimeRef = useRef(0)
   const transpositionRef = useRef(0)
   const micRmsGate = 0.01
   const showKeyChangeAlert = useKeyChangeAlertStore((store) => store.showKeyChangeAlert)
+  const reference = useKaraokeReference({
+    ready: state.ready,
+    midiName: state.midiName,
+    midiUrl: state.midiUrl,
+    queueIndex: state.queueIndex,
+  })
+  const { showSongInfo, songInfo } = useKaraokeSongIntro({
+    midiUrl: state.midiUrl,
+    midiName: state.midiName,
+    queue: state.queue,
+    queueIndex: state.queueIndex,
+    transposition: state.transposition,
+    showKeyChangeAlert,
+  })
+  const { pitchHistoryRef, lastPitchRef } = useKaraokePitchHistory({
+    pitchEngine,
+    reference,
+    currentTimeRef,
+    transpositionRef,
+    rmsGate: micRmsGate,
+    resetKey: `${state.midiName || ''}-${state.queueIndex ?? -1}`,
+  })
 
   const lines = useMemo(() => {
-    const entries = state.lrcEntries || []
-    const i = state.activeLyricIndex ?? -1
+    const entries = uiState.lrcEntries || []
+    const i = uiState.activeLyricIndex ?? -1
     const pairStart = i >= 0 ? i - (i % 2) : -1
     const current =
       pairStart >= 0 ? splitRubySegments(entries[pairStart]?.text) : { segments: [{ text: '…', ruby: '' }], hasRuby: false }
@@ -83,9 +104,9 @@ function Karaoke() {
       nextAlign: 'text-right lyric-row--indent',
       activeInPair,
     }
-  }, [state.activeLyricIndex, state.lrcEntries])
+  }, [uiState.activeLyricIndex, uiState.lrcEntries])
 
-  const progressPercent = Math.round((state.karaokeProgress ?? 0) * 1000) / 10
+  const progressPercent = Math.round((uiState.karaokeProgress ?? 0) * 1000) / 10
   const scorePercent =
     state.duration > 0 ? Math.max(0, Math.min(100, Math.round((state.currentTime / state.duration) * 100))) : 0
 
@@ -105,52 +126,6 @@ function Karaoke() {
   }, [state.transposition])
 
   useEffect(() => {
-    pitchHistoryRef.current = []
-    lastPitchRef.current = null
-  }, [state.midiName, state.midiUrl, state.queueIndex])
-  
-  useEffect(() => {
-    console.log(state.midiName, state.midiUrl)
-    const currentSong = state.queueIndex >= 0 ? state.queue?.[state.queueIndex] : null
-    const title = currentSong?.title || state.midiName || ''
-    if (!title) return
-    setSongInfo({ title, artist: currentSong?.artist || '' })
-    showKeyChangeAlert(state.transposition ?? 0, 8000)
-    setShowSongInfo(true)
-
-    const timer = setTimeout(() => setShowSongInfo(false), 8000)
-    return () => clearTimeout(timer)
-  }, [state.midiName, state.midiUrl])
-
-  useEffect(() => {
-    if (!state.ready || !state.midiName) {
-      setReference(null)
-      return
-    }
-    let active = true
-    synthEngine
-      .getMidiData()
-      .then((midiData) => {
-        if (!active) return
-        if (midiData) setReference(extractReferenceMelodyFromMidiData(midiData, { channel: 0 }))
-        else setReference(null)
-      })
-      .catch(() => {
-        if (active) setReference(null)
-      })
-    return () => {
-      active = false
-    }
-  }, [state.ready, state.midiName, state.midiUrl, state.queueIndex])
-
-  useEffect(() => {
-    const unsubscribe = pitchEngine.onPitch((result) => {
-      lastPitchRef.current = result
-    })
-    return () => unsubscribe()
-  }, [pitchEngine])
-
-  useEffect(() => {
     let cancelled = false
     const start = async () => {
       try {
@@ -165,25 +140,6 @@ function Karaoke() {
       stopSharedMic()
     }
   }, [pitchEngine])
-
-  useEffect(() => {
-    const interval = window.setInterval(() => {
-      const songTimeSec = currentTimeRef.current
-      const rawTargetMidi = reference ? getTargetMidiAtTime(reference, songTimeSec) : null
-      const transposedTargetMidi =
-        rawTargetMidi != null ? rawTargetMidi + transpositionRef.current : null
-      const last = lastPitchRef.current
-      const userMidi =
-        Number.isFinite(last?.midi) && Number.isFinite(last?.rms) && last.rms >= micRmsGate
-          ? Number(last.midi)
-          : null
-      const history = pitchHistoryRef.current
-      history.push({ t: songTimeSec, userMidi, targetMidi: transposedTargetMidi, rms: last?.rms ?? null })
-      const cutoff = songTimeSec - 12
-      while (history.length && history[0].t < cutoff) history.shift()
-    }, 80)
-    return () => window.clearInterval(interval)
-  }, [reference])
 
   return (
     <div className="karaokePage">

@@ -35,6 +35,10 @@ class PitchEngine {
     return this._detectors.slice()
   }
 
+  getAudioContext() {
+    return this._audioContext || (this._getAudioContext ? this._getAudioContext() : null)
+  }
+
   configureDetector(cfg) {
     this._config = { ...this._config, ...cfg }
     this._worker.postMessage({ type: 'config', cfg: this._config })
@@ -164,6 +168,7 @@ class PitchEngine {
       type: 'config',
       windowSize: this._config.windowSize,
       hopSize: this._config.hopSize,
+      hpfCutoffHz: this._config.hpfCutoffHz,
     })
   }
 

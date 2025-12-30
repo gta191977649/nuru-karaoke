@@ -1,10 +1,18 @@
 import { DEFAULT_CONFIG } from '../../../audioEngine.js'
+import {
+  applyHpfInPlace,
+  createHpfState,
+  removeDcOffsetInPlace,
+  updateHpfState,
+} from '../utils/dspUtils.js'
 
 class PitchFrameProcessor extends AudioWorkletProcessor {
   constructor() {
     super()
     this._windowSize = DEFAULT_CONFIG.windowSize
     this._hopSize = DEFAULT_CONFIG.hopSize
+    this._hpfCutoffHz = Number(DEFAULT_CONFIG.hpfCutoffHz) || 0
+    this._hpfState = createHpfState(this._hpfCutoffHz, sampleRate)
     this._buffer = new Float32Array(this._windowSize * 4)
     this._bufferLength = 0
 
@@ -13,9 +21,14 @@ class PitchFrameProcessor extends AudioWorkletProcessor {
       if (msg?.type !== 'config') return
       const nextWindow = Math.max(256, Number(msg.windowSize) || this._windowSize)
       const nextHop = Math.max(1, Number(msg.hopSize) || this._hopSize)
+      const nextCutoff = Number.isFinite(Number(msg.hpfCutoffHz))
+        ? Number(msg.hpfCutoffHz)
+        : this._hpfCutoffHz
       const needsReset = nextWindow !== this._windowSize
       this._windowSize = nextWindow
       this._hopSize = nextHop
+      this._hpfCutoffHz = nextCutoff
+      this._hpfState = updateHpfState(this._hpfState, this._hpfCutoffHz, sampleRate)
       if (needsReset) {
         this._buffer = new Float32Array(this._windowSize * 4)
         this._bufferLength = 0
@@ -52,6 +65,7 @@ class PitchFrameProcessor extends AudioWorkletProcessor {
     while (this._bufferLength >= this._windowSize) {
       const frame = new Float32Array(this._windowSize)
       frame.set(this._buffer.subarray(0, this._windowSize))
+      this._conditionFrame(frame)
 
       const remaining = this._bufferLength - this._hopSize
       if (remaining > 0) {
@@ -69,6 +83,12 @@ class PitchFrameProcessor extends AudioWorkletProcessor {
         [frame.buffer],
       )
     }
+  }
+
+  _conditionFrame(frame) {
+    if (!frame?.length) return
+    removeDcOffsetInPlace(frame)
+    this._hpfState = applyHpfInPlace(frame, this._hpfState)
   }
 }
 

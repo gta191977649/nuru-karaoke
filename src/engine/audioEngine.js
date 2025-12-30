@@ -2,9 +2,15 @@ const DEFAULT_CONFIG = {
   windowSize: 2048,
   hopSize: 256,
   rmsGate: 0.01,
-  clarityGate: 0.5,
+  clarityGate: 0.8,
   smoothing: false, //Do Moving Average on f0
-  sampleRate: 44100,
+  f0MinHz: 80, //  Detection Range for vocal low bound (Hz)
+  f0MaxHz: 1000, // Detection Range for vocal high bound (Hz)
+  medianWindowSize: 5, //中值滤波窗口大小（抗尖刺）
+  maxJumpSemitones: 3, //半音跳变约束（MIDI domain） 人声物理约束。
+  holdFrames: 2, // 音高短暂保持（Hold）
+  hpfCutoffHz: 80, //High-pass filter cutoff for mic conditioning
+  sampleRate: 48000,
   pitchAlgoId: 'pitchy',
 }
 

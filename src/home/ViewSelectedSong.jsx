@@ -1,13 +1,14 @@
 import { Button, Container, ListGroup, Tab, Tabs } from 'react-bootstrap'
-import { synthEngine } from '../engine/SynthEngine.js'
 import { useSynthEngine } from '../engine/useSynthEngine.js'
 import useAlertStore from '../state/alertStore.js'
+import { bumpQueueNext, clearQueue, removeFromQueue } from '../engine/playerController.js'
+import { selectHistory, selectReservedQueue } from '../engine/playerSelectors.js'
 
 function ViewSelectedSong({ onBack, onOpenKaraoke }) {
   const state = useSynthEngine()
 
-  const reserved = state.queue.map((song, idx) => ({ song, idx }))
-  const history = state.history || []
+  const reserved = selectReservedQueue(state)
+  const history = selectHistory(state)
   const showAlert = useAlertStore((store) => store.showAlert)
 
   return (
@@ -22,7 +23,7 @@ function ViewSelectedSong({ onBack, onOpenKaraoke }) {
             variant="outline-danger"
             type="button"
             disabled={!state.queue.length}
-            onClick={() => synthEngine.clearQueue()}
+            onClick={() => clearQueue()}
           >
             Clear
           </Button>
@@ -56,7 +57,7 @@ function ViewSelectedSong({ onBack, onOpenKaraoke }) {
                           size="sm"
                           type="button"
                           onClick={() => {
-                            synthEngine.bumpQueueNext(idx)
+                            bumpQueueNext(idx)
                             showAlert({
                               message: `${song.title} を割り込みしました`,
                               variant: 'info',
@@ -73,7 +74,7 @@ function ViewSelectedSong({ onBack, onOpenKaraoke }) {
                         variant="outline-secondary"
                         size="sm"
                         type="button"
-                        onClick={() => synthEngine.removeFromQueue(idx)}
+                        onClick={() => removeFromQueue(idx)}
                       >
                         キャンセル
                       </Button>

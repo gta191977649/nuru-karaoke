@@ -1,7 +1,7 @@
 import { Button, Col, Row } from 'react-bootstrap'
 import FindSongs from './FindSongs.jsx'
 import ComfirnSong from './ComfirnSong.jsx'
-import { synthEngine } from '../engine/SynthEngine.js'
+import { setPendingSong } from '../engine/playerController.js'
 import ViewSelectedSong from './ViewSelectedSong.jsx'
 
 const SCREENS = {
@@ -42,7 +42,7 @@ function WiiHomeMain({ screen, onNavigate, onOpenKaraoke, karaokeTargetRef, main
               onBack={() => onNavigate(SCREENS.home)}
               onSelectSong={(song) => {
                 onNavigate(SCREENS.comfirmSongs)
-                synthEngine.setPendingSong(song)
+                setPendingSong(song)
               }}
             />
           </main>
@@ -166,7 +166,7 @@ function WiiHomeMain({ screen, onNavigate, onOpenKaraoke, karaokeTargetRef, main
         </Col>
         <Col xs={12} lg={4}>
           <div className="joyInfo">
-            <div className="joyInfo__label">お知らせ</div>
+            <div className="joyInfo__label">LIVE!</div>
             <div className="joyInfo__media" ref={karaokeTargetRef}>
               <div className="joyInfo__overlay">ARENA SOUND</div>
             </div>

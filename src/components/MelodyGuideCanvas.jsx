@@ -166,6 +166,7 @@ function MelodyGuideCanvas({
       ctx.shadowBlur = 6
       history.forEach((point) => {
         if (point.t < visibleStart || point.t > visibleEnd) return
+        if (point.userMidi == null) return
         const midi = Number(point.userMidi)
         const pointRms = Number(point.rms)
         if (!Number.isFinite(midi) || (Number.isFinite(pointRms) && pointRms < rmsGate)) return
