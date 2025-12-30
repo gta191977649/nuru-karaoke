@@ -11,7 +11,7 @@ const DEFAULT_CONFIG = {
   holdFrames: 2, // 音高短暂保持（Hold）
   hpfCutoffHz: 80, //High-pass filter cutoff for mic conditioning
   sampleRate: 48000,
-  pitchAlgoId: 'pitchy',
+  pitchAlgoId: 'essentia-yin',
 }
 
 let sharedContext = null

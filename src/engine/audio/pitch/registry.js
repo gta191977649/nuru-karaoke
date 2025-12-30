@@ -1,4 +1,3 @@
-import { PitchfinderYinPlugin } from './plugins/pitchfinderYinPlugin.js'
 import { PitchyPlugin } from './plugins/pitchyPlugin.js'
 import { EssentiaYinPlugin } from './plugins/essentiaYinPlugin.js'
 import { PyinPlugin } from './plugins/pyinPlugin.js'
@@ -26,10 +25,9 @@ class PitchDetectorRegistry {
 function createDefaultPitchRegistry() {
   const registry = new PitchDetectorRegistry()
   registry.register(new PitchyPlugin())
-  registry.register(new PitchfinderYinPlugin())
   registry.register(new PyinPlugin())
-  registry.register(new CrepeTfPlugin())
   registry.register(new EssentiaYinPlugin())
+  registry.register(new CrepeTfPlugin())
   return registry
 }
 
