@@ -24,7 +24,7 @@ const SONG_LIBRARY = [
     artist: '石川さゆり',
     url: assetUrl(midiAssetMap, '天城越え.MID'),
     lrc: assetUrl(lrcAssetMap, '天城越え.lrc'),
-    lrc_offset: 4000,
+    lrc_offset: 7000,
   },
   {
     id: 'fuyou-kesiki',

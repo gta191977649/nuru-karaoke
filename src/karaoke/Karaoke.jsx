@@ -1,7 +1,6 @@
 import './Karaoke.css'
 import { useEffect, useMemo, useRef } from 'react'
-import { useSynthEngine } from '../engine/useSynthEngine.js'
-import { useSynthUi } from '../engine/useSynthUi.js'
+import { useKaraokeStore } from '../state/karaokeStore.js'
 import { synthEngine } from '../engine/SynthEngine.js'
 import { sharedPitchEngine, startSharedMic, stopSharedMic } from '../engine/audio/pitch/sharedPitchEngine.js'
 import MelodyGuideCanvas from '../components/MelodyGuideCanvas.jsx'
@@ -56,8 +55,7 @@ function renderRubySegments(segments) {
 }
 
 function Karaoke() {
-  const state = useSynthEngine()
-  const uiState = useSynthUi()
+  const state = useKaraokeStore()
   const pitchEngine = sharedPitchEngine
   const currentTimeRef = useRef(0)
   const transpositionRef = useRef(0)
@@ -87,8 +85,8 @@ function Karaoke() {
   })
 
   const lines = useMemo(() => {
-    const entries = uiState.lrcEntries || []
-    const i = uiState.activeLyricIndex ?? -1
+    const entries = state.lrcEntries || []
+    const i = state.activeLyricIndex ?? -1
     const pairStart = i >= 0 ? i - (i % 2) : -1
     const current =
       pairStart >= 0 ? splitRubySegments(entries[pairStart]?.text) : { segments: [{ text: '…', ruby: '' }], hasRuby: false }
@@ -104,9 +102,9 @@ function Karaoke() {
       nextAlign: 'text-right lyric-row--indent',
       activeInPair,
     }
-  }, [uiState.activeLyricIndex, uiState.lrcEntries])
+  }, [state.activeLyricIndex, state.lrcEntries])
 
-  const progressPercent = Math.round((uiState.karaokeProgress ?? 0) * 1000) / 10
+  const progressPercent = Math.round((state.karaokeProgress ?? 0) * 1000) / 10
   const scorePercent =
     state.duration > 0 ? Math.max(0, Math.min(100, Math.round((state.currentTime / state.duration) * 100))) : 0
 

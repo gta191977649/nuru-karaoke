@@ -1,11 +1,11 @@
 import { Button, Container, ListGroup, Tab, Tabs } from 'react-bootstrap'
-import { useSynthEngine } from '../engine/useSynthEngine.js'
+import { useKaraokeStore } from '../state/karaokeStore.js'
 import useAlertStore from '../state/alertStore.js'
 import { bumpQueueNext, clearQueue, removeFromQueue } from '../engine/playerController.js'
 import { selectHistory, selectReservedQueue } from '../engine/playerSelectors.js'
 
 function ViewSelectedSong({ onBack, onOpenKaraoke }) {
-  const state = useSynthEngine()
+  const state = useKaraokeStore()
 
   const reserved = selectReservedQueue(state)
   const history = selectHistory(state)

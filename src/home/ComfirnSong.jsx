@@ -1,6 +1,6 @@
 import { Button, Card, Col, Container, Row, Stack } from 'react-bootstrap'
 import { useEffect, useState } from 'react'
-import { useSynthUi } from '../engine/useSynthUi.js'
+import { useKaraokeStore } from '../state/karaokeStore.js'
 import { parseLrc } from '../engine/lrc.js'
 import useAlertStore from '../state/alertStore.js'
 import WiiDialog from '../components/WiiDialog.jsx'
@@ -25,8 +25,8 @@ function InfoRow({ icon, label, value }) {
 }
 
 export default function ComfirmSong({ onBack, onConfirm }) {
-  const uiState = useSynthUi()
-  const song = uiState.pendingSong
+  const state = useKaraokeStore()
+  const song = state.pendingSong
   const showAlert = useAlertStore((state) => state.showAlert)
   const [previewText, setPreviewText] = useState('—')
   const [showLyrics, setShowLyrics] = useState(false)

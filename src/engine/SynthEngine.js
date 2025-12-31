@@ -1,14 +1,14 @@
 import { Sequencer, WorkletSynthesizer } from 'spessasynth_lib'
 import processorUrl from 'spessasynth_lib/dist/spessasynth_processor.min.js?url'
 //import defaultSoundFontUrl from '../soundfont/a320u.sf2'
-//import defaultSoundFontUrl from '../soundfont/gmex.sf2'
+import defaultSoundFontUrl from '../soundfont/gmex.sf2'
 //import defaultSoundFontUrl from '../soundfont/sc88.sf2'
-import defaultSoundFontUrl from '../soundfont/sc55-hi.sf2'
+//import defaultSoundFontUrl from '../soundfont/sc55-hi.sf2'
 //import defaultSoundFontUrl from '../soundfont/gzdoom.sf2'
 import { findActiveLyricIndex, parseLrc } from './lrc.js'
 import { getKaraokeAudioEngine } from './audioEngine.js'
 import { PLAYER_CONFIG } from '../config.js'
-import { getSynthUiState, setSynthUiState } from '../state/synthUiStore.js'
+import { getKaraokeStoreState, setKaraokeStoreState } from '../state/karaokeStore.js'
 
 function extractChannelPatchesFromMIDI(midi) {
   if (!midi?.tracks?.length) return Array.from({ length: 16 }, () => null)
@@ -128,7 +128,6 @@ function resolvePatchName(presetList, patch, channelIndex) {
 
 class SynthEngine {
   constructor() {
-    this._listeners = new Set()
     this._initialized = false
     this._initializing = null
 
@@ -140,44 +139,10 @@ class SynthEngine {
     this._prevFinished = false
     this._isAdvancing = false
     this._isStopping = false
-
-    this._state = {
-      ready: false,
-      status: 'Initializing…',
-      soundFontUrl: defaultSoundFontUrl,
-      soundFontName: 'GM',
-      midiUrl: '',
-      midiName: '',
-      isPlaying: false,
-      currentTime: 0,
-      duration: 0,
-      reverbGain: 0.6,
-      chorusGain: 0.6,
-      transposition: 0,
-      queue: [],
-      queueIndex: -1,
-      history: [],
-      enabledChannels: Array.from({ length: 16 }, () => true),
-      channelInstrumentNames: Array.from({ length: 16 }, (_, i) => (i === 9 ? 'Drums' : '—')),
-    }
-  }
-
-  subscribe(listener) {
-    this._listeners.add(listener)
-    return () => this._listeners.delete(listener)
-  }
-
-  getSnapshot() {
-    return this._state
-  }
-
-  _emit() {
-    for (const listener of this._listeners) listener()
   }
 
   _setState(patch) {
-    this._state = { ...this._state, ...patch }
-    this._emit()
+    setKaraokeStoreState(patch)
   }
 
   async ensureInitialized() {
@@ -215,7 +180,8 @@ class SynthEngine {
         // ignore
       }
 
-      this._state.enabledChannels.forEach((enabled, i) => synth.muteChannel(i, !enabled))
+      const { enabledChannels } = getKaraokeStoreState()
+      enabledChannels.forEach((enabled, i) => synth.muteChannel(i, !enabled))
 
       this._initialized = true
       this._setState({ ready: true, status: 'Ready' })
@@ -237,7 +203,7 @@ class SynthEngine {
         const currentTime = seq.currentHighResolutionTime ?? seq.currentTime ?? 0
         const duration = seq.duration || 0
 
-        const uiState = getSynthUiState()
+        const uiState = getKaraokeStoreState()
         const t = currentTime - (uiState.lyricOffsetMs || 0) / 1000
         const activeLyricIndex = findActiveLyricIndex(uiState.lrcEntries || [], t)
         let karaokeProgress = 0
@@ -251,7 +217,7 @@ class SynthEngine {
 
         const isPlaying = !seq.paused && !seq.isFinished
         this._setState({ currentTime, duration, isPlaying })
-        setSynthUiState({ activeLyricIndex, karaokeProgress })
+        setKaraokeStoreState({ activeLyricIndex, karaokeProgress })
 
         if (seq.isFinished && !this._prevFinished) {
           this._prevFinished = true
@@ -331,22 +297,22 @@ class SynthEngine {
   }
 
   setPendingSong(song) {
-    setSynthUiState({ pendingSong: song || null })
+    setKaraokeStoreState({ pendingSong: song || null })
   }
 
   clearPendingSong() {
-    setSynthUiState({ pendingSong: null })
+    setKaraokeStoreState({ pendingSong: null })
   }
 
   enqueueSong(song) {
     if (!song) return
-    const next = this._state.queue.slice()
+    const next = getKaraokeStoreState().queue.slice()
     next.push(song)
     this._setState({ queue: next })
   }
 
   enqueuePendingSong() {
-    const pending = getSynthUiState().pendingSong
+    const pending = getKaraokeStoreState().pendingSong
     if (!pending) return
     this.enqueueSong(pending)
     this.clearPendingSong()
@@ -359,10 +325,10 @@ class SynthEngine {
   removeFromQueue(index) {
     const i = Number(index)
     if (!Number.isInteger(i)) return
-    const next = this._state.queue.slice()
+    const next = getKaraokeStoreState().queue.slice()
     if (i < 0 || i >= next.length) return
     next.splice(i, 1)
-    let queueIndex = this._state.queueIndex
+    let queueIndex = getKaraokeStoreState().queueIndex
     if (queueIndex >= next.length) queueIndex = next.length - 1
     this._setState({ queue: next, queueIndex })
   }
@@ -370,9 +336,9 @@ class SynthEngine {
   bumpQueueNext(index) {
     const i = Number(index)
     if (!Number.isInteger(i)) return
-    const queue = this._state.queue.slice()
+    const queue = getKaraokeStoreState().queue.slice()
     if (i < 0 || i >= queue.length) return
-    const currentIndex = this._state.queueIndex
+    const currentIndex = getKaraokeStoreState().queueIndex
     const targetIndex = currentIndex >= 0 ? currentIndex + 1 : 0
     if (i === targetIndex) return
     const [song] = queue.splice(i, 1)
@@ -389,12 +355,13 @@ class SynthEngine {
   async playQueueFrom(index = 0) {
     await this.ensureInitialized()
     const i = Number(index)
-    if (!Number.isInteger(i) || i < 0 || i >= this._state.queue.length) return
-    const song = this._state.queue[i]
+    const queue = getKaraokeStoreState().queue
+    if (!Number.isInteger(i) || i < 0 || i >= queue.length) return
+    const song = queue[i]
     if (!song?.url) return
     await this.resumeAudio()
     this.setTransposition(0)
-    setSynthUiState({
+    setKaraokeStoreState({
       lrcName: '',
       lrcEntries: [],
       lyricOffsetMs: 0,
@@ -409,7 +376,7 @@ class SynthEngine {
         const res = await fetch(song.lrc)
         if (res.ok) {
           const text = await res.text()
-            setSynthUiState({
+            setKaraokeStoreState({
               lrcName: song.lrcName || song.lrc.split('/').pop() || 'lyrics.lrc',
               lrcEntries: parseLrc(text),
             })
@@ -425,8 +392,9 @@ class SynthEngine {
 
   async playQueueIfIdle() {
     await this.ensureInitialized()
-    if (!this._state.queue.length) return
-    if (this._state.queueIndex >= 0) return
+    const { queue, queueIndex } = getKaraokeStoreState()
+    if (!queue.length) return
+    if (queueIndex >= 0) return
     await this.playQueueFrom(0)
   }
 
@@ -482,8 +450,9 @@ class SynthEngine {
       this._synth.setMasterParameter('masterGain', startGain)
       await new Promise((resolve) => setTimeout(resolve, fadeMs))
       await this._advanceQueue({ autoPlayNext: true })
-      if (this._state.queueIndex >= 0 && this._seq?.paused) {
-        await this.playQueueFrom(this._state.queueIndex)
+      const { queueIndex } = getKaraokeStoreState()
+      if (queueIndex >= 0 && this._seq?.paused) {
+        await this.playQueueFrom(queueIndex)
       }
     } finally {
       this._isStopping = false
@@ -492,12 +461,12 @@ class SynthEngine {
 
   async _advanceQueue({ autoPlayNext }) {
     if (this._isAdvancing) return
-    if (this._state.queueIndex < 0) return
+    if (getKaraokeStoreState().queueIndex < 0) return
     this._isAdvancing = true
     try {
-      const queue = this._state.queue.slice()
-      const history = this._state.history.slice()
-      const currentIndex = this._state.queueIndex
+      const { queue: currentQueue, history: currentHistory, queueIndex: currentIndex } = getKaraokeStoreState()
+      const queue = currentQueue.slice()
+      const history = currentHistory.slice()
       const current = queue[currentIndex]
       if (current) history.unshift(current)
       if (currentIndex >= 0 && currentIndex < queue.length) queue.splice(currentIndex, 1)
@@ -540,7 +509,7 @@ class SynthEngine {
   }
 
   shiftTransposition(deltaSemitones) {
-    const next = (Number(this._state.transposition) || 0) + (Number(deltaSemitones) || 0)
+    const next = (Number(getKaraokeStoreState().transposition) || 0) + (Number(deltaSemitones) || 0)
     this.setTransposition(next)
   }
 
@@ -548,7 +517,7 @@ class SynthEngine {
     if (!this._synth) return
     const idx = Number(channelIndex)
     if (!Number.isInteger(idx) || idx < 0 || idx > 15) return
-    const next = this._state.enabledChannels.slice()
+    const next = getKaraokeStoreState().enabledChannels.slice()
     next[idx] = Boolean(enabled)
     this._synth.muteChannel(idx, !next[idx])
     this._setState({ enabledChannels: next })
@@ -557,12 +526,12 @@ class SynthEngine {
   async loadLrcFromFile(file) {
     const text = await file.text()
     const entries = parseLrc(text)
-    setSynthUiState({ lrcName: file.name, lrcEntries: entries })
+    setKaraokeStoreState({ lrcName: file.name, lrcEntries: entries })
   }
 
   setLyricOffsetMs(ms) {
     const value = Math.max(-30000, Math.min(30000, Number(ms) || 0))
-    setSynthUiState({ lyricOffsetMs: value })
+    setKaraokeStoreState({ lyricOffsetMs: value })
   }
 
   async _updateChannelInstrumentNames(timeoutMs = 1500) {

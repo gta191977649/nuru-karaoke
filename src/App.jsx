@@ -3,7 +3,7 @@ import { Button, Col, Container, Row, Tab, Tabs } from 'react-bootstrap'
 import WiiHomeMain, { SCREENS } from './home/WiiHomeMain.jsx'
 import Karaoke from './karaoke/Karaoke.jsx'
 import { synthEngine } from './engine/SynthEngine.js'
-import { useSynthEngine } from './engine/useSynthEngine.js'
+import { useKaraokeStore } from './state/karaokeStore.js'
 import useUiStore from './state/uiStore.js'
 import WiiAlert from './components/WiiAlert.jsx'
 import KeyChangeAlert from './components/KeyChangeAlert.jsx'
@@ -28,7 +28,7 @@ function App({ onNavigate }) {
   const mainRef = useRef(null)
   const karaokeTargetRef = useRef(null)
   const [karaokeBase, setKaraokeBase] = useState({ left: 0, top: 0, width: 0, height: 0 })
-  const synth = useSynthEngine()
+  const synth = useKaraokeStore()
   const showKeyChangeAlert = useKeyChangeAlertStore((state) => state.showKeyChangeAlert)
   const showAlert = useAlertStore((state) => state.showAlert)
 

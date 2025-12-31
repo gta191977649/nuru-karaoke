@@ -5,8 +5,7 @@ import { sharedPitchEngine, startSharedMic, stopSharedMic } from './audio/pitch/
 import { DEFAULT_CONFIG } from './audioEngine.js'
 import { centsError } from './audio/pitch/utils/dspUtils.js'
 import { synthEngine } from './SynthEngine.js'
-import { useSynthEngine } from './useSynthEngine.js'
-import { useSynthUi } from './useSynthUi.js'
+import { useKaraokeStore } from '../state/karaokeStore.js'
 import MelodyGuideCanvas from '../components/MelodyGuideCanvas.jsx'
 
 const DEMO_MIDI_URL = new URL('../library/demo/sc55.mid', import.meta.url).toString()
@@ -79,8 +78,7 @@ const extractSysExMessages = (midiData) => {
 }
 
 function Synth({ onNavigateHome }) {
-  const state = useSynthEngine()
-  const uiState = useSynthUi()
+  const state = useKaraokeStore()
   const [midiUrl, setMidiUrl] = useState('')
   const [reference, setReference] = useState(null)
   const [sysExMessages, setSysExMessages] = useState([])
@@ -634,13 +632,13 @@ function Synth({ onNavigateHome }) {
                 await synthEngine.loadLrcFromFile(file)
               }}
             />
-            <div className="small text-muted mt-2">Loaded: {uiState.lrcName || '—'}</div>
-            <Form.Label className="small mt-2">Offset (ms): {uiState.lyricOffsetMs}</Form.Label>
+            <div className="small text-muted mt-2">Loaded: {state.lrcName || '—'}</div>
+            <Form.Label className="small mt-2">Offset (ms): {state.lyricOffsetMs}</Form.Label>
             <Form.Range
               min={-3000}
               max={3000}
               step={10}
-              value={uiState.lyricOffsetMs}
+              value={state.lyricOffsetMs}
               disabled={!state.ready}
               onChange={(e) => synthEngine.setLyricOffsetMs(Number(e.currentTarget.value))}
             />
