@@ -92,6 +92,8 @@ function Synth({ onNavigateHome }) {
   const [userPitchOffsetMs, setUserPitchOffsetMs] = useState(300)
   const [smoothing, setSmoothing] = useState(DEFAULT_CONFIG.smoothing)
   const [algoId, setAlgoId] = useState(DEFAULT_CONFIG.pitchAlgoId || 'essentia-yin')
+  const [showMelodyGuide, setShowMelodyGuide] = useState(false)
+  const [showFullPitchTrace, setShowFullPitchTrace] = useState(false)
   const [debugInfo, setDebugInfo] = useState({
     songTimeSec: 0,
     targetMidi: null,
@@ -751,27 +753,49 @@ function Synth({ onNavigateHome }) {
               </Col>
             </Row>
 
-            <div className="small text-muted mt-3">Melody Guide (target vs mic)</div>
-            <MelodyGuideCanvas
-              className="melodyGuideCanvas"
-              reference={reference}
-              historyRef={fullPitchHistoryRef}
-              currentTimeRef={currentTimeRef}
-              transpositionRef={transpositionRef}
-              rmsGate={rmsGate}
-              gateUserByTarget
-              userOffsetSec={userPitchOffsetMs / 1000}
-              width={760}
-              height={180}
-              style={{ width: '100%', height: 180, borderRadius: 8 }}
-            />
-            <div className="small text-muted mt-3">Full Pitch Trace (target vs mic)</div>
-            <canvas
-              ref={fullPitchCanvasRef}
-              width={760}
-              height={300}
-              style={{ width: '100%', height: 300, borderRadius: 8, background: '#0f1115' }}
-            />
+            <div className="d-flex align-items-center justify-content-between mt-3">
+              <div className="small text-muted">Melody Guide (target vs mic)</div>
+              <Button
+                size="sm"
+                variant="outline-secondary"
+                onClick={() => setShowMelodyGuide((prev) => !prev)}
+              >
+                {showMelodyGuide ? 'Hide' : 'Show'}
+              </Button>
+            </div>
+            {showMelodyGuide ? (
+              <MelodyGuideCanvas
+                className="melodyGuideCanvas"
+                reference={reference}
+                historyRef={fullPitchHistoryRef}
+                currentTimeRef={currentTimeRef}
+                transpositionRef={transpositionRef}
+                rmsGate={rmsGate}
+                gateUserByTarget
+                userOffsetSec={userPitchOffsetMs / 1000}
+                width={760}
+                height={180}
+                style={{ width: '100%', height: 180, borderRadius: 8 }}
+              />
+            ) : null}
+            <div className="d-flex align-items-center justify-content-between mt-3">
+              <div className="small text-muted">Full Pitch Trace (target vs mic)</div>
+              <Button
+                size="sm"
+                variant="outline-secondary"
+                onClick={() => setShowFullPitchTrace((prev) => !prev)}
+              >
+                {showFullPitchTrace ? 'Hide' : 'Show'}
+              </Button>
+            </div>
+            {showFullPitchTrace ? (
+              <canvas
+                ref={fullPitchCanvasRef}
+                width={760}
+                height={300}
+                style={{ width: '100%', height: 300, borderRadius: 8, background: '#0f1115' }}
+              />
+            ) : null}
 
             <div className="small mt-3">
               <div>songTimeSec: {formatNumber(debugInfo.songTimeSec, 2)}</div>

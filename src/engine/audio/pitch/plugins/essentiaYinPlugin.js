@@ -22,7 +22,7 @@ class EssentiaYinPlugin {
   constructor() {
     this.id = 'essentia-yin'
     this.name = 'Essentia YIN'
-    this._confidenceGate = 0.5
+    this._confidenceGate = 0.2
     this._maxFrequency = null
     this._minFrequency = null
   }

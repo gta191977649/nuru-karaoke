@@ -106,6 +106,14 @@ const SONG_LIBRARY = [
     lrc: assetUrl(lrcAssetMap, 'ikimodekinai.lrc'),
     lrc_offset: 2500,
   },
+  {
+    id: 'kinmoryo',
+    title: '銀の龍の背に乗って',
+    artist: '中島みゆき',
+    url: assetUrl(midiAssetMap, '銀の龍の背に乗って.MID'),
+    lrc: assetUrl(lrcAssetMap, '銀の龍の背に乗って.lrc'),
+    lrc_offset: 3000,
+  },
 ]
 
 export { SONG_LIBRARY }

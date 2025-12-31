@@ -10,6 +10,7 @@ class PitchEngine {
     this._worker.onmessage = (event) => {
       const msg = event.data
       if (msg?.type !== 'pitch') return
+      if (this._useWorkletDetector) return
       for (const cb of this._listeners) cb(msg.result)
     }
 
@@ -26,6 +27,7 @@ class PitchEngine {
     this._workletNode = null
     this._monitorGain = null
     this._workletReady = null
+    this._useWorkletDetector = false
 
     this._starting = null
     this._stopRequested = false
@@ -48,7 +50,9 @@ class PitchEngine {
   setDetector(algoId) {
     if (!algoId || this._algoId === algoId) return
     this._algoId = algoId
+    this._useWorkletDetector = false
     this._worker.postMessage({ type: 'setAlgo', algoId })
+    this._postWorkletConfig()
   }
 
   onPitch(cb) {
@@ -89,7 +93,25 @@ class PitchEngine {
 
       workletNode.port.onmessage = (event) => {
         const msg = event.data
-        if (msg?.type !== 'frame') return
+        if (!msg?.type) return
+        if (msg.type === 'detector') {
+          if (msg.algoId === this._algoId) {
+            this._useWorkletDetector = Boolean(msg.ready)
+          }
+          return
+        }
+        if (msg.type === 'pitch') {
+          const result = msg.result
+          if (!result) return
+          if (result.algoId && result.algoId !== this._algoId) return
+          if (typeof result.algoId === 'string' && result.algoId.startsWith('essentia')) {
+            this._useWorkletDetector = true
+          }
+          for (const cb of this._listeners) cb(result)
+          return
+        }
+        if (msg.type !== 'frame') return
+        if (this._useWorkletDetector) return
         const samples = msg.samples
         if (!samples) return
         this._worker.postMessage(
@@ -166,9 +188,20 @@ class PitchEngine {
     if (!this._workletNode) return
     this._workletNode.port.postMessage({
       type: 'config',
+      algoId: this._algoId,
       windowSize: this._config.windowSize,
       hopSize: this._config.hopSize,
       hpfCutoffHz: this._config.hpfCutoffHz,
+      rmsGate: this._config.rmsGate,
+      smoothing: this._config.smoothing,
+      f0MinHz: this._config.f0MinHz,
+      f0MaxHz: this._config.f0MaxHz,
+      medianWindowSize: this._config.medianWindowSize,
+      maxJumpSemitones: this._config.maxJumpSemitones,
+      holdFrames: this._config.holdFrames,
+      yinConfidenceGate: this._config.yinConfidenceGate,
+      yinProbOutputUnvoiced: this._config.yinProbOutputUnvoiced,
+      yinProbPreciseTime: this._config.yinProbPreciseTime,
     })
   }
 
@@ -182,6 +215,7 @@ class PitchEngine {
     this._workletNode = null
     this._source = null
     this._monitorGain = null
+    this._useWorkletDetector = false
 
     this._stream.getTracks().forEach((track) => track.stop())
     this._stream = null

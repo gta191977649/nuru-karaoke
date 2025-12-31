@@ -8,10 +8,11 @@ const DEFAULT_CONFIG = {
   f0MaxHz: 1000, // Detection Range for vocal high bound (Hz)
   medianWindowSize: 5, //中值滤波窗口大小（抗尖刺）
   maxJumpSemitones: 3, //半音跳变约束（MIDI domain） 人声物理约束。
-  holdFrames: 2, // 音高短暂保持（Hold）
+  holdFrames: 5, // 音高短暂保持（Hold）
   hpfCutoffHz: 80, //High-pass filter cutoff for mic conditioning
   sampleRate: 48000,
-  pitchAlgoId: 'essentia-yin',
+  pitchAlgoId: 'pitchy',
+  yinConfidenceGate: 0.2,
 }
 
 let sharedContext = null
