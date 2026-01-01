@@ -53,10 +53,10 @@ const SONG_LIBRARY = [
   {
     id: 'gudanbeibanqiu',
     title: '孤单北半球',
-    artist: '欧得洋',
+    artist: '林依晨',
     url: assetUrl(midiAssetMap, '孤单北半球.MID'),
     lrc: assetUrl(lrcAssetMap, '孤单北半球.lrc'),
-    lrc_offset: -1760,
+    lrc_offset: 0,
   },
   {
     id: 'kimihamelody',
@@ -113,6 +113,14 @@ const SONG_LIBRARY = [
     url: assetUrl(midiAssetMap, '銀の龍の背に乗って.MID'),
     lrc: assetUrl(lrcAssetMap, '銀の龍の背に乗って.lrc'),
     lrc_offset: 3000,
+  },
+  {
+    id: 'earthsong',
+    title: 'Earth Song',
+    artist: 'Michael Jackson',
+    url: assetUrl(midiAssetMap, 'earth_song.MID'),
+    lrc: assetUrl(lrcAssetMap, 'earth_song.lrc'),
+    lrc_offset: 0,
   },
 ]
 

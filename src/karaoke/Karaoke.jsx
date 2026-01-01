@@ -30,10 +30,18 @@ function splitRubySegments(text) {
     const base = raw.slice(cursor, open)
     const ruby = raw.slice(open + 1, close)
     if (base) {
-      const prefix = base.slice(0, -1)
-      const lastChar = base.slice(-1)
-      if (prefix) segments.push({ text: prefix, ruby: '' })
-      segments.push({ text: lastChar, ruby })
+      const wordMatch = base.match(/[A-Za-z][A-Za-z0-9'-]*$/)
+      if (wordMatch) {
+        const word = wordMatch[0]
+        const prefix = base.slice(0, base.length - word.length)
+        if (prefix) segments.push({ text: prefix, ruby: '' })
+        segments.push({ text: word, ruby })
+      } else {
+        const prefix = base.slice(0, -1)
+        const lastChar = base.slice(-1)
+        if (prefix) segments.push({ text: prefix, ruby: '' })
+        segments.push({ text: lastChar, ruby })
+      }
     }
     cursor = close + 1
   }
