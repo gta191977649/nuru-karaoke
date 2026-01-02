@@ -221,9 +221,10 @@ function MelodyGuideCanvas({
         if (needsResize) {
           state.lastSize = { w, h }
           state.bg.clear()
-          state.bg.beginFill(0x000000, 0.3)
-          state.bg.drawRoundedRect(0, 0, w, h, 12)
-          state.bg.endFill()
+          state.bg.setFillStyle({ color: 0x000000, alpha: 0.3 })
+          state.bg.beginPath()
+          state.bg.roundRect(0, 0, w, h, 12)
+          state.bg.fill()
         }
         const needsGrid = needsResize || state.lastGrid.lineCount !== lineCount
         if (needsGrid) {
@@ -274,15 +275,16 @@ function MelodyGuideCanvas({
         state.notes.clear()
         state.notes.setStrokeStyle({ width: 2, color: 0xffffff, alpha: 1 })
         drawMelodyNotes(0x000000, 0.9, true)
-        drawMelodyNotes(0x4a4a4a, 0.85, false)
+        drawMelodyNotes(0x4a4a4a, 0.5, false)
 
         const history = snap.historyRef?.current || []
         const missWidth = Math.max(8, pixelsPerSec * 0.12)
         const missHeight = 10
 
         state.miss.clear()
-        state.miss.lineStyle(1, 0xffffff, 0.9)
-        state.miss.beginFill(0x0b0b0b, 0.85)
+        state.miss.setStrokeStyle({ width: 1, color: 0xffffff, alpha: 0.9 })
+        state.miss.setFillStyle({ color: 0x0b0b0b, alpha: 0.85 })
+        state.miss.beginPath()
         history.forEach((point) => {
           if (point.t < visibleStart || point.t > visibleEnd) return
           const targetMidi = Number(point.targetMidi)
@@ -290,13 +292,15 @@ function MelodyGuideCanvas({
           if (!Number.isFinite(targetMidi) || Number.isFinite(userMidi)) return
           const x = playheadX + (point.t - songTimeSec) * pixelsPerSec
           const { y } = midiToY(targetMidi)
-          state.miss.drawRoundedRect(x - missWidth / 2, y - missHeight / 2, missWidth, missHeight, 5)
+          state.miss.roundRect(x - missWidth / 2, y - missHeight / 2, missWidth, missHeight, 5)
         })
-        state.miss.endFill()
+        state.miss.fill()
+        state.miss.stroke()
 
         state.user.clear()
         const drawUserNotes = (fillColor, fillAlpha, requireInRange) => {
-          state.user.beginFill(fillColor, fillAlpha)
+          state.user.setFillStyle({ color: fillColor, alpha: fillAlpha })
+          state.user.beginPath()
           history.forEach((point) => {
             if (point.t < visibleStart || point.t > visibleEnd) return
             if (point.userMidi == null) return
@@ -319,9 +323,9 @@ function MelodyGuideCanvas({
             if (requireInRange !== inRange) return
             const x = playheadX + (point.t - songTimeSec) * pixelsPerSec
             const barW = Math.max(6, pixelsPerSec * 0.18)
-            state.user.drawRoundedRect(x - barW / 2, y - 5, barW, 10, 5)
+            state.user.roundRect(x - barW / 2, y - 5, barW, 10, 5)
           })
-          state.user.endFill()
+          state.user.fill()
         }
         drawUserNotes(0x78c8ff, 0.9, true)
         drawUserNotes(0x6a6a6a, 0.7, false)
