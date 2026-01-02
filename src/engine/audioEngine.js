@@ -10,6 +10,13 @@ const DEFAULT_CONFIG = {
   maxJumpSemitones: 3, //半音跳变约束（MIDI domain） 人声物理约束。
   holdFrames: 5, // 音高短暂保持（Hold）
   hpfCutoffHz: 80, //High-pass filter cutoff for mic conditioning
+  enableDcRemoval: true,
+  enableHpf: true,
+  enableRmsGate: true,
+  enableF0Validate: true,
+  enableTemporalSmooth: false,
+  debugPipeline: false,
+  debugPipelineStride: 4,
   sampleRate: 48000,
   pitchAlgoId: 'pitchy',
   yinConfidenceGate: 0.2,

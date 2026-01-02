@@ -26,21 +26,12 @@ class PitchyPlugin {
     const sampleRate = Number(frame?.sampleRate)
     if (!samples || !Number.isFinite(sampleRate)) return null
 
-    const frameRms = rms(samples)
+    const frameRms = Number.isFinite(frame?.rms) ? frame.rms : rms(samples)
 
     this._ensureDetector(samples.length)
     const [f0Hz, clarity] = this._detector.findPitch(samples, sampleRate)
     const midi = Number.isFinite(f0Hz) ? hzToMidi(f0Hz) : null
     const confidence = Number.isFinite(clarity) ? clarity : 0
-    if (!Number.isFinite(clarity) || clarity < this._clarityGate) {
-      return {
-        f0Hz: null,
-        midi: null,
-        confidence,
-        rms: frameRms,
-      }
-    }
-
     return {
       f0Hz: Number.isFinite(f0Hz) ? f0Hz : null,
       midi,

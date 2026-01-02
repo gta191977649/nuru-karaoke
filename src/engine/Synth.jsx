@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
-import { Button, Col, Container, Form, Row } from 'react-bootstrap'
+import { Button, Col, Container, Form, Row, Tab, Tabs } from 'react-bootstrap'
+import Spectrogram from 'spectrogram'
 import { extractReferenceMelodyFromMidiData, getTargetMidiAtTime } from './audio/midi/referenceMelody.js'
 import { sharedPitchEngine, startSharedMic, stopSharedMic } from './audio/pitch/sharedPitchEngine.js'
 import { DEFAULT_CONFIG } from './audioEngine.js'
@@ -77,6 +78,201 @@ const extractSysExMessages = (midiData) => {
   return messages
 }
 
+function WaveformCanvas({ data, height = 80, color = '#4ec3ff', background = '#0f1115' }) {
+  const canvasRef = useRef(null)
+
+  useEffect(() => {
+    const canvas = canvasRef.current
+    if (!canvas) return
+    const ctx = canvas.getContext('2d')
+    if (!ctx) return
+    const dpr = window.devicePixelRatio || 1
+    const width = canvas.clientWidth || 1
+    const drawHeight = canvas.clientHeight || height
+    canvas.width = Math.floor(width * dpr)
+    canvas.height = Math.floor(drawHeight * dpr)
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0)
+
+    ctx.clearRect(0, 0, width, drawHeight)
+    ctx.fillStyle = background
+    ctx.fillRect(0, 0, width, drawHeight)
+
+    if (!data || !data.length) return
+    ctx.strokeStyle = color
+    ctx.lineWidth = 1.5
+    ctx.beginPath()
+    const mid = drawHeight / 2
+    const max = drawHeight / 2
+    const len = data.length
+    for (let i = 0; i < len; i += 1) {
+      const x = (i / (len - 1)) * width
+      const y = mid - Math.max(-1, Math.min(1, data[i])) * max
+      if (i === 0) ctx.moveTo(x, y)
+      else ctx.lineTo(x, y)
+    }
+    ctx.stroke()
+  }, [data, height, color, background])
+
+  return <canvas ref={canvasRef} style={{ width: '100%', height }} />
+}
+
+function buildSpectrogramColors(steps) {
+  const stops = [
+    { t: 0.0, c: [10, 12, 26] },
+    { t: 0.25, c: [16, 72, 156] },
+    { t: 0.55, c: [34, 182, 146] },
+    { t: 0.78, c: [230, 200, 64] },
+    { t: 1.0, c: [255, 82, 58] },
+  ]
+  const total = Math.max(1, steps)
+  const colors = new Array(total)
+  for (let i = 0; i < total; i += 1) {
+    const t = i / Math.max(1, total - 1)
+    let a = stops[0]
+    let b = stops[stops.length - 1]
+    for (let j = 0; j < stops.length - 1; j += 1) {
+      if (t >= stops[j].t && t <= stops[j + 1].t) {
+        a = stops[j]
+        b = stops[j + 1]
+        break
+      }
+    }
+    const span = b.t - a.t || 1
+    const local = (t - a.t) / span
+    const r = Math.round(a.c[0] + (b.c[0] - a.c[0]) * local)
+    const g = Math.round(a.c[1] + (b.c[1] - a.c[1]) * local)
+    const bl = Math.round(a.c[2] + (b.c[2] - a.c[2]) * local)
+    colors[i] = `rgb(${r}, ${g}, ${bl})`
+  }
+  return colors
+}
+
+function MelSpectrogramCanvas({
+  analyser,
+  f0Hz,
+  height = 140,
+  minHz = DEFAULT_CONFIG.f0MinHz,
+  maxHz = DEFAULT_CONFIG.f0MaxHz,
+}) {
+  const canvasRef = useRef(null)
+  const overlayRef = useRef(null)
+  const spectroRef = useRef(null)
+  const f0Ref = useRef(f0Hz)
+
+  useEffect(() => {
+    f0Ref.current = f0Hz
+  }, [f0Hz])
+
+  useEffect(() => {
+    const canvas = canvasRef.current
+    if (!canvas || !analyser) return undefined
+
+    if (!spectroRef.current) {
+      const spectro = Spectrogram(canvas, {
+        canvas: {
+          width: () => canvas.clientWidth || 1,
+          height: () => canvas.clientHeight || height,
+        },
+        audio: { enable: false },
+        colors: buildSpectrogramColors,
+      })
+      spectro._draw = function drawLeftToRight(array, canvasContext) {
+        if (this._paused) return false
+        if (!canvasContext?._tempContext) return false
+
+        const targetCanvas = canvasContext.canvas
+        const width = targetCanvas.width
+        const drawHeight = targetCanvas.height
+        const tempCanvasContext = canvasContext._tempContext
+        const tempCanvas = tempCanvasContext.canvas
+
+        tempCanvasContext.drawImage(targetCanvas, 0, 0, width, drawHeight)
+
+        for (let i = 0; i < array.length; i += 1) {
+          const value = array[i]
+          canvasContext.fillStyle = this._getColor(value)
+          if (this._audioEnded) {
+            canvasContext.fillStyle = this._getColor(0)
+          }
+          canvasContext.fillRect(0, drawHeight - i, 1, 1)
+        }
+
+        canvasContext.translate(1, 0)
+        canvasContext.drawImage(tempCanvas, 0, 0, width, drawHeight, 0, 0, width, drawHeight)
+        canvasContext.drawImage(tempCanvas, 0, 0, width, drawHeight, 0, 0, width, drawHeight)
+        canvasContext.setTransform(1, 0, 0, 1, 0, 0)
+
+        this._baseCanvasContext.drawImage(targetCanvas, 0, 0, width, drawHeight)
+        return true
+      }
+      spectroRef.current = spectro
+    }
+
+    spectroRef.current.connectSource(analyser, analyser.context)
+    spectroRef.current.start()
+
+    return () => {
+      try {
+        spectroRef.current?.clear?.()
+      } catch (err) {
+        console.warn('[Spectrogram] clear failed', err)
+      }
+      spectroRef.current = null
+    }
+  }, [analyser])
+
+  useEffect(() => {
+    const overlay = overlayRef.current
+    if (!overlay || !analyser) return undefined
+
+    let raf = 0
+    const ctx = overlay.getContext('2d')
+    if (!ctx) return undefined
+
+    const draw = () => {
+      raf = window.requestAnimationFrame(draw)
+
+      const width = overlay.clientWidth || 1
+      const drawHeight = overlay.clientHeight || height
+      const dpr = window.devicePixelRatio || 1
+      if (overlay.width !== Math.floor(width * dpr) || overlay.height !== Math.floor(drawHeight * dpr)) {
+        overlay.width = Math.floor(width * dpr)
+        overlay.height = Math.floor(drawHeight * dpr)
+        ctx.setTransform(dpr, 0, 0, dpr, 0, 0)
+        ctx.clearRect(0, 0, width, drawHeight)
+      }
+
+      ctx.drawImage(overlay, 1, 0)
+      ctx.clearRect(0, 0, 1, drawHeight)
+
+      const f0 = f0Ref.current
+      if (!Number.isFinite(f0) || f0 <= 0) return
+      if (f0 < minHz || f0 > maxHz) return
+
+      const nyquist = analyser.context.sampleRate / 2
+      const binCount = analyser.frequencyBinCount || 1
+      const clamped = Math.max(0, Math.min(nyquist, f0))
+      const bin = Math.round((clamped / nyquist) * (binCount - 1))
+      const y = drawHeight - 1 - Math.round((bin / Math.max(1, binCount - 1)) * (drawHeight - 1))
+      ctx.fillStyle = '#ff4d4d'
+      ctx.fillRect(0, Math.max(0, y - 1), 1, 3)
+    }
+
+    draw()
+    return () => window.cancelAnimationFrame(raf)
+  }, [analyser, height, minHz, maxHz])
+
+  return (
+    <div style={{ position: 'relative', width: '100%', height }}>
+      <canvas ref={canvasRef} style={{ width: '100%', height, display: 'block' }} />
+      <canvas
+        ref={overlayRef}
+        style={{ width: '100%', height, position: 'absolute', inset: 0, pointerEvents: 'none' }}
+      />
+    </div>
+  )
+}
+
 function Synth({ onNavigateHome }) {
   const state = useKaraokeStore()
   const [midiUrl, setMidiUrl] = useState('')
@@ -90,8 +286,22 @@ function Synth({ onNavigateHome }) {
   const [userPitchOffsetMs, setUserPitchOffsetMs] = useState(300)
   const [smoothing, setSmoothing] = useState(DEFAULT_CONFIG.smoothing)
   const [algoId, setAlgoId] = useState(DEFAULT_CONFIG.pitchAlgoId || 'essentia-yin')
+  const [enableDcRemoval, setEnableDcRemoval] = useState(DEFAULT_CONFIG.enableDcRemoval !== false)
+  const [enableHpf, setEnableHpf] = useState(DEFAULT_CONFIG.enableHpf !== false)
+  const [enableRmsGate, setEnableRmsGate] = useState(DEFAULT_CONFIG.enableRmsGate !== false)
+  const [enableF0Validate, setEnableF0Validate] = useState(DEFAULT_CONFIG.enableF0Validate !== false)
+  const [enableTemporalSmooth, setEnableTemporalSmooth] = useState(
+    DEFAULT_CONFIG.enableTemporalSmooth !== false,
+  )
+  const [debugPipeline, setDebugPipeline] = useState(Boolean(DEFAULT_CONFIG.debugPipeline))
+  const [debugPipelineStride, setDebugPipelineStride] = useState(
+    Math.max(1, Number(DEFAULT_CONFIG.debugPipelineStride) || 4),
+  )
   const [showMelodyGuide, setShowMelodyGuide] = useState(false)
   const [showFullPitchTrace, setShowFullPitchTrace] = useState(false)
+  const [pipelineDebug, setPipelineDebug] = useState({ stages: {}, metrics: {}, sampleRate: null })
+  const [f0History, setF0History] = useState({ raw: new Float32Array(0), post: new Float32Array(0) })
+  const [debugAnalyser, setDebugAnalyser] = useState(null)
   const [debugInfo, setDebugInfo] = useState({
     songTimeSec: 0,
     targetMidi: null,
@@ -111,8 +321,12 @@ function Synth({ onNavigateHome }) {
   const fullPitchHistoryRef = useRef([])
   const currentTimeRef = useRef(0)
   const transpositionRef = useRef(0)
+  const rawF0HistoryRef = useRef([])
+  const postF0HistoryRef = useRef([])
   const pitchEngine = sharedPitchEngine
   const detectorOptions = useMemo(() => pitchEngine.listDetectors(), [pitchEngine])
+  const pipelineStages = pipelineDebug.stages || {}
+  const pipelineMetrics = pipelineDebug.metrics || {}
 
   const getCssVar = (el, name, fallback) => {
     if (!el) return fallback
@@ -156,8 +370,48 @@ function Synth({ onNavigateHome }) {
   }, [state.transposition])
 
   useEffect(() => {
-    pitchEngine.configureDetector({ windowSize, hopSize, rmsGate, smoothing })
-  }, [pitchEngine, windowSize, hopSize, rmsGate, smoothing])
+    pitchEngine.configureDetector({
+      windowSize,
+      hopSize,
+      rmsGate,
+      smoothing,
+      enableDcRemoval,
+      enableHpf,
+      enableRmsGate,
+      enableF0Validate,
+      enableTemporalSmooth,
+      debugPipeline,
+      debugPipelineStride,
+    })
+  }, [
+    pitchEngine,
+    windowSize,
+    hopSize,
+    rmsGate,
+    smoothing,
+    enableDcRemoval,
+    enableHpf,
+    enableRmsGate,
+    enableF0Validate,
+    enableTemporalSmooth,
+    debugPipeline,
+    debugPipelineStride,
+  ])
+
+  useEffect(() => {
+    if (!micActive) {
+      setDebugAnalyser(null)
+      return
+    }
+
+    const analyser = pitchEngine.ensureDebugAnalyser?.({
+      fftSize: 2048,
+      smoothingTimeConstant: 0,
+      enableHpf,
+      hpfCutoffHz: DEFAULT_CONFIG.hpfCutoffHz,
+    })
+    setDebugAnalyser(analyser || null)
+  }, [pitchEngine, micActive, enableHpf])
 
   useEffect(() => {
     if (!state.midiName) {
@@ -182,6 +436,35 @@ function Synth({ onNavigateHome }) {
   useEffect(() => {
     pitchEngine.setDetector(algoId)
   }, [pitchEngine, algoId])
+
+  useEffect(() => {
+    const unsubscribe = pitchEngine.onDebug((msg) => {
+      const rawValue = Number.isFinite(msg?.metrics?.rawF0Hz) ? msg.metrics.rawF0Hz : 0
+      const postValue = Number.isFinite(msg?.metrics?.result?.f0Hz) ? msg.metrics.result.f0Hz : 0
+      const rawHistory = rawF0HistoryRef.current.slice()
+      rawHistory.push(rawValue)
+      if (rawHistory.length > 160) rawHistory.shift()
+      rawF0HistoryRef.current = rawHistory
+      const postHistory = postF0HistoryRef.current.slice()
+      postHistory.push(postValue)
+      if (postHistory.length > 160) postHistory.shift()
+      postF0HistoryRef.current = postHistory
+      const normalize = (arr) =>
+        new Float32Array(arr.map((v) => Math.max(-1, Math.min(1, (v / 1000) * 2 - 1))))
+      setF0History({
+        raw: normalize(rawHistory),
+        post: normalize(postHistory),
+      })
+      setPipelineDebug({
+        stages: msg?.stages || {},
+        metrics: msg?.metrics || {},
+        sampleRate: Number.isFinite(msg?.sampleRate) ? msg.sampleRate : null,
+      })
+    })
+    return () => {
+      unsubscribe()
+    }
+  }, [pitchEngine])
 
   useEffect(() => {
     const interval = window.setInterval(() => {
@@ -647,167 +930,259 @@ function Synth({ onNavigateHome }) {
 
         <Col xs={12}>
           <div className="p-3 border rounded-3">
-            <div className="fw-semibold mb-2">Karaoke Pitch Debug</div>
-            <Row className="g-2 align-items-center mb-3">
-              <Col xs="auto">
-                <Button
-                  type="button"
-                  disabled={!state.ready || micActive}
-                  onClick={async () => {
-                    try {
-                      await startSharedMic()
-                      const audioContext = pitchEngine.getAudioContext?.()
-                      setDebugInfo((prev) => ({
-                        ...prev,
-                        micSampleRate: audioContext?.sampleRate ?? null,
-                      }))
-                      setMicActive(true)
-                    } catch (err) {
-                      console.error(err)
-                    }
-                  }}
-                >
-                  Start Mic
-                </Button>
-              </Col>
-              <Col xs="auto">
-                <Button
-                  type="button"
-                  variant="secondary"
-                  disabled={!micActive}
-                  onClick={() => {
-                    stopSharedMic()
-                    setDebugInfo((prev) => ({
-                      ...prev,
-                      micSampleRate: null,
-                    }))
-                    setMicActive(false)
-                  }}
-                >
-                  Stop Mic
-                </Button>
-              </Col>
-              <Col xs={12} md>
-                <Form.Select value={algoId} onChange={(e) => setAlgoId(e.currentTarget.value)}>
-                  {detectorOptions.map((option) => (
-                    <option key={option.id} value={option.id}>
-                      {option.name}
-                    </option>
-                  ))}
-                </Form.Select>
-              </Col>
-            </Row>
+            <Tabs defaultActiveKey="pitch-debug" className="mb-3">
+              <Tab eventKey="pitch-debug" title="Pitch Debug">
+                <div className="fw-semibold mb-2">Karaoke Pitch Debug</div>
+                <Row className="g-2 align-items-center mb-3">
+                  <Col xs="auto">
+                    <Button
+                      type="button"
+                      disabled={!state.ready || micActive}
+                      onClick={async () => {
+                        try {
+                          await startSharedMic()
+                          const audioContext = pitchEngine.getAudioContext?.()
+                          setDebugInfo((prev) => ({
+                            ...prev,
+                            micSampleRate: audioContext?.sampleRate ?? null,
+                          }))
+                          setMicActive(true)
+                        } catch (err) {
+                          console.error(err)
+                        }
+                      }}
+                    >
+                      Start Mic
+                    </Button>
+                  </Col>
+                  <Col xs="auto">
+                    <Button
+                      type="button"
+                      variant="secondary"
+                      disabled={!micActive}
+                      onClick={() => {
+                        stopSharedMic()
+                        setDebugInfo((prev) => ({
+                          ...prev,
+                          micSampleRate: null,
+                        }))
+                        setMicActive(false)
+                      }}
+                    >
+                      Stop Mic
+                    </Button>
+                  </Col>
+                  <Col xs={12} md>
+                    <Form.Select value={algoId} onChange={(e) => setAlgoId(e.currentTarget.value)}>
+                      {detectorOptions.map((option) => (
+                        <option key={option.id} value={option.id}>
+                          {option.name}
+                        </option>
+                      ))}
+                    </Form.Select>
+                  </Col>
+                </Row>
 
-            <Row className="g-3">
-              <Col xs={12} md={6}>
-                <Form.Label className="small">Window Size</Form.Label>
-                <Form.Select value={windowSize} onChange={(e) => setWindowSize(Number(e.currentTarget.value))}>
-                  <option value={2048}>2048</option>
-                  <option value={4096}>4096</option>
-                </Form.Select>
+                <Row className="g-3">
+                  <Col xs={12} md={6}>
+                    <Form.Label className="small">Window Size</Form.Label>
+                    <Form.Select value={windowSize} onChange={(e) => setWindowSize(Number(e.currentTarget.value))}>
+                      <option value={2048}>2048</option>
+                      <option value={4096}>4096</option>
+                    </Form.Select>
 
-                <Form.Label className="small mt-2">Hop Size</Form.Label>
-                <Form.Select value={hopSize} onChange={(e) => setHopSize(Number(e.currentTarget.value))}>
-                  <option value={128}>128</option>
-                  <option value={256}>256</option>
-                  <option value={512}>512</option>
-                </Form.Select>
+                    <Form.Label className="small mt-2">Hop Size</Form.Label>
+                    <Form.Select value={hopSize} onChange={(e) => setHopSize(Number(e.currentTarget.value))}>
+                      <option value={128}>128</option>
+                      <option value={256}>256</option>
+                      <option value={512}>512</option>
+                    </Form.Select>
 
-                <Form.Label className="small mt-2">RMS Gate ({rmsGate.toFixed(3)})</Form.Label>
-                <Form.Range
-                  min={0}
-                  max={0.05}
-                  step={0.001}
-                  value={rmsGate}
-                  onChange={(e) => setRmsGate(Number(e.currentTarget.value))}
-                />
-              </Col>
+                    <Form.Label className="small mt-2">RMS Gate ({rmsGate.toFixed(3)})</Form.Label>
+                    <Form.Range
+                      min={0}
+                      max={0.05}
+                      step={0.001}
+                      value={rmsGate}
+                      onChange={(e) => setRmsGate(Number(e.currentTarget.value))}
+                    />
+                  </Col>
 
-              <Col xs={12} md={6}>
-                <Form.Label className="small">Latency Comp (ms): {latencyCompMs}</Form.Label>
-                <Form.Range
-                  min={-300}
-                  max={300}
-                  step={1}
-                  value={latencyCompMs}
-                  onChange={(e) => setLatencyCompMs(Number(e.currentTarget.value))}
-                />
-                <Form.Label className="small mt-2">User Pitch Offset (ms): {userPitchOffsetMs}</Form.Label>
-                <Form.Range
-                  min={-300}
-                  max={300}
-                  step={1}
-                  value={userPitchOffsetMs}
-                  onChange={(e) => setUserPitchOffsetMs(Number(e.currentTarget.value))}
-                />
-                <Form.Check
-                  type="switch"
-                  id="pitch-smoothing"
-                  className="mt-2"
-                  label="Smoothing"
-                  checked={smoothing}
-                  onChange={(e) => setSmoothing(e.currentTarget.checked)}
-                />
-              </Col>
-            </Row>
+                  <Col xs={12} md={6}>
+                    <Form.Label className="small">Latency Comp (ms): {latencyCompMs}</Form.Label>
+                    <Form.Range
+                      min={-300}
+                      max={300}
+                      step={1}
+                      value={latencyCompMs}
+                      onChange={(e) => setLatencyCompMs(Number(e.currentTarget.value))}
+                    />
+                    <Form.Label className="small mt-2">User Pitch Offset (ms): {userPitchOffsetMs}</Form.Label>
+                    <Form.Range
+                      min={-300}
+                      max={300}
+                      step={1}
+                      value={userPitchOffsetMs}
+                      onChange={(e) => setUserPitchOffsetMs(Number(e.currentTarget.value))}
+                    />
+                    <Form.Check
+                      type="switch"
+                      id="pitch-smoothing"
+                      className="mt-2"
+                      label="Smoothing"
+                      checked={smoothing}
+                      onChange={(e) => setSmoothing(e.currentTarget.checked)}
+                    />
+                  </Col>
+                </Row>
 
-            <div className="d-flex align-items-center justify-content-between mt-3">
-              <div className="small text-muted">Melody Guide (target vs mic)</div>
-              <Button
-                size="sm"
-                variant="outline-secondary"
-                onClick={() => setShowMelodyGuide((prev) => !prev)}
-              >
-                {showMelodyGuide ? 'Hide' : 'Show'}
-              </Button>
-            </div>
-            {showMelodyGuide ? (
-              <MelodyGuideCanvas
-                className="melodyGuideCanvas"
-                reference={reference}
-                historyRef={fullPitchHistoryRef}
-                currentTimeRef={currentTimeRef}
-                transpositionRef={transpositionRef}
-                rmsGate={rmsGate}
-                gateUserByTarget
-                userOffsetSec={userPitchOffsetMs / 1000}
-                width={760}
-                height={180}
-                style={{ width: '100%', height: 180, borderRadius: 8 }}
-              />
-            ) : null}
-            <div className="d-flex align-items-center justify-content-between mt-3">
-              <div className="small text-muted">Full Pitch Trace (target vs mic)</div>
-              <Button
-                size="sm"
-                variant="outline-secondary"
-                onClick={() => setShowFullPitchTrace((prev) => !prev)}
-              >
-                {showFullPitchTrace ? 'Hide' : 'Show'}
-              </Button>
-            </div>
-            {showFullPitchTrace ? (
-              <canvas
-                ref={fullPitchCanvasRef}
-                width={760}
-                height={300}
-                style={{ width: '100%', height: 300, borderRadius: 8, background: '#0f1115' }}
-              />
-            ) : null}
+                <div className="d-flex align-items-center justify-content-between mt-3">
+                  <div className="small text-muted">Melody Guide (target vs mic)</div>
+                  <Button
+                    size="sm"
+                    variant="outline-secondary"
+                    onClick={() => setShowMelodyGuide((prev) => !prev)}
+                  >
+                    {showMelodyGuide ? 'Hide' : 'Show'}
+                  </Button>
+                </div>
+                {showMelodyGuide ? (
+                  <MelodyGuideCanvas
+                    className="melodyGuideCanvas"
+                    reference={reference}
+                    historyRef={fullPitchHistoryRef}
+                    currentTimeRef={currentTimeRef}
+                    transpositionRef={transpositionRef}
+                    rmsGate={rmsGate}
+                    gateUserByTarget
+                    userOffsetSec={userPitchOffsetMs / 1000}
+                    width={760}
+                    height={180}
+                    style={{ width: '100%', height: 180, borderRadius: 8 }}
+                  />
+                ) : null}
+                <div className="d-flex align-items-center justify-content-between mt-3">
+                  <div className="small text-muted">Full Pitch Trace (target vs mic)</div>
+                  <Button
+                    size="sm"
+                    variant="outline-secondary"
+                    onClick={() => setShowFullPitchTrace((prev) => !prev)}
+                  >
+                    {showFullPitchTrace ? 'Hide' : 'Show'}
+                  </Button>
+                </div>
+                {showFullPitchTrace ? (
+                  <canvas
+                    ref={fullPitchCanvasRef}
+                    width={760}
+                    height={300}
+                    style={{ width: '100%', height: 300, borderRadius: 8, background: '#0f1115' }}
+                  />
+                ) : null}
 
-            <div className="small mt-3">
-              <div>songTimeSec: {formatNumber(debugInfo.songTimeSec, 2)}</div>
-              <div>targetMidi: {formatNumber(debugInfo.targetMidi, 2)}</div>
-              <div>targetPitchClass: {formatPitchClass(debugInfo.targetMidi)}</div>
-              <div>userMidi: {formatNumber(debugInfo.userMidi, 2)}</div>
-              <div>userPitchClass: {formatPitchClass(debugInfo.userMidi)}</div>
-              <div>pitchErrorCents: {formatNumber(debugInfo.pitchErrorCents, 1)}</div>
-              <div>f0Hz: {formatNumber(debugInfo.f0Hz, 2)}</div>
-              <div>confidence: {formatNumber(debugInfo.confidence, 3)}</div>
-              <div>rms: {formatNumber(debugInfo.rms, 4)}</div>
-              <div>algoName: {debugInfo.algoName || 'n/a'}</div>
-              <div>micSampleRate: {formatNumber(debugInfo.micSampleRate, 0)}</div>
-            </div>
+                <div className="small mt-3">
+                  <div>songTimeSec: {formatNumber(debugInfo.songTimeSec, 2)}</div>
+                  <div>targetMidi: {formatNumber(debugInfo.targetMidi, 2)}</div>
+                  <div>targetPitchClass: {formatPitchClass(debugInfo.targetMidi)}</div>
+                  <div>userMidi: {formatNumber(debugInfo.userMidi, 2)}</div>
+                  <div>userPitchClass: {formatPitchClass(debugInfo.userMidi)}</div>
+                  <div>pitchErrorCents: {formatNumber(debugInfo.pitchErrorCents, 1)}</div>
+                  <div>f0Hz: {formatNumber(debugInfo.f0Hz, 2)}</div>
+                  <div>confidence: {formatNumber(debugInfo.confidence, 3)}</div>
+                  <div>rms: {formatNumber(debugInfo.rms, 4)}</div>
+                  <div>algoName: {debugInfo.algoName || 'n/a'}</div>
+                  <div>micSampleRate: {formatNumber(debugInfo.micSampleRate, 0)}</div>
+                </div>
+              </Tab>
+              <Tab eventKey="pipeline-debug" title="Pipeline Debug">
+                <div className="fw-semibold mb-2">Signal Pipeline</div>
+                <Row className="g-3">
+                  <Col xs={12} md={5}>
+                    <Form.Check
+                      type="switch"
+                      id="pipeline-debug-enabled"
+                      label="Debug Stream"
+                      checked={debugPipeline}
+                      onChange={(e) => setDebugPipeline(e.currentTarget.checked)}
+                    />
+                    <Form.Label className="small mt-2">Debug Stride: {debugPipelineStride} frame(s)</Form.Label>
+                    <Form.Range
+                      min={1}
+                      max={12}
+                      step={1}
+                      value={debugPipelineStride}
+                      onChange={(e) => setDebugPipelineStride(Number(e.currentTarget.value))}
+                    />
+                    <div className="mt-3">
+                      <Form.Check
+                        type="switch"
+                        id="pipeline-dc"
+                        label="DC Removal"
+                        checked={enableDcRemoval}
+                        onChange={(e) => setEnableDcRemoval(e.currentTarget.checked)}
+                      />
+                      <Form.Check
+                        type="switch"
+                        id="pipeline-hpf"
+                        label="HPF"
+                        checked={enableHpf}
+                        onChange={(e) => setEnableHpf(e.currentTarget.checked)}
+                      />
+                      <Form.Check
+                        type="switch"
+                        id="pipeline-rms"
+                        label="RMS Gate"
+                        checked={enableRmsGate}
+                        onChange={(e) => setEnableRmsGate(e.currentTarget.checked)}
+                      />
+                      <Form.Check
+                        type="switch"
+                        id="pipeline-validate"
+                        label="f0 Validate"
+                        checked={enableF0Validate}
+                        onChange={(e) => setEnableF0Validate(e.currentTarget.checked)}
+                      />
+                      <Form.Check
+                        type="switch"
+                        id="pipeline-smooth"
+                        label="Temporal Smooth"
+                        checked={enableTemporalSmooth}
+                        onChange={(e) => setEnableTemporalSmooth(e.currentTarget.checked)}
+                      />
+                    </div>
+                  </Col>
+                  <Col xs={12} md={7}>
+                    <div className="small text-muted mb-2">Input</div>
+                    <WaveformCanvas data={pipelineStages.input} height={70} />
+                    <div className="small text-muted mt-3 mb-2">After DC Removal</div>
+                    <WaveformCanvas data={pipelineStages.dcRemoved} height={70} />
+                    <div className="small text-muted mt-3 mb-2">After HPF</div>
+                    <WaveformCanvas data={pipelineStages.hpf} height={70} />
+                    <div className="small text-muted mt-3 mb-2">After RMS Gate</div>
+                    <WaveformCanvas data={pipelineStages.gated} height={70} />
+                    <div className="small text-muted mt-3 mb-2">Raw f0 Trace</div>
+                    <WaveformCanvas data={f0History.raw} height={60} color="#f1c40f" />
+                    <div className="small text-muted mt-3 mb-2">Post f0 Trace</div>
+                    <WaveformCanvas data={f0History.post} height={60} color="#8bd17c" />
+                    <div className="small text-muted mt-3 mb-2">Spectrogram + F0</div>
+                    <MelSpectrogramCanvas
+                      analyser={debugAnalyser}
+                      f0Hz={pipelineMetrics.result?.f0Hz}
+                      height={140}
+                    />
+                    <div className="small mt-3">
+                      <div>rms: {formatNumber(pipelineMetrics.rms, 4)}</div>
+                      <div>gateOpen: {pipelineMetrics.gateOpen ? 'yes' : 'no'}</div>
+                      <div>rawF0Hz: {formatNumber(pipelineMetrics.rawF0Hz, 2)}</div>
+                      <div>rawConfidence: {formatNumber(pipelineMetrics.rawConfidence, 3)}</div>
+                      <div>f0Hz: {formatNumber(pipelineMetrics.result?.f0Hz, 2)}</div>
+                      <div>confidence: {formatNumber(pipelineMetrics.result?.confidence, 3)}</div>
+                      <div>midi: {formatNumber(pipelineMetrics.result?.midi, 2)}</div>
+                    </div>
+                  </Col>
+                </Row>
+              </Tab>
+            </Tabs>
           </div>
         </Col>
 

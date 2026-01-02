@@ -6,17 +6,10 @@ class PitchEngine {
     this._audioContext = options.audioContext || null
     this._getAudioContext = options.getAudioContext || null
 
-    this._worker = new Worker(new URL('./worker/pitchWorker.js', import.meta.url), { type: 'module' })
-    this._worker.onmessage = (event) => {
-      const msg = event.data
-      if (msg?.type !== 'pitch') return
-      if (this._useWorkletDetector) return
-      for (const cb of this._listeners) cb(msg.result)
-    }
-
     this._listeners = new Set()
+    this._debugListeners = new Set()
 
-    const registry = createDefaultPitchRegistry()
+    const registry = createDefaultPitchRegistry({ includeCrepe: false })
     this._detectors = registry.list().map((plugin) => ({ id: plugin.id, name: plugin.name }))
 
     this._config = { ...DEFAULT_CONFIG }
@@ -27,7 +20,10 @@ class PitchEngine {
     this._workletNode = null
     this._monitorGain = null
     this._workletReady = null
-    this._useWorkletDetector = false
+    this._debugAnalyser = null
+    this._debugHpf = null
+    this._debugGain = null
+    this._debugConnected = false
 
     this._starting = null
     this._stopRequested = false
@@ -43,22 +39,66 @@ class PitchEngine {
 
   configureDetector(cfg) {
     this._config = { ...this._config, ...cfg }
-    this._worker.postMessage({ type: 'config', cfg: this._config })
     this._postWorkletConfig()
   }
 
   setDetector(algoId) {
     if (!algoId || this._algoId === algoId) return
     this._algoId = algoId
-    this._useWorkletDetector = false
-    this._worker.postMessage({ type: 'setAlgo', algoId })
     this._postWorkletConfig()
+  }
+
+  ensureDebugAnalyser(options = {}) {
+    if (!this._source) return null
+    const audioContext = this._ensureAudioContext()
+
+    if (!this._debugAnalyser) {
+      this._debugAnalyser = audioContext.createAnalyser()
+    }
+    if (!this._debugHpf) {
+      this._debugHpf = audioContext.createBiquadFilter()
+      this._debugHpf.type = 'highpass'
+    }
+    if (!this._debugGain) {
+      this._debugGain = audioContext.createGain()
+      this._debugGain.gain.value = 0
+      this._debugGain.connect(audioContext.destination)
+    }
+    if (!this._debugConnected) {
+      this._source.connect(this._debugHpf)
+      this._debugHpf.connect(this._debugAnalyser)
+      this._debugAnalyser.connect(this._debugGain)
+      this._debugConnected = true
+    }
+
+    const fftSize = Number(options.fftSize)
+    if (Number.isFinite(fftSize) && fftSize >= 32) {
+      this._debugAnalyser.fftSize = fftSize
+    }
+    const smoothing = Number(options.smoothingTimeConstant)
+    if (Number.isFinite(smoothing)) {
+      this._debugAnalyser.smoothingTimeConstant = Math.max(0, Math.min(1, smoothing))
+    }
+
+    const hpfCutoff = Number.isFinite(options.hpfCutoffHz)
+      ? Number(options.hpfCutoffHz)
+      : DEFAULT_CONFIG.hpfCutoffHz
+    const hpfEnabled = options.enableHpf !== false
+    this._debugHpf.frequency.value = hpfEnabled ? Math.max(0, hpfCutoff) : 0
+
+    return this._debugAnalyser
   }
 
   onPitch(cb) {
     if (typeof cb !== 'function') return () => {}
     this._listeners.add(cb)
     return () => this._listeners.delete(cb)
+  }
+
+  onDebug(cb) {
+    if (typeof cb !== 'function') return () => {}
+    this._debugListeners.add(cb)
+    return () => this._debugListeners.delete(cb)
   }
 
   async startMic() {
@@ -94,35 +134,16 @@ class PitchEngine {
       workletNode.port.onmessage = (event) => {
         const msg = event.data
         if (!msg?.type) return
-        if (msg.type === 'detector') {
-          if (msg.algoId === this._algoId) {
-            this._useWorkletDetector = Boolean(msg.ready)
-          }
-          return
-        }
         if (msg.type === 'pitch') {
           const result = msg.result
           if (!result) return
           if (result.algoId && result.algoId !== this._algoId) return
-          if (typeof result.algoId === 'string' && result.algoId.startsWith('essentia')) {
-            this._useWorkletDetector = true
-          }
           for (const cb of this._listeners) cb(result)
           return
         }
-        if (msg.type !== 'frame') return
-        if (this._useWorkletDetector) return
-        const samples = msg.samples
-        if (!samples) return
-        this._worker.postMessage(
-          {
-            type: 'frame',
-            tAcSec: msg.tAcSec,
-            samples,
-            sampleRate: msg.sampleRate,
-          },
-          [samples.buffer],
-        )
+        if (msg.type === 'pipeline-debug') {
+          for (const cb of this._debugListeners) cb(msg)
+        }
       }
 
       const monitorGain = audioContext.createGain()
@@ -202,6 +223,14 @@ class PitchEngine {
       yinConfidenceGate: this._config.yinConfidenceGate,
       yinProbOutputUnvoiced: this._config.yinProbOutputUnvoiced,
       yinProbPreciseTime: this._config.yinProbPreciseTime,
+      clarityGate: this._config.clarityGate,
+      enableDcRemoval: this._config.enableDcRemoval,
+      enableHpf: this._config.enableHpf,
+      enableRmsGate: this._config.enableRmsGate,
+      enableF0Validate: this._config.enableF0Validate,
+      enableTemporalSmooth: this._config.enableTemporalSmooth,
+      debugPipeline: this._config.debugPipeline,
+      debugPipelineStride: this._config.debugPipelineStride,
     })
   }
 
@@ -211,11 +240,24 @@ class PitchEngine {
     this._workletNode?.disconnect()
     this._source?.disconnect()
     this._monitorGain?.disconnect()
+    if (this._debugHpf) {
+      try {
+        this._source?.disconnect(this._debugHpf)
+      } catch (err) {
+        console.warn('[PitchEngine] debug analyser disconnect failed', err)
+      }
+    }
+    this._debugAnalyser?.disconnect()
+    this._debugHpf?.disconnect()
+    this._debugGain?.disconnect()
+    this._debugAnalyser = null
+    this._debugHpf = null
+    this._debugGain = null
+    this._debugConnected = false
 
     this._workletNode = null
     this._source = null
     this._monitorGain = null
-    this._useWorkletDetector = false
 
     this._stream.getTracks().forEach((track) => track.stop())
     this._stream = null

@@ -1,6 +1,8 @@
 import { DEFAULT_CONFIG } from '../../../audioEngine.js'
 import Essentia from 'essentia.js/dist/essentia.js-core.es.js'
 import { EssentiaWASM } from 'essentia.js/dist/essentia-wasm.es.js'
+import { PitchyPlugin } from '../plugins/pitchyPlugin.js'
+import { PyinPlugin } from '../plugins/pyinPlugin.js'
 import {
   applyHpfInPlace,
   createHpfState,
@@ -15,6 +17,7 @@ import {
 
 const ESSENTIA_ALGOS = new Set(['essentia-yin', 'essentia-probabilistic-yin'])
 const SMOOTH_WINDOW_SIZE = 5
+const DEBUG_FRAME_SIZE = 256
 let essentiaInstance = null
 let essentiaError = null
 
@@ -57,12 +60,6 @@ function detectEssentiaYin(essentia, samples, sampleRate, cfg) {
 
     const f0Hz = Number.isFinite(res?.pitch) && res.pitch > 0 ? res.pitch : null
     const confidence = Number.isFinite(res?.pitchConfidence) ? res.pitchConfidence : 0
-    if (!f0Hz || confidence < cfg.confidenceGate) {
-      return {
-        f0Hz: null,
-        confidence,
-      }
-    }
 
     return {
       f0Hz,
@@ -130,12 +127,6 @@ function detectEssentiaProbabilisticYin(essentia, samples, sampleRate, cfg) {
       : Number.isFinite(res?.confidence)
         ? res.confidence
         : 0
-    if (!f0Hz || confidence < cfg.confidenceGate) {
-      return {
-        f0Hz: null,
-        confidence,
-      }
-    }
 
     return {
       f0Hz,
@@ -144,6 +135,18 @@ function detectEssentiaProbabilisticYin(essentia, samples, sampleRate, cfg) {
   } finally {
     if (signalVec?.delete) signalVec.delete()
   }
+}
+
+function downsampleFrame(frame, targetLength = DEBUG_FRAME_SIZE) {
+  const len = frame?.length || 0
+  if (!len) return new Float32Array(0)
+  if (len <= targetLength) return frame.slice()
+  const out = new Float32Array(targetLength)
+  const stride = len / targetLength
+  for (let i = 0; i < targetLength; i += 1) {
+    out[i] = frame[Math.floor(i * stride)] || 0
+  }
+  return out
 }
 
 class PitchFrameProcessor extends AudioWorkletProcessor {
@@ -156,18 +159,30 @@ class PitchFrameProcessor extends AudioWorkletProcessor {
     this._buffer = new Float32Array(this._windowSize * 4)
     this._bufferLength = 0
     this._algoId = DEFAULT_CONFIG.pitchAlgoId || 'pitchy'
-    this._useWorkletDetector = false
+    this._detectors = new Map([
+      ['pitchy', new PitchyPlugin()],
+      ['pyin', new PyinPlugin()],
+    ])
+    this._detector = this._detectors.get(this._algoId) || null
     this._config = {
       rmsGate: DEFAULT_CONFIG.rmsGate,
       smoothing: DEFAULT_CONFIG.smoothing,
+      clarityGate: DEFAULT_CONFIG.clarityGate,
+      yinConfidenceGate: DEFAULT_CONFIG.yinConfidenceGate,
       f0MinHz: DEFAULT_CONFIG.f0MinHz,
       f0MaxHz: DEFAULT_CONFIG.f0MaxHz,
       medianWindowSize: DEFAULT_CONFIG.medianWindowSize,
       maxJumpSemitones: DEFAULT_CONFIG.maxJumpSemitones,
       holdFrames: DEFAULT_CONFIG.holdFrames,
+      enableDcRemoval: DEFAULT_CONFIG.enableDcRemoval !== false,
+      enableHpf: DEFAULT_CONFIG.enableHpf !== false,
+      enableRmsGate: DEFAULT_CONFIG.enableRmsGate !== false,
+      enableF0Validate: DEFAULT_CONFIG.enableF0Validate !== false,
+      enableTemporalSmooth: DEFAULT_CONFIG.enableTemporalSmooth !== false,
+      debugPipeline: Boolean(DEFAULT_CONFIG.debugPipeline),
+      debugPipelineStride: Math.max(1, Number(DEFAULT_CONFIG.debugPipelineStride) || 4),
     }
     this._essentiaConfig = {
-      confidenceGate: 0.5,
       minFrequency: DEFAULT_CONFIG.f0MinHz,
       maxFrequency: DEFAULT_CONFIG.f0MaxHz,
       frameSize: this._windowSize,
@@ -183,16 +198,20 @@ class PitchFrameProcessor extends AudioWorkletProcessor {
       lastStableMidi: null,
       holdLeft: 0,
     }
+    this._debugCounter = 0
+
+    if (this._detector?.configure) this._detector.configure(this._config)
 
     this.port.onmessage = (event) => {
       const msg = event.data
       if (msg?.type !== 'config') return
       this._applyConfig(msg)
-      this._updateAlgo(msg.algoId)
+      this._setAlgo(msg.algoId)
     }
   }
 
   _applyConfig(msg) {
+    const prevTemporal = this._config.enableTemporalSmooth
     const nextWindow = Math.max(256, Number(msg.windowSize) || this._windowSize)
     const nextHop = Math.max(1, Number(msg.hopSize) || this._hopSize)
     const nextCutoff = Number.isFinite(Number(msg.hpfCutoffHz))
@@ -215,6 +234,10 @@ class PitchFrameProcessor extends AudioWorkletProcessor {
     }
 
     if (typeof msg.smoothing === 'boolean') this._config.smoothing = msg.smoothing
+    const clarityGate = Number(msg.clarityGate)
+    if (Number.isFinite(clarityGate)) this._config.clarityGate = clarityGate
+    const yinConfidenceGate = Number(msg.yinConfidenceGate)
+    if (Number.isFinite(yinConfidenceGate)) this._config.yinConfidenceGate = yinConfidenceGate
 
     const f0MinHz = Number(msg.f0MinHz)
     if (Number.isFinite(f0MinHz)) {
@@ -236,9 +259,16 @@ class PitchFrameProcessor extends AudioWorkletProcessor {
 
     const holdFrames = Number(msg.holdFrames)
     if (Number.isFinite(holdFrames)) this._config.holdFrames = holdFrames
-
-    const confidenceGate = Number(msg.yinConfidenceGate)
-    if (Number.isFinite(confidenceGate)) this._essentiaConfig.confidenceGate = confidenceGate
+    if (typeof msg.enableDcRemoval === 'boolean') this._config.enableDcRemoval = msg.enableDcRemoval
+    if (typeof msg.enableHpf === 'boolean') this._config.enableHpf = msg.enableHpf
+    if (typeof msg.enableRmsGate === 'boolean') this._config.enableRmsGate = msg.enableRmsGate
+    if (typeof msg.enableF0Validate === 'boolean') this._config.enableF0Validate = msg.enableF0Validate
+    if (typeof msg.enableTemporalSmooth === 'boolean') this._config.enableTemporalSmooth = msg.enableTemporalSmooth
+    if (typeof msg.debugPipeline === 'boolean') this._config.debugPipeline = msg.debugPipeline
+    const debugStride = Number(msg.debugPipelineStride)
+    if (Number.isFinite(debugStride) && debugStride > 0) {
+      this._config.debugPipelineStride = Math.max(1, Math.round(debugStride))
+    }
 
     if (Number.isFinite(nextWindow)) this._essentiaConfig.frameSize = nextWindow
     if (Number.isFinite(nextHop)) this._essentiaConfig.hopSize = nextHop
@@ -250,29 +280,19 @@ class PitchFrameProcessor extends AudioWorkletProcessor {
     if (typeof msg.yinProbPreciseTime === 'boolean') {
       this._essentiaConfig.preciseTime = msg.yinProbPreciseTime
     }
+
+    if (this._detector?.configure) this._detector.configure(this._config)
+    if (prevTemporal !== this._config.enableTemporalSmooth) this._resetTracking()
   }
 
-  _updateAlgo(algoId) {
+  _setAlgo(algoId) {
     if (typeof algoId !== 'string' || !algoId) return
-    const algoChanged = algoId !== this._algoId
-    if (algoChanged) {
-      this._algoId = algoId
-      this._resetTracking()
-    }
-
-    const shouldUseEssentia = ESSENTIA_ALGOS.has(algoId)
-    let ready = false
-    let error = null
-    if (shouldUseEssentia) {
-      ready = Boolean(getEssentia())
-      error = essentiaError
-    }
-
-    const statusChanged = ready !== this._useWorkletDetector || algoChanged
-    this._useWorkletDetector = ready
-    if (statusChanged) {
-      this._notifyDetectorStatus(algoId, ready, error)
-    }
+    if (algoId === this._algoId) return
+    this._algoId = algoId
+    this._detector = this._detectors.get(algoId) || null
+    if (this._detector?.configure) this._detector.configure(this._config)
+    if (this._detector?.reset) this._detector.reset()
+    this._resetTracking()
   }
 
   process(inputs) {
@@ -304,7 +324,23 @@ class PitchFrameProcessor extends AudioWorkletProcessor {
     while (this._bufferLength >= this._windowSize) {
       const frame = new Float32Array(this._windowSize)
       frame.set(this._buffer.subarray(0, this._windowSize))
-      this._conditionFrame(frame)
+      const debugStages = this._shouldDebug() ? {} : null
+      if (debugStages) debugStages.input = downsampleFrame(frame)
+
+      if (this._config.enableDcRemoval) removeDcOffsetInPlace(frame)
+      if (debugStages) debugStages.dcRemoved = downsampleFrame(frame)
+
+      if (this._config.enableHpf) {
+        this._hpfState = applyHpfInPlace(frame, this._hpfState)
+      }
+      if (debugStages) debugStages.hpf = downsampleFrame(frame)
+
+      const frameRms = rms(frame)
+      const gateEnabled = this._config.enableRmsGate && Number.isFinite(this._config.rmsGate)
+      const gateOpen = !gateEnabled || frameRms >= this._config.rmsGate
+      if (debugStages) {
+        debugStages.gated = gateOpen ? downsampleFrame(frame) : new Float32Array(DEBUG_FRAME_SIZE)
+      }
 
       const remaining = this._bufferLength - this._hopSize
       if (remaining > 0) {
@@ -312,32 +348,59 @@ class PitchFrameProcessor extends AudioWorkletProcessor {
       }
       this._bufferLength = Math.max(0, remaining)
 
-      if (this._useWorkletDetector) {
-        const result = this._detectPitch(frame)
-        if (result) {
-          this.port.postMessage({
-            type: 'pitch',
-            result,
-          })
+      if (!gateOpen) {
+        const result = {
+          tAcSec: currentTime,
+          f0Hz: null,
+          midi: null,
+          confidence: 0,
+          rms: frameRms,
+          algoId: this._algoId,
         }
-      } else {
-        this.port.postMessage(
-          {
-            type: 'frame',
-            tAcSec: currentTime,
-            samples: frame,
-            sampleRate,
-          },
-          [frame.buffer],
-        )
+        this._postPitch(result)
+        this._postDebug(debugStages, {
+          rms: frameRms,
+          gateOpen,
+          rawF0Hz: null,
+          rawConfidence: 0,
+          result,
+        })
+        continue
       }
-    }
-  }
 
-  _conditionFrame(frame) {
-    if (!frame?.length) return
-    removeDcOffsetInPlace(frame)
-    this._hpfState = applyHpfInPlace(frame, this._hpfState)
+      const raw = this._runDetector(frame, frameRms)
+      if (!raw) {
+        const result = {
+          tAcSec: currentTime,
+          f0Hz: null,
+          midi: null,
+          confidence: 0,
+          rms: frameRms,
+          algoId: this._algoId,
+        }
+        this._postPitch(result)
+        this._postDebug(debugStages, {
+          rms: frameRms,
+          gateOpen,
+          rawF0Hz: null,
+          rawConfidence: 0,
+          result,
+        })
+        continue
+      }
+
+      const result = this._postProcess(raw, frameRms)
+      if (result) {
+        this._postPitch(result)
+      }
+      this._postDebug(debugStages, {
+        rms: frameRms,
+        gateOpen,
+        rawF0Hz: raw.f0Hz ?? null,
+        rawConfidence: raw.confidence ?? 0,
+        result,
+      })
+    }
   }
 
   _resetTracking() {
@@ -345,42 +408,56 @@ class PitchFrameProcessor extends AudioWorkletProcessor {
     this._stabilityState = { window: [], lastStableF0: null, lastStableMidi: null, holdLeft: 0 }
   }
 
-  _notifyDetectorStatus(algoId, ready, error) {
+  _shouldDebug() {
+    if (!this._config.debugPipeline) return false
+    const stride = Math.max(1, Number(this._config.debugPipelineStride) || 1)
+    this._debugCounter += 1
+    return this._debugCounter % stride === 0
+  }
+
+  _postPitch(result) {
+    if (!result) return
     this.port.postMessage({
-      type: 'detector',
-      algoId,
-      ready: Boolean(ready),
-      error: error ? String(error?.message || error) : null,
+      type: 'pitch',
+      result,
     })
   }
 
-  _detectPitch(samples) {
-    const frameRms = rms(samples)
-    if (Number.isFinite(this._config.rmsGate) && frameRms < this._config.rmsGate) {
-      return {
-        tAcSec: currentTime,
-        f0Hz: null,
-        midi: null,
-        confidence: 0,
-        rms: frameRms,
-        algoId: this._algoId,
+  _postDebug(stages, metrics) {
+    if (!stages) return
+    this.port.postMessage({
+      type: 'pipeline-debug',
+      tAcSec: currentTime,
+      sampleRate,
+      stages,
+      metrics: metrics || {},
+    })
+  }
+
+  _runDetector(samples, frameRms) {
+    if (ESSENTIA_ALGOS.has(this._algoId)) {
+      const essentia = getEssentia()
+      if (!essentia) return null
+      if (this._algoId === 'essentia-yin') {
+        return detectEssentiaYin(essentia, samples, sampleRate, this._essentiaConfig)
+      }
+      if (this._algoId === 'essentia-probabilistic-yin') {
+        return detectEssentiaProbabilisticYin(essentia, samples, sampleRate, this._essentiaConfig)
       }
     }
 
-    const raw = this._runEssentia(samples)
+    if (!this._detector?.detect) return null
+    const raw = this._detector.detect({ samples, sampleRate, rms: frameRms })
     if (!raw) return null
-    return this._postProcess(raw, frameRms)
+    return {
+      f0Hz: raw.f0Hz ?? null,
+      confidence: raw.confidence ?? 0,
+    }
   }
 
-  _runEssentia(samples) {
-    const essentia = getEssentia()
-    if (!essentia) return null
-    if (this._algoId === 'essentia-yin') {
-      return detectEssentiaYin(essentia, samples, sampleRate, this._essentiaConfig)
-    }
-    if (this._algoId === 'essentia-probabilistic-yin') {
-      return detectEssentiaProbabilisticYin(essentia, samples, sampleRate, this._essentiaConfig)
-    }
+  _getConfidenceGate() {
+    if (this._algoId === 'pitchy') return Number(this._config.clarityGate)
+    if (ESSENTIA_ALGOS.has(this._algoId)) return Number(this._config.yinConfidenceGate)
     return null
   }
 
@@ -397,47 +474,58 @@ class PitchFrameProcessor extends AudioWorkletProcessor {
     const holdFrames = Number.isFinite(this._config.holdFrames) ? this._config.holdFrames : 2
     let usedHold = false
 
-    const isValidRange =
-      Number.isFinite(f0Hz) &&
-      (!Number.isFinite(f0MinHz) || f0Hz >= f0MinHz) &&
-      (!Number.isFinite(f0MaxHz) || f0Hz <= f0MaxHz)
-    f0Hz = isValidRange ? f0Hz : null
+    if (this._config.enableF0Validate) {
+      const confidenceGate = this._getConfidenceGate()
+      if (Number.isFinite(confidenceGate)) {
+        if (!Number.isFinite(confidence) || confidence < confidenceGate) {
+          f0Hz = null
+        }
+      }
 
-    if (Number.isFinite(f0Hz)) {
-      this._stabilityState.window = pushWindow(this._stabilityState.window, f0Hz, medianWindowSize)
-      const medianF0 = medianOfWindow(this._stabilityState.window)
-      f0Hz = Number.isFinite(medianF0) ? medianF0 : f0Hz
+      const isValidRange =
+        Number.isFinite(f0Hz) &&
+        (!Number.isFinite(f0MinHz) || f0Hz >= f0MinHz) &&
+        (!Number.isFinite(f0MaxHz) || f0Hz <= f0MaxHz)
+      f0Hz = isValidRange ? f0Hz : null
+    }
 
-      const candidateMidi = hzToMidi(f0Hz)
-      if (
-        Number.isFinite(candidateMidi) &&
-        Number.isFinite(this._stabilityState.lastStableMidi) &&
-        Math.abs(candidateMidi - this._stabilityState.lastStableMidi) > maxJumpSemitones
-      ) {
-        f0Hz = null
-      } else {
-        this._stabilityState.lastStableF0 = f0Hz
-        this._stabilityState.lastStableMidi = candidateMidi
-        this._stabilityState.holdLeft = holdFrames
+    if (this._config.enableTemporalSmooth) {
+      if (Number.isFinite(f0Hz)) {
+        this._stabilityState.window = pushWindow(this._stabilityState.window, f0Hz, medianWindowSize)
+        const medianF0 = medianOfWindow(this._stabilityState.window)
+        f0Hz = Number.isFinite(medianF0) ? medianF0 : f0Hz
+
+        const candidateMidi = hzToMidi(f0Hz)
+        if (
+          Number.isFinite(candidateMidi) &&
+          Number.isFinite(this._stabilityState.lastStableMidi) &&
+          Math.abs(candidateMidi - this._stabilityState.lastStableMidi) > maxJumpSemitones
+        ) {
+          f0Hz = null
+        } else {
+          this._stabilityState.lastStableF0 = f0Hz
+          this._stabilityState.lastStableMidi = candidateMidi
+          this._stabilityState.holdLeft = holdFrames
+        }
+      }
+
+      if (!Number.isFinite(f0Hz)) {
+        if (this._stabilityState.holdLeft > 0 && Number.isFinite(this._stabilityState.lastStableF0)) {
+          f0Hz = this._stabilityState.lastStableF0
+          usedHold = true
+          this._stabilityState.holdLeft -= 1
+        } else {
+          this._stabilityState.holdLeft = 0
+        }
+      }
+
+      if (this._config.smoothing) {
+        this._smoothState = smoothMovingAverage(this._smoothState, f0Hz, SMOOTH_WINDOW_SIZE)
+        f0Hz = this._smoothState.value
       }
     }
 
-    if (!Number.isFinite(f0Hz)) {
-      if (this._stabilityState.holdLeft > 0 && Number.isFinite(this._stabilityState.lastStableF0)) {
-        f0Hz = this._stabilityState.lastStableF0
-        usedHold = true
-        this._stabilityState.holdLeft -= 1
-      } else {
-        this._stabilityState.holdLeft = 0
-      }
-    }
-
-    if (this._config.smoothing) {
-      this._smoothState = smoothMovingAverage(this._smoothState, f0Hz, SMOOTH_WINDOW_SIZE)
-      f0Hz = this._smoothState.value
-    }
-
-    const midi = Number.isFinite(f0Hz) ? hzToMidi(f0Hz) : raw?.midi ?? null
+    const midi = Number.isFinite(f0Hz) ? hzToMidi(f0Hz) : null
 
     return {
       tAcSec: currentTime,

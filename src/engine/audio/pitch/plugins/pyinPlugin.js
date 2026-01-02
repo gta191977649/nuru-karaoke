@@ -82,7 +82,7 @@ class PyinPlugin {
     this._ensureState()
     this._sampleRate = sampleRate
 
-    const frameRms = rms(samples)
+    const frameRms = Number.isFinite(frame?.rms) ? frame.rms : rms(samples)
 
     const candidates = this._getYinCandidates(samples)
     const voicedResult = this._updateCausalStates(candidates)

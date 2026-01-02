@@ -23,13 +23,14 @@ class PitchDetectorRegistry {
   }
 }
 
-function createDefaultPitchRegistry() {
+function createDefaultPitchRegistry(options = {}) {
+  const includeCrepe = options.includeCrepe !== false
   const registry = new PitchDetectorRegistry()
   registry.register(new PitchyPlugin())
   registry.register(new PyinPlugin())
   registry.register(new EssentiaYinPlugin())
   registry.register(new EssentiaProbabilisticYinPlugin())
-  registry.register(new CrepeTfPlugin())
+  if (includeCrepe) registry.register(new CrepeTfPlugin())
   return registry
 }
 
