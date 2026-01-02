@@ -71,7 +71,6 @@
   display: flex;
   flex-direction: column;
   padding: 20px;
-
 }
 
 .pitch-monitor-bar {
@@ -223,10 +222,20 @@
   flex: 2;
   position: relative;
   margin-top: 10px;
+  margin-bottom: 100px;
   overflow: hidden;
+  
 }
 
 .melodyGuideCanvas {
+  width: 100%;
+  height: 100%;
+  display: block;
+  border-radius: 10px;
+  overflow: hidden;
+}
+
+.melodyGuideCanvas canvas {
   width: 100%;
   height: 100%;
   display: block;
