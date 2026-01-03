@@ -10,7 +10,7 @@ const COLORS = {
   melodyOutFill: 0x4a4a4a,
   missFill: 0x0b0b0b,
   missStroke: 0xffffff,
-  userWrong: 0x83401e,
+  userMiss: 0x83401e,
   userGlowFill: 0xffd14a,
   userGlowStroke: 0xfff2b8,
   userMissStroke: 0xffffff,
@@ -25,13 +25,24 @@ const ALPHAS = {
   melodyStroke: 1,
   missFill: 0.85,
   missStroke: 0.9,
-  userWrong: 0.5,
-  userMissStroke: 1,
+  userMiss: 0.5,
+  userMissStroke: 0.1,
   userGlowFill: 0.95,
   userGlowStroke: 0.9,
   playheadOuter: 0.15,
   playheadMid: 0.35,
   playheadInner: 0.9,
+}
+
+const STROKE_WIDTH = {
+  grid: 1,
+  melody: 2,
+  miss: 1,
+  user: 1,
+  userGlow: 1,
+  playheadOuter: 8,
+  playheadMid: 4,
+  playheadInner: 2,
 }
 
 function getNotesBounds(notes, transposition, fallbackMin, fallbackMax) {
@@ -101,7 +112,7 @@ function MelodyGuideCanvas({
   windowSec = 8,
   minMidi = 36,
   maxMidi = 96,
-  smoothAlpha = 0.35,
+  smoothAlpha = 0.1,
   className,
   style,
 }) {
@@ -120,6 +131,7 @@ function MelodyGuideCanvas({
     lastGrid: { w: 0, h: 0, lineCount: 12 },
     lastCenterPitch: null,
     lastCenterSnap: null,
+    centerSnap: null,
   })
   const stateRef = useRef({
     reference,
@@ -132,6 +144,7 @@ function MelodyGuideCanvas({
     windowSec,
     minMidi,
     maxMidi,
+    smoothAlpha,
   })
 
   useEffect(() => {
@@ -146,6 +159,7 @@ function MelodyGuideCanvas({
       windowSec,
       minMidi,
       maxMidi,
+      smoothAlpha,
     }
   }, [
     reference,
@@ -158,6 +172,7 @@ function MelodyGuideCanvas({
     windowSec,
     minMidi,
     maxMidi,
+    smoothAlpha,
   ])
 
   useEffect(() => {
@@ -219,6 +234,7 @@ function MelodyGuideCanvas({
         lastGrid: { w: 0, h: 0, lineCount: 12 },
         lastCenterPitch: null,
         lastCenterSnap: null,
+        centerSnap: null,
       }
 
       app.ticker.add(() => {
@@ -249,16 +265,26 @@ function MelodyGuideCanvas({
           const fallback = (bounds.minMidi + bounds.maxMidi) / 2
           centerPitch = Number.isFinite(fallback) ? fallback : (snap.minMidi + snap.maxMidi) / 2
         }
-        let centerSnap = state.lastCenterSnap
-        if (!Number.isFinite(centerSnap)) {
-          centerSnap = Math.round(centerPitch / 12) * 12
+        let centerSnapTarget = state.lastCenterSnap
+        if (!Number.isFinite(centerSnapTarget)) {
+          centerSnapTarget = Math.round(centerPitch / 12) * 12
         }
         if (Number.isFinite(medianMidi)) {
-          while (medianMidi > centerSnap + 8) centerSnap += 12
-          while (medianMidi < centerSnap - 8) centerSnap -= 12
+          while (medianMidi > centerSnapTarget + 8) centerSnapTarget += 12
+          while (medianMidi < centerSnapTarget - 8) centerSnapTarget -= 12
         }
         state.lastCenterPitch = centerPitch
-        state.lastCenterSnap = centerSnap
+        state.lastCenterSnap = centerSnapTarget
+        const smoothAlpha = Math.max(0, Math.min(1, Number(snap.smoothAlpha) || 0))
+        if (!Number.isFinite(state.centerSnap) || smoothAlpha <= 0) {
+          state.centerSnap = centerSnapTarget
+        } else {
+          state.centerSnap += (centerSnapTarget - state.centerSnap) * smoothAlpha
+          if (Math.abs(state.centerSnap - centerSnapTarget) < 1e-3) {
+            state.centerSnap = centerSnapTarget
+          }
+        }
+        const centerSnap = state.centerSnap
         const rangeSemis = 18
         const topPitch = centerSnap + rangeSemis
         const bottomPitch = centerSnap - rangeSemis
@@ -279,7 +305,11 @@ function MelodyGuideCanvas({
         if (needsGrid) {
           state.lastGrid = { w, h, lineCount }
           state.grid.clear()
-          state.grid.setStrokeStyle({ width: 1, color: COLORS.grid, alpha: ALPHAS.grid })
+          state.grid.setStrokeStyle({
+            width: STROKE_WIDTH.grid,
+            color: COLORS.grid,
+            alpha: ALPHAS.grid,
+          })
           state.grid.beginPath()
           for (let i = 0; i < lineCount; i += 1) {
             const y = lineY(i)
@@ -322,7 +352,11 @@ function MelodyGuideCanvas({
           state.notes.stroke()
         }
         state.notes.clear()
-        state.notes.setStrokeStyle({ width: 2, color: COLORS.grid, alpha: ALPHAS.melodyStroke })
+        state.notes.setStrokeStyle({
+          width: STROKE_WIDTH.melody,
+          color: COLORS.grid,
+          alpha: ALPHAS.melodyStroke,
+        })
         drawMelodyNotes(COLORS.melodyFill, ALPHAS.melodyFill, true)
         drawMelodyNotes(COLORS.melodyOutFill, ALPHAS.melodyOutFill, false)
 
@@ -331,7 +365,11 @@ function MelodyGuideCanvas({
         const missHeight = 10
 
         state.miss.clear()
-        state.miss.setStrokeStyle({ width: 1, color: COLORS.missStroke, alpha: ALPHAS.missStroke })
+        state.miss.setStrokeStyle({
+          width: STROKE_WIDTH.miss,
+          color: COLORS.missStroke,
+          alpha: ALPHAS.missStroke,
+        })
         state.miss.setFillStyle({ color: COLORS.missFill, alpha: ALPHAS.missFill })
         state.miss.beginPath()
         history.forEach((point) => {
@@ -392,9 +430,9 @@ function MelodyGuideCanvas({
             blueRects.push(rect)
           }
         })
-        state.user.setFillStyle({ color: COLORS.userWrong, alpha: ALPHAS.userWrong })
+        state.user.setFillStyle({ color: COLORS.userMiss, alpha: ALPHAS.userMiss })
         state.user.setStrokeStyle({
-          width: 1,
+          width: STROKE_WIDTH.user,
           color: COLORS.userMissStroke,
           alpha: ALPHAS.userMissStroke,
         })
@@ -404,9 +442,9 @@ function MelodyGuideCanvas({
         })
         state.user.fill()
         state.user.stroke()
-        state.user.setFillStyle({ color: COLORS.userWrong, alpha: ALPHAS.userWrong })
+        state.user.setFillStyle({ color: COLORS.userMiss, alpha: ALPHAS.userMiss })
         state.user.setStrokeStyle({
-          width: 1,
+          width: STROKE_WIDTH.user,
           color: COLORS.userMissStroke,
           alpha: ALPHAS.userMissStroke,
         })
@@ -419,7 +457,7 @@ function MelodyGuideCanvas({
         if (state.userGlow) {
           state.userGlow.setFillStyle({ color: COLORS.userGlowFill, alpha: ALPHAS.userGlowFill })
           state.userGlow.setStrokeStyle({
-            width: 1,
+            width: STROKE_WIDTH.userGlow,
             color: COLORS.userGlowStroke,
             alpha: ALPHAS.userGlowStroke,
           })
@@ -433,17 +471,29 @@ function MelodyGuideCanvas({
 
         state.playhead.clear()
         const alignedPlayheadX = Math.round(playheadX) + 0.5
-        state.playhead.setStrokeStyle({ width: 8, color: COLORS.playhead, alpha: ALPHAS.playheadOuter })
+        state.playhead.setStrokeStyle({
+          width: STROKE_WIDTH.playheadOuter,
+          color: COLORS.playhead,
+          alpha: ALPHAS.playheadOuter,
+        })
         state.playhead.beginPath()
         state.playhead.moveTo(alignedPlayheadX, 0)
         state.playhead.lineTo(alignedPlayheadX, h)
         state.playhead.stroke()
-        state.playhead.setStrokeStyle({ width: 4, color: COLORS.playhead, alpha: ALPHAS.playheadMid })
+        state.playhead.setStrokeStyle({
+          width: STROKE_WIDTH.playheadMid,
+          color: COLORS.playhead,
+          alpha: ALPHAS.playheadMid,
+        })
         state.playhead.beginPath()
         state.playhead.moveTo(alignedPlayheadX, 0)
         state.playhead.lineTo(alignedPlayheadX, h)
         state.playhead.stroke()
-        state.playhead.setStrokeStyle({ width: 2, color: COLORS.playhead, alpha: ALPHAS.playheadInner })
+        state.playhead.setStrokeStyle({
+          width: STROKE_WIDTH.playheadInner,
+          color: COLORS.playhead,
+          alpha: ALPHAS.playheadInner,
+        })
         state.playhead.beginPath()
         state.playhead.moveTo(alignedPlayheadX, 0)
         state.playhead.lineTo(alignedPlayheadX, h)
@@ -471,6 +521,7 @@ function MelodyGuideCanvas({
         lastGrid: { w: 0, h: 0, lineCount: 12 },
         lastCenterPitch: null,
         lastCenterSnap: null,
+        centerSnap: null,
       }
     }
   }, [])

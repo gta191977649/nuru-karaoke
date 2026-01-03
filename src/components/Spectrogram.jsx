@@ -16,7 +16,7 @@ const COLOR_STOPS = [
   { t: 0.88, c: [251, 155, 6] },
   { t: 1.0, c: [252, 255, 164] },
 ]
-const F0_COLOR = 0xff4d4d
+const F0_COLOR = 0x8bd17c
 
 const buildColorMap = (steps) => {
   const total = Math.max(1, steps)
@@ -67,7 +67,6 @@ function Spectrogram({
   const containerRef = useRef(null)
   const analyserRef = useRef(analyser)
   const f0Ref = useRef(f0Hz)
-  const tickRef = useRef(null)
   const pixiRef = useRef({
     app: null,
     bg: null,
@@ -140,8 +139,7 @@ function Spectrogram({
         data: null,
       }
 
-      const tick = () => {
-        if (!active) return
+      app.ticker.add(() => {
         const state = pixiRef.current
         const { app: activeApp } = state
         const rootEl = containerRef.current
@@ -264,10 +262,7 @@ function Spectrogram({
         state.nextTexture = prev
         state.outputSprite.texture = state.currentTexture
         state.scrollSprite.texture = state.currentTexture
-      }
-
-      tickRef.current = tick
-      app.ticker.add(tick)
+      })
     }
 
     init()
@@ -276,14 +271,10 @@ function Spectrogram({
       const app = pixiRef.current.app
       const currentTexture = pixiRef.current.currentTexture
       const nextTexture = pixiRef.current.nextTexture
-      const tick = tickRef.current
-      if (app && tick) app.ticker.remove(tick)
-      if (app) app.ticker.stop()
       if (currentTexture) currentTexture.destroy(true)
       if (nextTexture) nextTexture.destroy(true)
-      if (app) app.destroy(true, true)
+      if (app) app.destroy(true)
       if (containerRef.current) containerRef.current.innerHTML = ''
-      tickRef.current = null
       pixiRef.current = {
         app: null,
         bg: null,

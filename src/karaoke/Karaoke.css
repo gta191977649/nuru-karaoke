@@ -1,5 +1,11 @@
 @import url('https://fonts.googleapis.com/css2?family=Zen+Old+Mincho:wght@400;500;600;700;900&display=swap');
 
+@font-face {
+  font-family: 'BIZUDPMincho-Bold';
+  src: url('../assets/font/BIZUDPMincho-Bold.ttf') format('truetype');
+  font-weight: bolder;
+}
+
 .karaokePage {
   --bg-color: #5052f5;
   --pitch-bg: rgba(60, 40, 20, 0.1);
@@ -325,8 +331,8 @@
 }
 
 .lyrics-container {
-  /* font-family: "YuMinCho", serif; */
-  font-weight: bold;
+  font-family: 'BIZUDPMincho-Bold', 'Hiragino Mincho ProN', 'Yu Mincho', serif;
+  font-weight: bolder;
   font-style: normal;
 }
 
