@@ -1,6 +1,38 @@
 import { useEffect, useRef } from 'react'
-import { Application, Graphics } from 'pixi.js'
+import { Application, Container, Graphics } from 'pixi.js'
+import { BloomFilter } from 'pixi-filters'
 import { getTargetMidiAtTime } from '../engine/audio/midi/referenceMelody.js'
+
+const COLORS = {
+  background: 0x000000,
+  grid: 0xffffff,
+  melodyFill: 0x000000,
+  melodyOutFill: 0x4a4a4a,
+  missFill: 0x0b0b0b,
+  missStroke: 0xffffff,
+  userWrong: 0x83401e,
+  userGlowFill: 0xffd14a,
+  userGlowStroke: 0xfff2b8,
+  userMissStroke: 0xffffff,
+  playhead: 0xffffff,
+}
+
+const ALPHAS = {
+  background: 0.3,
+  grid: 0.2,
+  melodyFill: 0.5,
+  melodyOutFill: 0.5,
+  melodyStroke: 1,
+  missFill: 0.85,
+  missStroke: 0.9,
+  userWrong: 0.5,
+  userMissStroke: 1,
+  userGlowFill: 0.95,
+  userGlowStroke: 0.9,
+  playheadOuter: 0.15,
+  playheadMid: 0.35,
+  playheadInner: 0.9,
+}
 
 function getNotesBounds(notes, transposition, fallbackMin, fallbackMax) {
   if (!notes?.length) {
@@ -81,6 +113,8 @@ function MelodyGuideCanvas({
     notes: null,
     miss: null,
     user: null,
+    userGlowContainer: null,
+    userGlow: null,
     playhead: null,
     lastSize: { w: 0, h: 0 },
     lastGrid: { w: 0, h: 0, lineCount: 12 },
@@ -157,9 +191,19 @@ function MelodyGuideCanvas({
       const notes = new Graphics()
       const miss = new Graphics()
       const user = new Graphics()
+      const userGlowContainer = new Container()
+      const userGlow = new Graphics()
       const playhead = new Graphics()
 
-      app.stage.addChild(bg, grid, notes, miss, user, playhead)
+      userGlowContainer.addChild(userGlow)
+      userGlowContainer.filters = [
+        new BloomFilter({
+          strength: 5,
+          quality: 4,
+          threshold: 0.2,
+        }),
+      ]
+      app.stage.addChild(bg, grid, notes, miss, user, userGlowContainer, playhead)
 
       pixiRef.current = {
         app,
@@ -168,6 +212,8 @@ function MelodyGuideCanvas({
         notes,
         miss,
         user,
+        userGlowContainer,
+        userGlow,
         playhead,
         lastSize: { w: 0, h: 0 },
         lastGrid: { w: 0, h: 0, lineCount: 12 },
@@ -221,16 +267,19 @@ function MelodyGuideCanvas({
         if (needsResize) {
           state.lastSize = { w, h }
           state.bg.clear()
-          state.bg.setFillStyle({ color: 0x000000, alpha: 0.3 })
+          state.bg.setFillStyle({ color: COLORS.background, alpha: ALPHAS.background })
           state.bg.beginPath()
           state.bg.roundRect(0, 0, w, h, 12)
           state.bg.fill()
+          if (state.userGlowContainer) {
+            state.userGlowContainer.filterArea = activeApp.screen
+          }
         }
         const needsGrid = needsResize || state.lastGrid.lineCount !== lineCount
         if (needsGrid) {
           state.lastGrid = { w, h, lineCount }
           state.grid.clear()
-          state.grid.setStrokeStyle({ width: 1, color: 0xffffff, alpha: 0.2 })
+          state.grid.setStrokeStyle({ width: 1, color: COLORS.grid, alpha: ALPHAS.grid })
           state.grid.beginPath()
           for (let i = 0; i < lineCount; i += 1) {
             const y = lineY(i)
@@ -273,17 +322,17 @@ function MelodyGuideCanvas({
           state.notes.stroke()
         }
         state.notes.clear()
-        state.notes.setStrokeStyle({ width: 2, color: 0xffffff, alpha: 1 })
-        drawMelodyNotes(0x000000, 0.9, true)
-        drawMelodyNotes(0x4a4a4a, 0.5, false)
+        state.notes.setStrokeStyle({ width: 2, color: COLORS.grid, alpha: ALPHAS.melodyStroke })
+        drawMelodyNotes(COLORS.melodyFill, ALPHAS.melodyFill, true)
+        drawMelodyNotes(COLORS.melodyOutFill, ALPHAS.melodyOutFill, false)
 
         const history = snap.historyRef?.current || []
         const missWidth = Math.max(8, pixelsPerSec * 0.12)
         const missHeight = 10
 
         state.miss.clear()
-        state.miss.setStrokeStyle({ width: 1, color: 0xffffff, alpha: 0.9 })
-        state.miss.setFillStyle({ color: 0x0b0b0b, alpha: 0.85 })
+        state.miss.setStrokeStyle({ width: 1, color: COLORS.missStroke, alpha: ALPHAS.missStroke })
+        state.miss.setFillStyle({ color: COLORS.missFill, alpha: ALPHAS.missFill })
         state.miss.beginPath()
         history.forEach((point) => {
           if (point.t < visibleStart || point.t > visibleEnd) return
@@ -298,51 +347,103 @@ function MelodyGuideCanvas({
         state.miss.stroke()
 
         state.user.clear()
-        const drawUserNotes = (fillColor, fillAlpha, requireInRange) => {
-          state.user.setFillStyle({ color: fillColor, alpha: fillAlpha })
-          state.user.beginPath()
-          history.forEach((point) => {
-            if (point.t < visibleStart || point.t > visibleEnd) return
-            if (point.userMidi == null) return
-            const midi = Number(point.userMidi)
-            const targetMidiPoint = Number(point.targetMidi)
-            const pointRms = Number(point.rms)
-            if (!Number.isFinite(midi) || (Number.isFinite(pointRms) && pointRms < snap.rmsGate)) return
-            if (snap.gateUserByTarget && snap.reference) {
-              const t = Number(point.t)
-              const offset = Math.max(0, Number(snap.userOffsetSec) || 0)
-              const targetMidi =
-                getTargetMidiAtTime(snap.reference, t - offset) ??
-                getTargetMidiAtTime(snap.reference, t + offset)
-              if (targetMidi == null) return
-            }
-            const mappedMidi = Number.isFinite(targetMidiPoint)
-              ? mapUserMidiToTargetOctave(midi, targetMidiPoint)
-              : midi
-            const { y, inRange } = midiToY(mappedMidi)
-            if (requireInRange !== inRange) return
-            const x = playheadX + (point.t - songTimeSec) * pixelsPerSec
-            const barW = Math.max(6, pixelsPerSec * 0.18)
-            state.user.roundRect(x - barW / 2, y - 5, barW, 10, 5)
+        if (state.userGlow) state.userGlow.clear()
+        const userBarW = Math.max(6, pixelsPerSec * 0.18)
+        const userBarH = 10
+        const userRadius = 5
+        const glowRects = []
+        const blueRects = []
+        const greyRects = []
+        history.forEach((point) => {
+          if (point.t < visibleStart || point.t > visibleEnd) return
+          if (point.userMidi == null) return
+          const midi = Number(point.userMidi)
+          const targetMidiPoint =
+            point.targetMidi == null ? null : Number(point.targetMidi)
+          const pointRms = Number(point.rms)
+          if (!Number.isFinite(midi) || (Number.isFinite(pointRms) && pointRms < snap.rmsGate)) return
+          if (snap.gateUserByTarget && snap.reference) {
+            const t = Number(point.t)
+            const offset = Math.max(0, Number(snap.userOffsetSec) || 0)
+            const targetMidi =
+              getTargetMidiAtTime(snap.reference, t - offset) ??
+              getTargetMidiAtTime(snap.reference, t + offset)
+            if (targetMidi == null) return
+          }
+          const hasTarget = Number.isFinite(targetMidiPoint)
+          const isCorrectKey =
+            hasTarget && mod12(Math.round(midi)) === mod12(Math.round(targetMidiPoint))
+          const mappedMidi = hasTarget
+            ? mapUserMidiToTargetOctave(midi, targetMidiPoint)
+            : midi
+          const { y, inRange } = midiToY(mappedMidi)
+          const x = playheadX + (point.t - songTimeSec) * pixelsPerSec
+          const rect = {
+            x: x - userBarW / 2,
+            y: y - userBarH / 2,
+            w: userBarW,
+            h: userBarH,
+          }
+          if (isCorrectKey && inRange) {
+            glowRects.push(rect)
+          } else if (!inRange) {
+            greyRects.push(rect)
+          } else {
+            blueRects.push(rect)
+          }
+        })
+        state.user.setFillStyle({ color: COLORS.userWrong, alpha: ALPHAS.userWrong })
+        state.user.setStrokeStyle({
+          width: 1,
+          color: COLORS.userMissStroke,
+          alpha: ALPHAS.userMissStroke,
+        })
+        state.user.beginPath()
+        blueRects.forEach((rect) => {
+          state.user.roundRect(rect.x, rect.y, rect.w, rect.h, userRadius)
+        })
+        state.user.fill()
+        state.user.stroke()
+        state.user.setFillStyle({ color: COLORS.userWrong, alpha: ALPHAS.userWrong })
+        state.user.setStrokeStyle({
+          width: 1,
+          color: COLORS.userMissStroke,
+          alpha: ALPHAS.userMissStroke,
+        })
+        state.user.beginPath()
+        greyRects.forEach((rect) => {
+          state.user.roundRect(rect.x, rect.y, rect.w, rect.h, userRadius)
+        })
+        state.user.fill()
+        state.user.stroke()
+        if (state.userGlow) {
+          state.userGlow.setFillStyle({ color: COLORS.userGlowFill, alpha: ALPHAS.userGlowFill })
+          state.userGlow.setStrokeStyle({
+            width: 1,
+            color: COLORS.userGlowStroke,
+            alpha: ALPHAS.userGlowStroke,
           })
-          state.user.fill()
+          state.userGlow.beginPath()
+          glowRects.forEach((rect) => {
+            state.userGlow.roundRect(rect.x, rect.y, rect.w, rect.h, userRadius)
+          })
+          state.userGlow.fill()
+          state.userGlow.stroke()
         }
-        drawUserNotes(0x78c8ff, 0.9, true)
-        drawUserNotes(0x6a6a6a, 0.7, false)
 
         state.playhead.clear()
         const alignedPlayheadX = Math.round(playheadX) + 0.5
-        state.playhead.setStrokeStyle({ width: 8, color: 0xffffff, alpha: 0.15 })
+        state.playhead.setStrokeStyle({ width: 8, color: COLORS.playhead, alpha: ALPHAS.playheadOuter })
         state.playhead.beginPath()
         state.playhead.moveTo(alignedPlayheadX, 0)
         state.playhead.lineTo(alignedPlayheadX, h)
         state.playhead.stroke()
-        state.playhead.setStrokeStyle({ width: 4, color: 0xffffff, alpha: 0.35 })
+        state.playhead.setStrokeStyle({ width: 4, color: COLORS.playhead, alpha: ALPHAS.playheadMid })
         state.playhead.beginPath()
         state.playhead.moveTo(alignedPlayheadX, 0)
         state.playhead.lineTo(alignedPlayheadX, h)
         state.playhead.stroke()
-        state.playhead.setStrokeStyle({ width: 2, color: 0xffffff, alpha: 0.9 })
+        state.playhead.setStrokeStyle({ width: 2, color: COLORS.playhead, alpha: ALPHAS.playheadInner })
         state.playhead.beginPath()
         state.playhead.moveTo(alignedPlayheadX, 0)
         state.playhead.lineTo(alignedPlayheadX, h)
@@ -363,6 +464,8 @@ function MelodyGuideCanvas({
         notes: null,
         miss: null,
         user: null,
+        userGlowContainer: null,
+        userGlow: null,
         playhead: null,
         lastSize: { w: 0, h: 0 },
         lastGrid: { w: 0, h: 0, lineCount: 12 },

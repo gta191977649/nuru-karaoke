@@ -1,6 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { Button, Col, Container, Form, Row, Tab, Tabs } from 'react-bootstrap'
-import Spectrogram from 'spectrogram'
 import { extractReferenceMelodyFromMidiData, getTargetMidiAtTime } from './audio/midi/referenceMelody.js'
 import { sharedPitchEngine, startSharedMic, stopSharedMic } from './audio/pitch/sharedPitchEngine.js'
 import { DEFAULT_CONFIG } from './audioEngine.js'
@@ -8,6 +7,8 @@ import { centsError } from './audio/pitch/utils/dspUtils.js'
 import { synthEngine } from './SynthEngine.js'
 import { useKaraokeStore } from '../state/karaokeStore.js'
 import MelodyGuideCanvas from '../components/MelodyGuideCanvas.jsx'
+import Spectrogram from '../components/Spectrogram.jsx'
+import WaveformPixi from '../components/WaveformPixi.jsx'
 
 const DEMO_MIDI_URL = new URL('../library/demo/sc55.mid', import.meta.url).toString()
 
@@ -76,201 +77,6 @@ const extractSysExMessages = (midiData) => {
     })
   })
   return messages
-}
-
-function WaveformCanvas({ data, height = 80, color = '#4ec3ff', background = '#0f1115' }) {
-  const canvasRef = useRef(null)
-
-  useEffect(() => {
-    const canvas = canvasRef.current
-    if (!canvas) return
-    const ctx = canvas.getContext('2d')
-    if (!ctx) return
-    const dpr = window.devicePixelRatio || 1
-    const width = canvas.clientWidth || 1
-    const drawHeight = canvas.clientHeight || height
-    canvas.width = Math.floor(width * dpr)
-    canvas.height = Math.floor(drawHeight * dpr)
-    ctx.setTransform(dpr, 0, 0, dpr, 0, 0)
-
-    ctx.clearRect(0, 0, width, drawHeight)
-    ctx.fillStyle = background
-    ctx.fillRect(0, 0, width, drawHeight)
-
-    if (!data || !data.length) return
-    ctx.strokeStyle = color
-    ctx.lineWidth = 1.5
-    ctx.beginPath()
-    const mid = drawHeight / 2
-    const max = drawHeight / 2
-    const len = data.length
-    for (let i = 0; i < len; i += 1) {
-      const x = (i / (len - 1)) * width
-      const y = mid - Math.max(-1, Math.min(1, data[i])) * max
-      if (i === 0) ctx.moveTo(x, y)
-      else ctx.lineTo(x, y)
-    }
-    ctx.stroke()
-  }, [data, height, color, background])
-
-  return <canvas ref={canvasRef} style={{ width: '100%', height }} />
-}
-
-function buildSpectrogramColors(steps) {
-  const stops = [
-    { t: 0.0, c: [10, 12, 26] },
-    { t: 0.25, c: [16, 72, 156] },
-    { t: 0.55, c: [34, 182, 146] },
-    { t: 0.78, c: [230, 200, 64] },
-    { t: 1.0, c: [255, 82, 58] },
-  ]
-  const total = Math.max(1, steps)
-  const colors = new Array(total)
-  for (let i = 0; i < total; i += 1) {
-    const t = i / Math.max(1, total - 1)
-    let a = stops[0]
-    let b = stops[stops.length - 1]
-    for (let j = 0; j < stops.length - 1; j += 1) {
-      if (t >= stops[j].t && t <= stops[j + 1].t) {
-        a = stops[j]
-        b = stops[j + 1]
-        break
-      }
-    }
-    const span = b.t - a.t || 1
-    const local = (t - a.t) / span
-    const r = Math.round(a.c[0] + (b.c[0] - a.c[0]) * local)
-    const g = Math.round(a.c[1] + (b.c[1] - a.c[1]) * local)
-    const bl = Math.round(a.c[2] + (b.c[2] - a.c[2]) * local)
-    colors[i] = `rgb(${r}, ${g}, ${bl})`
-  }
-  return colors
-}
-
-function MelSpectrogramCanvas({
-  analyser,
-  f0Hz,
-  height = 140,
-  minHz = DEFAULT_CONFIG.f0MinHz,
-  maxHz = DEFAULT_CONFIG.f0MaxHz,
-}) {
-  const canvasRef = useRef(null)
-  const overlayRef = useRef(null)
-  const spectroRef = useRef(null)
-  const f0Ref = useRef(f0Hz)
-
-  useEffect(() => {
-    f0Ref.current = f0Hz
-  }, [f0Hz])
-
-  useEffect(() => {
-    const canvas = canvasRef.current
-    if (!canvas || !analyser) return undefined
-
-    if (!spectroRef.current) {
-      const spectro = Spectrogram(canvas, {
-        canvas: {
-          width: () => canvas.clientWidth || 1,
-          height: () => canvas.clientHeight || height,
-        },
-        audio: { enable: false },
-        colors: buildSpectrogramColors,
-      })
-      spectro._draw = function drawLeftToRight(array, canvasContext) {
-        if (this._paused) return false
-        if (!canvasContext?._tempContext) return false
-
-        const targetCanvas = canvasContext.canvas
-        const width = targetCanvas.width
-        const drawHeight = targetCanvas.height
-        const tempCanvasContext = canvasContext._tempContext
-        const tempCanvas = tempCanvasContext.canvas
-
-        tempCanvasContext.drawImage(targetCanvas, 0, 0, width, drawHeight)
-
-        for (let i = 0; i < array.length; i += 1) {
-          const value = array[i]
-          canvasContext.fillStyle = this._getColor(value)
-          if (this._audioEnded) {
-            canvasContext.fillStyle = this._getColor(0)
-          }
-          canvasContext.fillRect(0, drawHeight - i, 1, 1)
-        }
-
-        canvasContext.translate(1, 0)
-        canvasContext.drawImage(tempCanvas, 0, 0, width, drawHeight, 0, 0, width, drawHeight)
-        canvasContext.drawImage(tempCanvas, 0, 0, width, drawHeight, 0, 0, width, drawHeight)
-        canvasContext.setTransform(1, 0, 0, 1, 0, 0)
-
-        this._baseCanvasContext.drawImage(targetCanvas, 0, 0, width, drawHeight)
-        return true
-      }
-      spectroRef.current = spectro
-    }
-
-    spectroRef.current.connectSource(analyser, analyser.context)
-    spectroRef.current.start()
-
-    return () => {
-      try {
-        spectroRef.current?.clear?.()
-      } catch (err) {
-        console.warn('[Spectrogram] clear failed', err)
-      }
-      spectroRef.current = null
-    }
-  }, [analyser])
-
-  useEffect(() => {
-    const overlay = overlayRef.current
-    if (!overlay || !analyser) return undefined
-
-    let raf = 0
-    const ctx = overlay.getContext('2d')
-    if (!ctx) return undefined
-
-    const draw = () => {
-      raf = window.requestAnimationFrame(draw)
-
-      const width = overlay.clientWidth || 1
-      const drawHeight = overlay.clientHeight || height
-      const dpr = window.devicePixelRatio || 1
-      if (overlay.width !== Math.floor(width * dpr) || overlay.height !== Math.floor(drawHeight * dpr)) {
-        overlay.width = Math.floor(width * dpr)
-        overlay.height = Math.floor(drawHeight * dpr)
-        ctx.setTransform(dpr, 0, 0, dpr, 0, 0)
-        ctx.clearRect(0, 0, width, drawHeight)
-      }
-
-      ctx.drawImage(overlay, 1, 0)
-      ctx.clearRect(0, 0, 1, drawHeight)
-
-      const f0 = f0Ref.current
-      if (!Number.isFinite(f0) || f0 <= 0) return
-      if (f0 < minHz || f0 > maxHz) return
-
-      const nyquist = analyser.context.sampleRate / 2
-      const binCount = analyser.frequencyBinCount || 1
-      const clamped = Math.max(0, Math.min(nyquist, f0))
-      const bin = Math.round((clamped / nyquist) * (binCount - 1))
-      const y = drawHeight - 1 - Math.round((bin / Math.max(1, binCount - 1)) * (drawHeight - 1))
-      ctx.fillStyle = '#ff4d4d'
-      ctx.fillRect(0, Math.max(0, y - 1), 1, 3)
-    }
-
-    draw()
-    return () => window.cancelAnimationFrame(raf)
-  }, [analyser, height, minHz, maxHz])
-
-  return (
-    <div style={{ position: 'relative', width: '100%', height }}>
-      <canvas ref={canvasRef} style={{ width: '100%', height, display: 'block' }} />
-      <canvas
-        ref={overlayRef}
-        style={{ width: '100%', height, position: 'absolute', inset: 0, pointerEvents: 'none' }}
-      />
-    </div>
-  )
 }
 
 function Synth({ onNavigateHome }) {
@@ -1153,23 +959,29 @@ function Synth({ onNavigateHome }) {
                   </Col>
                   <Col xs={12} md={7}>
                     <div className="small text-muted mb-2">Input</div>
-                    <WaveformCanvas data={pipelineStages.input} height={70} />
+                    <WaveformPixi data={pipelineStages.input} height={70} />
                     <div className="small text-muted mt-3 mb-2">After DC Removal</div>
-                    <WaveformCanvas data={pipelineStages.dcRemoved} height={70} />
+                    <WaveformPixi data={pipelineStages.dcRemoved} height={70} />
                     <div className="small text-muted mt-3 mb-2">After HPF</div>
-                    <WaveformCanvas data={pipelineStages.hpf} height={70} />
+                    <WaveformPixi data={pipelineStages.hpf} height={70} />
                     <div className="small text-muted mt-3 mb-2">After RMS Gate</div>
-                    <WaveformCanvas data={pipelineStages.gated} height={70} />
+                    <WaveformPixi data={pipelineStages.gated} height={70} />
                     <div className="small text-muted mt-3 mb-2">Raw f0 Trace</div>
-                    <WaveformCanvas data={f0History.raw} height={60} color="#f1c40f" />
+                    <WaveformPixi data={f0History.raw} height={60} color="#f1c40f" />
                     <div className="small text-muted mt-3 mb-2">Post f0 Trace</div>
-                    <WaveformCanvas data={f0History.post} height={60} color="#8bd17c" />
+                    <WaveformPixi data={f0History.post} height={60} color="#8bd17c" />
                     <div className="small text-muted mt-3 mb-2">Spectrogram + F0</div>
-                    <MelSpectrogramCanvas
-                      analyser={debugAnalyser}
-                      f0Hz={pipelineMetrics.result?.f0Hz}
-                      height={140}
-                    />
+                    {debugPipeline ? (
+                      <Spectrogram
+                        analyser={debugAnalyser}
+                        f0Hz={pipelineMetrics.result?.f0Hz}
+                        height={140}
+                        minHz={DEFAULT_CONFIG.f0MinHz}
+                        maxHz={DEFAULT_CONFIG.f0MaxHz}
+                      />
+                    ) : (
+                      <div style={{ width: '100%', height: 140, background: '#000' }} />
+                    )}
                     <div className="small mt-3">
                       <div>rms: {formatNumber(pipelineMetrics.rms, 4)}</div>
                       <div>gateOpen: {pipelineMetrics.gateOpen ? 'yes' : 'no'}</div>
