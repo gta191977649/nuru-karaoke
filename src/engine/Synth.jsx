@@ -7,8 +7,10 @@ import { centsError } from './audio/pitch/utils/dspUtils.js'
 import { synthEngine } from './SynthEngine.js'
 import { useKaraokeStore } from '../state/karaokeStore.js'
 import MelodyGuideCanvas from '../components/MelodyGuideCanvas.jsx'
+import ParticlePreview from '../components/particles/ParticlePreview.jsx'
 import Spectrogram from '../components/Spectrogram.jsx'
 import WaveformPixi from '../components/WaveformPixi.jsx'
+import { DEFAULT_PARTICLE_CONFIG, cloneParticleConfig } from '../components/particles/particleSystem.js'
 
 const DEMO_MIDI_URL = new URL('../library/demo/sc55.mid', import.meta.url).toString()
 
@@ -17,6 +19,25 @@ const isSysExStatus = (status) => status === 0xf0 || status === 0xf7
 const toHex = (value) => Number(value).toString(16).padStart(2, '0').toUpperCase()
 
 const formatSysExMessage = (msg) => [msg.status, ...msg.data].map(toHex).join(' ')
+
+const clampNumber = (value, min, max) => Math.min(max, Math.max(min, value))
+const RAD_TO_DEG = 180 / Math.PI
+const DEG_TO_RAD = Math.PI / 180
+
+const formatHexColor = (value) => {
+  const num = clampNumber(Number(value) || 0, 0, 0xffffff)
+  return `#${num.toString(16).padStart(6, '0')}`
+}
+
+const parseHexColor = (value, fallback) => {
+  if (typeof value !== 'string') return fallback
+  let hex = value.trim()
+  if (hex.startsWith('#')) hex = hex.slice(1)
+  if (hex.length === 3) hex = hex.split('').map((ch) => ch + ch).join('')
+  if (hex.length !== 6) return fallback
+  const parsed = Number.parseInt(hex, 16)
+  return Number.isNaN(parsed) ? fallback : parsed
+}
 
 const getSysExOperationName = (msg) => {
   const data = Array.isArray(msg?.data) ? msg.data.slice() : []
@@ -105,6 +126,10 @@ function Synth({ onNavigateHome }) {
   )
   const [showMelodyGuide, setShowMelodyGuide] = useState(false)
   const [showFullPitchTrace, setShowFullPitchTrace] = useState(false)
+  const [particlePreviewEmit, setParticlePreviewEmit] = useState(true)
+  const [particleConfig, setParticleConfig] = useState(() =>
+    cloneParticleConfig(DEFAULT_PARTICLE_CONFIG),
+  )
   const [pipelineDebug, setPipelineDebug] = useState({ stages: {}, metrics: {}, sampleRate: null })
   const [f0History, setF0History] = useState({ raw: new Float32Array(0), post: new Float32Array(0) })
   const [debugAnalyser, setDebugAnalyser] = useState(null)
@@ -994,6 +1019,343 @@ function Synth({ onNavigateHome }) {
                     </div>
                   </Col>
                 </Row>
+              </Tab>
+              <Tab eventKey="particle-debug" title="Particle Debug">
+                <div className="fw-semibold mb-2">Particle Tuning</div>
+                <Row className="g-3">
+                  <Col xs={12} md={6}>
+                    <Form.Label className="small">Emission Rate: {particleConfig.emissionRate}</Form.Label>
+                    <Form.Range
+                      min={0}
+                      max={400}
+                      step={1}
+                      value={particleConfig.emissionRate}
+                      onChange={(e) => {
+                        const next = Number(e.currentTarget?.value ?? e.target?.value ?? 0)
+                        setParticleConfig((prev) => ({
+                          ...prev,
+                          emissionRate: next,
+                        }))
+                      }}
+                    />
+                    <Form.Label className="small mt-2">Max Particles: {particleConfig.maxParticles}</Form.Label>
+                    <Form.Range
+                      min={50}
+                      max={1500}
+                      step={10}
+                      value={particleConfig.maxParticles}
+                      onChange={(e) => {
+                        const next = Number(e.currentTarget?.value ?? e.target?.value ?? 0)
+                        setParticleConfig((prev) => ({
+                          ...prev,
+                          maxParticles: next,
+                        }))
+                      }}
+                    />
+                    <Form.Label className="small mt-2">
+                      Lifetime Min: {particleConfig.lifetime.min.toFixed(2)}s
+                    </Form.Label>
+                    <Form.Range
+                      min={0.05}
+                      max={2}
+                      step={0.05}
+                      value={particleConfig.lifetime.min}
+                      onChange={(e) => {
+                        const next = Number(e.currentTarget?.value ?? e.target?.value ?? 0)
+                        setParticleConfig((prev) => ({
+                          ...prev,
+                          lifetime: {
+                            ...prev.lifetime,
+                            min: Math.min(next, prev.lifetime.max),
+                          },
+                        }))
+                      }}
+                    />
+                    <Form.Label className="small mt-2">
+                      Lifetime Max: {particleConfig.lifetime.max.toFixed(2)}s
+                    </Form.Label>
+                    <Form.Range
+                      min={0.1}
+                      max={3}
+                      step={0.05}
+                      value={particleConfig.lifetime.max}
+                      onChange={(e) => {
+                        const next = Number(e.currentTarget?.value ?? e.target?.value ?? 0)
+                        setParticleConfig((prev) => ({
+                          ...prev,
+                          lifetime: {
+                            ...prev.lifetime,
+                            max: Math.max(next, prev.lifetime.min),
+                          },
+                        }))
+                      }}
+                    />
+                    <Form.Label className="small mt-2">
+                      Speed Min: {particleConfig.speed.min.toFixed(0)}
+                    </Form.Label>
+                    <Form.Range
+                      min={0}
+                      max={400}
+                      step={5}
+                      value={particleConfig.speed.min}
+                      onChange={(e) => {
+                        const next = Number(e.currentTarget?.value ?? e.target?.value ?? 0)
+                        setParticleConfig((prev) => ({
+                          ...prev,
+                          speed: { ...prev.speed, min: Math.min(next, prev.speed.max) },
+                        }))
+                      }}
+                    />
+                    <Form.Label className="small mt-2">
+                      Speed Max: {particleConfig.speed.max.toFixed(0)}
+                    </Form.Label>
+                    <Form.Range
+                      min={0}
+                      max={600}
+                      step={5}
+                      value={particleConfig.speed.max}
+                      onChange={(e) => {
+                        const next = Number(e.currentTarget?.value ?? e.target?.value ?? 0)
+                        setParticleConfig((prev) => ({
+                          ...prev,
+                          speed: { ...prev.speed, max: Math.max(next, prev.speed.min) },
+                        }))
+                      }}
+                    />
+                    <Form.Label className="small mt-2">
+                      Angle Min: {(particleConfig.angle.min * RAD_TO_DEG).toFixed(0)}°
+                    </Form.Label>
+                    <Form.Range
+                      min={-180}
+                      max={180}
+                      step={1}
+                      value={particleConfig.angle.min * RAD_TO_DEG}
+                      onChange={(e) => {
+                        const nextDeg = Number(e.currentTarget?.value ?? e.target?.value ?? 0)
+                        const next = nextDeg * DEG_TO_RAD
+                        setParticleConfig((prev) => ({
+                          ...prev,
+                          angle: { ...prev.angle, min: Math.min(next, prev.angle.max) },
+                        }))
+                      }}
+                    />
+                    <Form.Label className="small mt-2">
+                      Angle Max: {(particleConfig.angle.max * RAD_TO_DEG).toFixed(0)}°
+                    </Form.Label>
+                    <Form.Range
+                      min={-180}
+                      max={180}
+                      step={1}
+                      value={particleConfig.angle.max * RAD_TO_DEG}
+                      onChange={(e) => {
+                        const nextDeg = Number(e.currentTarget?.value ?? e.target?.value ?? 0)
+                        const next = nextDeg * DEG_TO_RAD
+                        setParticleConfig((prev) => ({
+                          ...prev,
+                          angle: { ...prev.angle, max: Math.max(next, prev.angle.min) },
+                        }))
+                      }}
+                    />
+                    <Form.Label className="small mt-2">Spawn Radius: {particleConfig.spawnRadius}</Form.Label>
+                    <Form.Range
+                      min={0}
+                      max={24}
+                      step={1}
+                      value={particleConfig.spawnRadius}
+                      onChange={(e) => {
+                        const next = Number(e.currentTarget?.value ?? e.target?.value ?? 0)
+                        setParticleConfig((prev) => ({
+                          ...prev,
+                          spawnRadius: next,
+                        }))
+                      }}
+                    />
+                  </Col>
+                  <Col xs={12} md={6}>
+                    <Form.Label className="small">
+                      Scale Start: {particleConfig.scale.start.toFixed(2)}
+                    </Form.Label>
+                    <Form.Range
+                      min={0.05}
+                      max={2}
+                      step={0.05}
+                      value={particleConfig.scale.start}
+                      onChange={(e) => {
+                        const next = Number(e.currentTarget?.value ?? e.target?.value ?? 0)
+                        setParticleConfig((prev) => ({
+                          ...prev,
+                          scale: { ...prev.scale, start: Math.max(next, prev.scale.end) },
+                        }))
+                      }}
+                    />
+                    <Form.Label className="small mt-2">
+                      Scale End: {particleConfig.scale.end.toFixed(2)}
+                    </Form.Label>
+                    <Form.Range
+                      min={0.05}
+                      max={1.5}
+                      step={0.05}
+                      value={particleConfig.scale.end}
+                      onChange={(e) => {
+                        const next = Number(e.currentTarget?.value ?? e.target?.value ?? 0)
+                        setParticleConfig((prev) => ({
+                          ...prev,
+                          scale: { ...prev.scale, end: Math.min(next, prev.scale.start) },
+                        }))
+                      }}
+                    />
+                    <Form.Label className="small mt-2">
+                      Alpha Start: {particleConfig.alpha.start.toFixed(2)}
+                    </Form.Label>
+                    <Form.Range
+                      min={0}
+                      max={1}
+                      step={0.05}
+                      value={particleConfig.alpha.start}
+                      onChange={(e) => {
+                        const next = Number(e.currentTarget?.value ?? e.target?.value ?? 0)
+                        setParticleConfig((prev) => ({
+                          ...prev,
+                          alpha: { ...prev.alpha, start: Math.max(next, prev.alpha.end) },
+                        }))
+                      }}
+                    />
+                    <Form.Label className="small mt-2">
+                      Alpha End: {particleConfig.alpha.end.toFixed(2)}
+                    </Form.Label>
+                    <Form.Range
+                      min={0}
+                      max={1}
+                      step={0.05}
+                      value={particleConfig.alpha.end}
+                      onChange={(e) => {
+                        const next = Number(e.currentTarget?.value ?? e.target?.value ?? 0)
+                        setParticleConfig((prev) => ({
+                          ...prev,
+                          alpha: { ...prev.alpha, end: Math.min(next, prev.alpha.start) },
+                        }))
+                      }}
+                    />
+                    <Form.Label className="small mt-2">
+                      Rotation Speed Min: {particleConfig.rotationSpeed.min.toFixed(1)}
+                    </Form.Label>
+                    <Form.Range
+                      min={-12}
+                      max={0}
+                      step={0.5}
+                      value={particleConfig.rotationSpeed.min}
+                      onChange={(e) => {
+                        const next = Number(e.currentTarget?.value ?? e.target?.value ?? 0)
+                        setParticleConfig((prev) => ({
+                          ...prev,
+                          rotationSpeed: {
+                            ...prev.rotationSpeed,
+                            min: Math.min(next, prev.rotationSpeed.max),
+                          },
+                        }))
+                      }}
+                    />
+                    <Form.Label className="small mt-2">
+                      Rotation Speed Max: {particleConfig.rotationSpeed.max.toFixed(1)}
+                    </Form.Label>
+                    <Form.Range
+                      min={0}
+                      max={12}
+                      step={0.5}
+                      value={particleConfig.rotationSpeed.max}
+                      onChange={(e) => {
+                        const next = Number(e.currentTarget?.value ?? e.target?.value ?? 0)
+                        setParticleConfig((prev) => ({
+                          ...prev,
+                          rotationSpeed: {
+                            ...prev.rotationSpeed,
+                            max: Math.max(next, prev.rotationSpeed.min),
+                          },
+                        }))
+                      }}
+                    />
+                    <Row className="g-2 mt-2">
+                      <Col xs={6}>
+                        <Form.Label className="small">Tint Start</Form.Label>
+                        <Form.Control
+                          type="color"
+                          value={formatHexColor(particleConfig.tint.start)}
+                          onChange={(e) => {
+                            const value = e.currentTarget?.value ?? e.target?.value ?? ''
+                            const next = parseHexColor(value, particleConfig.tint.start)
+                            setParticleConfig((prev) => ({
+                              ...prev,
+                              tint: { ...prev.tint, start: next },
+                            }))
+                          }}
+                        />
+                      </Col>
+                      <Col xs={6}>
+                        <Form.Label className="small">Tint End</Form.Label>
+                        <Form.Control
+                          type="color"
+                          value={formatHexColor(particleConfig.tint.end)}
+                          onChange={(e) => {
+                            const value = e.currentTarget?.value ?? e.target?.value ?? ''
+                            const next = parseHexColor(value, particleConfig.tint.end)
+                            setParticleConfig((prev) => ({
+                              ...prev,
+                              tint: { ...prev.tint, end: next },
+                            }))
+                          }}
+                        />
+                      </Col>
+                    </Row>
+                    <div className="mt-3">
+                      <Button
+                        size="sm"
+                        variant="outline-secondary"
+                        onClick={() => setParticleConfig(cloneParticleConfig(DEFAULT_PARTICLE_CONFIG))}
+                      >
+                        Reset Defaults
+                      </Button>
+                    </div>
+                  </Col>
+                </Row>
+                <div className="d-flex align-items-center justify-content-between mt-3">
+                  <div className="small text-muted">Particle Preview (auto emit)</div>
+                  <Form.Check
+                    type="switch"
+                    id="particle-preview-toggle"
+                    label="Emit"
+                    checked={particlePreviewEmit}
+                    onChange={(e) => setParticlePreviewEmit(e.currentTarget?.checked ?? false)}
+                  />
+                </div>
+                <div className="mt-2">
+                  <ParticlePreview
+                    particleConfig={particleConfig}
+                    emit={particlePreviewEmit}
+                    width={760}
+                    height={160}
+                    style={{ width: '100%', height: 160, borderRadius: 8 }}
+                  />
+                </div>
+                <div className="small text-muted mt-3">
+                  Hit the correct note to emit particles on the melody guide (mic required).
+                </div>
+                <div className="mt-2">
+                  <MelodyGuideCanvas
+                    className="melodyGuideCanvas"
+                    reference={reference}
+                    historyRef={fullPitchHistoryRef}
+                    lastPitchRef={lastPitchRef}
+                    currentTimeRef={currentTimeRef}
+                    transpositionRef={transpositionRef}
+                    rmsGate={rmsGate}
+                    gateUserByTarget
+                    userOffsetSec={userPitchOffsetMs / 1000}
+                    width={760}
+                    height={180}
+                    particleConfig={particleConfig}
+                    style={{ width: '100%', height: 180, borderRadius: 8 }}
+                  />
+                </div>
               </Tab>
             </Tabs>
           </div>

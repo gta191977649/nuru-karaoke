@@ -2,6 +2,7 @@ import { useEffect, useRef } from 'react'
 import { Application, Container, Graphics } from 'pixi.js'
 import { BloomFilter } from 'pixi-filters'
 import { getTargetMidiAtTime } from '../engine/audio/midi/referenceMelody.js'
+import { DEFAULT_PARTICLE_CONFIG, createParticleSystem } from './particles/particleSystem.js'
 
 const COLORS = {
   background: 0x000000,
@@ -116,6 +117,7 @@ function MelodyGuideCanvas({
   minMidi = 36,
   maxMidi = 96,
   smoothAlpha = 0.1,
+  particleConfig = DEFAULT_PARTICLE_CONFIG,
   className,
   style,
 }) {
@@ -129,6 +131,7 @@ function MelodyGuideCanvas({
     user: null,
     userGlowContainer: null,
     userGlow: null,
+    particleSystem: null,
     playhead: null,
     lastSize: { w: 0, h: 0 },
     lastGrid: { w: 0, h: 0, lineCount: 12 },
@@ -149,6 +152,7 @@ function MelodyGuideCanvas({
     minMidi,
     maxMidi,
     smoothAlpha,
+    particleConfig,
   })
 
   useEffect(() => {
@@ -165,6 +169,7 @@ function MelodyGuideCanvas({
       minMidi,
       maxMidi,
       smoothAlpha,
+      particleConfig,
     }
   }, [
     reference,
@@ -179,6 +184,7 @@ function MelodyGuideCanvas({
     minMidi,
     maxMidi,
     smoothAlpha,
+    particleConfig,
   ])
 
   useEffect(() => {
@@ -214,9 +220,10 @@ function MelodyGuideCanvas({
       const user = new Graphics()
       const userGlowContainer = new Container()
       const userGlow = new Graphics()
+      const particleSystem = createParticleSystem(particleConfig)
       const playhead = new Graphics()
 
-      userGlowContainer.addChild(userGlow)
+      userGlowContainer.addChild(particleSystem.container, userGlow)
       userGlowContainer.filters = [
         new BloomFilter({
           strength: 5,
@@ -235,6 +242,7 @@ function MelodyGuideCanvas({
         user,
         userGlowContainer,
         userGlow,
+        particleSystem,
         playhead,
         lastSize: { w: 0, h: 0 },
         lastGrid: { w: 0, h: 0, lineCount: 12 },
@@ -250,6 +258,7 @@ function MelodyGuideCanvas({
         const w = activeApp.screen.width
         const h = activeApp.screen.height
         if (!w || !h) return
+        const deltaSec = activeApp.ticker.deltaMS / 1000
 
         const snap = stateRef.current
         const songTimeSec = snap.currentTimeRef?.current ?? 0
@@ -306,6 +315,7 @@ function MelodyGuideCanvas({
           if (state.userGlowContainer) {
             state.userGlowContainer.filterArea = activeApp.screen
           }
+          state.particleSystem?.setBounds(activeApp.screen)
         }
         const needsGrid = needsResize || state.lastGrid.lineCount !== lineCount
         if (needsGrid) {
@@ -476,6 +486,7 @@ function MelodyGuideCanvas({
         }
 
         let playheadDotY = null
+        let emitParticles = false
         const lastPitch = snap.lastPitchRef?.current
         let userMidi = Number.isFinite(lastPitch?.midi) ? Number(lastPitch.midi) : null
         let userRms = Number.isFinite(lastPitch?.rms) ? Number(lastPitch.rms) : null
@@ -507,8 +518,12 @@ function MelodyGuideCanvas({
             const mappedMidi = Number.isFinite(transposedTarget)
               ? mapUserMidiToTargetOctave(userMidi, transposedTarget)
               : userMidi
-            const { y } = midiToY(mappedMidi)
+            const { y, inRange } = midiToY(mappedMidi)
             playheadDotY = y
+            const isCorrectKey =
+              Number.isFinite(transposedTarget) &&
+              mod12(Math.round(userMidi)) === mod12(Math.round(transposedTarget))
+            emitParticles = isCorrectKey && inRange
           }
         }
 
@@ -547,6 +562,11 @@ function MelodyGuideCanvas({
           state.playhead.circle(alignedPlayheadX, playheadDotY, PLAYHEAD_DOT_RADIUS)
           state.playhead.fill()
         }
+
+        if (state.particleSystem) {
+          state.particleSystem.setConfig(snap.particleConfig)
+          state.particleSystem.update(deltaSec, emitParticles, alignedPlayheadX, playheadDotY)
+        }
       })
     }
 
@@ -554,6 +574,8 @@ function MelodyGuideCanvas({
     return () => {
       active = false
       const app = pixiRef.current.app
+      const particleSystem = pixiRef.current.particleSystem
+      if (particleSystem) particleSystem.destroy()
       if (app) app.destroy(true)
       if (containerRef.current) containerRef.current.innerHTML = ''
       pixiRef.current = {
@@ -565,6 +587,7 @@ function MelodyGuideCanvas({
         user: null,
         userGlowContainer: null,
         userGlow: null,
+        particleSystem: null,
         playhead: null,
         lastSize: { w: 0, h: 0 },
         lastGrid: { w: 0, h: 0, lineCount: 12 },
