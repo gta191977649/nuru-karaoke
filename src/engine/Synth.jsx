@@ -857,6 +857,7 @@ function Synth({ onNavigateHome }) {
                     className="melodyGuideCanvas"
                     reference={reference}
                     historyRef={fullPitchHistoryRef}
+                    lastPitchRef={lastPitchRef}
                     currentTimeRef={currentTimeRef}
                     transpositionRef={transpositionRef}
                     rmsGate={rmsGate}

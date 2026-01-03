@@ -221,6 +221,7 @@ function Karaoke() {
               className="melodyGuideCanvas"
               reference={reference}
               historyRef={pitchHistoryRef}
+              lastPitchRef={lastPitchRef}
               currentTimeRef={currentTimeRef}
               transpositionRef={transpositionRef}
               rmsGate={micRmsGate}

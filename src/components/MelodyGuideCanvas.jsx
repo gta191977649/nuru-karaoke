@@ -45,6 +45,8 @@ const STROKE_WIDTH = {
   playheadInner: 2,
 }
 
+const PLAYHEAD_DOT_RADIUS = 5
+
 function getNotesBounds(notes, transposition, fallbackMin, fallbackMax) {
   if (!notes?.length) {
     return { minMidi: fallbackMin, maxMidi: fallbackMax }
@@ -102,6 +104,7 @@ function mapUserMidiToTargetOctave(userMidi, targetMidi) {
 function MelodyGuideCanvas({
   reference,
   historyRef,
+  lastPitchRef,
   currentTimeRef,
   transpositionRef,
   rmsGate = 0,
@@ -136,6 +139,7 @@ function MelodyGuideCanvas({
   const stateRef = useRef({
     reference,
     historyRef,
+    lastPitchRef,
     currentTimeRef,
     transpositionRef,
     rmsGate,
@@ -151,6 +155,7 @@ function MelodyGuideCanvas({
     stateRef.current = {
       reference,
       historyRef,
+      lastPitchRef,
       currentTimeRef,
       transpositionRef,
       rmsGate,
@@ -164,6 +169,7 @@ function MelodyGuideCanvas({
   }, [
     reference,
     historyRef,
+    lastPitchRef,
     currentTimeRef,
     transpositionRef,
     rmsGate,
@@ -469,6 +475,43 @@ function MelodyGuideCanvas({
           state.userGlow.stroke()
         }
 
+        let playheadDotY = null
+        const lastPitch = snap.lastPitchRef?.current
+        let userMidi = Number.isFinite(lastPitch?.midi) ? Number(lastPitch.midi) : null
+        let userRms = Number.isFinite(lastPitch?.rms) ? Number(lastPitch.rms) : null
+        if (!Number.isFinite(userMidi)) {
+          const history = snap.historyRef?.current || []
+          const lastPoint = history.length ? history[history.length - 1] : null
+          if (Number.isFinite(lastPoint?.userMidi)) {
+            userMidi = Number(lastPoint.userMidi)
+            userRms = Number.isFinite(lastPoint?.rms) ? Number(lastPoint.rms) : userRms
+          }
+        }
+        const passesGate =
+          Number.isFinite(userMidi) &&
+          (!Number.isFinite(userRms) || userRms >= (Number(snap.rmsGate) || 0))
+        if (passesGate) {
+          let targetMidi = null
+          if (snap.reference) {
+            if (snap.gateUserByTarget) {
+              const offset = Math.max(0, Number(snap.userOffsetSec) || 0)
+              targetMidi =
+                getTargetMidiAtTime(snap.reference, songTimeSec - offset) ??
+                getTargetMidiAtTime(snap.reference, songTimeSec + offset)
+            } else {
+              targetMidi = getTargetMidiAtTime(snap.reference, songTimeSec)
+            }
+          }
+          if (!(snap.gateUserByTarget && snap.reference && targetMidi == null)) {
+            const transposedTarget = targetMidi != null ? targetMidi + transposition : null
+            const mappedMidi = Number.isFinite(transposedTarget)
+              ? mapUserMidiToTargetOctave(userMidi, transposedTarget)
+              : userMidi
+            const { y } = midiToY(mappedMidi)
+            playheadDotY = y
+          }
+        }
+
         state.playhead.clear()
         const alignedPlayheadX = Math.round(playheadX) + 0.5
         state.playhead.setStrokeStyle({
@@ -498,6 +541,12 @@ function MelodyGuideCanvas({
         state.playhead.moveTo(alignedPlayheadX, 0)
         state.playhead.lineTo(alignedPlayheadX, h)
         state.playhead.stroke()
+        if (Number.isFinite(playheadDotY)) {
+          state.playhead.setFillStyle({ color: COLORS.playhead, alpha: ALPHAS.playheadInner })
+          state.playhead.beginPath()
+          state.playhead.circle(alignedPlayheadX, playheadDotY, PLAYHEAD_DOT_RADIUS)
+          state.playhead.fill()
+        }
       })
     }
 
