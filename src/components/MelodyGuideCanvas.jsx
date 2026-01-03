@@ -47,6 +47,14 @@ const STROKE_WIDTH = {
 }
 
 const PLAYHEAD_DOT_RADIUS = 5
+const NOTE_MERGE_CONFIG = {
+  // Semitone tolerance for considering the user's pitch "in range" of the target.
+  pitchToleranceSemis: 0.5,
+  // Minimum fraction of target note duration the user must cover to treat it as full-length.
+  coverageRatio: 0.75,
+  // Silence gap (seconds) to consider a note ended when RMS drops below the gate.
+  gapThresholdSec: 0.5,
+}
 
 function getNotesBounds(notes, transposition, fallbackMin, fallbackMax) {
   if (!notes?.length) {
@@ -377,75 +385,149 @@ function MelodyGuideCanvas({
         drawMelodyNotes(COLORS.melodyOutFill, ALPHAS.melodyOutFill, false)
 
         const history = snap.historyRef?.current || []
-        const missWidth = Math.max(8, pixelsPerSec * 0.12)
-        const missHeight = 10
+        const gapThreshold = NOTE_MERGE_CONFIG.gapThresholdSec
+        const historyStep = history.length > 1
+          ? Math.max(
+              0.02,
+              Math.min(0.2, (history[history.length - 1].t - history[0].t) / (history.length - 1)),
+            )
+          : 0.08
+        const nextTime = (idx) =>
+          idx + 1 < history.length ? history[idx + 1].t : history[idx].t + historyStep
 
-        state.miss.clear()
-        state.miss.setStrokeStyle({
-          width: STROKE_WIDTH.miss,
-          color: COLORS.missStroke,
-          alpha: ALPHAS.missStroke,
-        })
-        state.miss.setFillStyle({ color: COLORS.missFill, alpha: ALPHAS.missFill })
-        state.miss.beginPath()
-        history.forEach((point) => {
-          if (point.t < visibleStart || point.t > visibleEnd) return
-          const targetMidi = Number(point.targetMidi)
-          const userMidi = Number(point.userMidi)
-          if (!Number.isFinite(targetMidi) || Number.isFinite(userMidi)) return
-          const x = playheadX + (point.t - songTimeSec) * pixelsPerSec
-          const { y } = midiToY(targetMidi)
-          state.miss.roundRect(x - missWidth / 2, y - missHeight / 2, missWidth, missHeight, 5)
-        })
-        state.miss.fill()
-        state.miss.stroke()
+        const forcedNotes = []
+        if (notesData.length && history.length) {
+          notesData.forEach((note) => {
+            if (note.t1Sec < visibleStart || note.t0Sec > visibleEnd) return
+            const noteStart = note.t0Sec
+            const noteEnd = note.t1Sec
+            const duration = noteEnd - noteStart
+            if (duration <= 0) return
+            const targetMidi = note.midi + transposition
+            let covered = 0
+            for (let i = 0; i < history.length; i += 1) {
+              const point = history[i]
+              if (point.t < noteStart || point.t > noteEnd) continue
+              const userMidi = Number.isFinite(point.userMidi) ? Number(point.userMidi) : null
+              if (!Number.isFinite(userMidi)) continue
+              const pointRms = Number.isFinite(point.rms) ? Number(point.rms) : null
+              if (Number.isFinite(pointRms) && pointRms < snap.rmsGate) continue
+              if (snap.gateUserByTarget && snap.reference) {
+                const t = Number(point.t)
+                const offset = Math.max(0, Number(snap.userOffsetSec) || 0)
+                const targetMidiGate =
+                  getTargetMidiAtTime(snap.reference, t - offset) ??
+                  getTargetMidiAtTime(snap.reference, t + offset)
+                if (targetMidiGate == null) continue
+              }
+              const mappedMidi = mapUserMidiToTargetOctave(userMidi, targetMidi)
+              if (!Number.isFinite(mappedMidi)) continue
+              if (Math.abs(mappedMidi - targetMidi) > NOTE_MERGE_CONFIG.pitchToleranceSemis) continue
+              const segStart = Math.max(noteStart, point.t)
+              const segEnd = Math.min(noteEnd, nextTime(i))
+              const dt = segEnd - segStart
+              if (dt > 0) covered += dt
+            }
+            if (covered / duration >= NOTE_MERGE_CONFIG.coverageRatio) {
+              const { y, inRange } = midiToY(targetMidi)
+              forcedNotes.push({ t0: noteStart, t1: noteEnd, y, inRange, targetMidi })
+            }
+          })
+        }
 
-        state.user.clear()
-        if (state.userGlow) state.userGlow.clear()
-        const userBarW = Math.max(6, pixelsPerSec * 0.18)
-        const userBarH = 10
-        const userRadius = 5
-        const glowRects = []
-        const blueRects = []
-        const greyRects = []
-        history.forEach((point) => {
-          if (point.t < visibleStart || point.t > visibleEnd) return
-          if (point.userMidi == null) return
-          const midi = Number(point.userMidi)
-          const targetMidiPoint =
-            point.targetMidi == null ? null : Number(point.targetMidi)
-          const pointRms = Number(point.rms)
-          if (!Number.isFinite(midi) || (Number.isFinite(pointRms) && pointRms < snap.rmsGate)) return
+        const isForcedTime = (t) =>
+          forcedNotes.some((note) => t >= note.t0 && t <= note.t1)
+
+        const buildSegments = (classifier) => {
+          const segments = []
+          let current = null
+          for (let i = 0; i < history.length; i += 1) {
+            const point = history[i]
+            const info = classifier(point)
+            if (!info) {
+              if (current) {
+                segments.push(current)
+                current = null
+              }
+              continue
+            }
+            const t = point.t
+            const dt = Math.max(0, nextTime(i) - t)
+            const sampleEnd = t + Math.min(dt, gapThreshold)
+            if (
+              !current ||
+              current.key !== info.key ||
+              t - current.lastT > gapThreshold
+            ) {
+              if (current) segments.push(current)
+              current = {
+                t0: t,
+                t1: sampleEnd,
+                y: info.y,
+                key: info.key,
+                type: info.type,
+                lastT: t,
+              }
+            } else {
+              current.t1 = Math.max(current.t1, sampleEnd)
+              current.lastT = t
+            }
+          }
+          if (current) segments.push(current)
+          return segments
+        }
+
+        const segments = buildSegments((point) => {
+          if (point.t < visibleStart || point.t > visibleEnd) return null
+          const targetMidiPoint = Number.isFinite(point.targetMidi) ? Number(point.targetMidi) : null
+          const userMidi = Number.isFinite(point.userMidi) ? Number(point.userMidi) : null
+          if (!Number.isFinite(userMidi)) return null
+          const pointRms = Number.isFinite(point.rms) ? Number(point.rms) : null
+          if (Number.isFinite(pointRms) && pointRms < snap.rmsGate) return null
           if (snap.gateUserByTarget && snap.reference) {
             const t = Number(point.t)
             const offset = Math.max(0, Number(snap.userOffsetSec) || 0)
-            const targetMidi =
+            const targetMidiGate =
               getTargetMidiAtTime(snap.reference, t - offset) ??
               getTargetMidiAtTime(snap.reference, t + offset)
-            if (targetMidi == null) return
+            if (targetMidiGate == null) return null
           }
-          const hasTarget = Number.isFinite(targetMidiPoint)
-          const isCorrectKey =
-            hasTarget && mod12(Math.round(midi)) === mod12(Math.round(targetMidiPoint))
-          const mappedMidi = hasTarget
-            ? mapUserMidiToTargetOctave(midi, targetMidiPoint)
-            : midi
+          if (!Number.isFinite(targetMidiPoint)) return null
+          const mappedMidi = mapUserMidiToTargetOctave(userMidi, targetMidiPoint)
+          if (!Number.isFinite(mappedMidi)) return null
           const { y, inRange } = midiToY(mappedMidi)
-          const x = playheadX + (point.t - songTimeSec) * pixelsPerSec
-          const rect = {
-            x: x - userBarW / 2,
-            y: y - userBarH / 2,
-            w: userBarW,
-            h: userBarH,
+          const inTolerance = Math.abs(mappedMidi - targetMidiPoint) <= NOTE_MERGE_CONFIG.pitchToleranceSemis
+          const forcedTime = isForcedTime(point.t)
+          if (inRange && inTolerance) {
+            if (forcedTime) return null
+            return { type: 'correct', key: `correct-${Math.round(targetMidiPoint)}`, y }
           }
-          if (isCorrectKey && inRange) {
-            glowRects.push(rect)
-          } else if (!inRange) {
-            greyRects.push(rect)
-          } else {
-            blueRects.push(rect)
+          return {
+            type: 'incorrect',
+            key: `incorrect-${Math.round(userMidi)}-${Math.round(targetMidiPoint)}`,
+            y,
           }
         })
+
+        const forcedCorrect = []
+        forcedNotes.forEach((note) => {
+          const entry = {
+            t0: note.t0,
+            t1: note.t1,
+            y: note.y,
+          }
+          if (note.inRange) forcedCorrect.push(entry)
+        })
+
+        const correctSegments = segments.filter((seg) => seg.type === 'correct').concat(forcedCorrect)
+        const incorrectSegments = segments.filter((seg) => seg.type === 'incorrect')
+        const userBarW = Math.max(6, pixelsPerSec * 0.18)
+        const userBarH = 10
+        const userRadius = 5
+
+        state.miss.clear()
+        state.user.clear()
+        if (state.userGlow) state.userGlow.clear()
         state.user.setFillStyle({ color: COLORS.userMiss, alpha: ALPHAS.userMiss })
         state.user.setStrokeStyle({
           width: STROKE_WIDTH.user,
@@ -453,20 +535,12 @@ function MelodyGuideCanvas({
           alpha: ALPHAS.userMissStroke,
         })
         state.user.beginPath()
-        blueRects.forEach((rect) => {
-          state.user.roundRect(rect.x, rect.y, rect.w, rect.h, userRadius)
-        })
-        state.user.fill()
-        state.user.stroke()
-        state.user.setFillStyle({ color: COLORS.userMiss, alpha: ALPHAS.userMiss })
-        state.user.setStrokeStyle({
-          width: STROKE_WIDTH.user,
-          color: COLORS.userMissStroke,
-          alpha: ALPHAS.userMissStroke,
-        })
-        state.user.beginPath()
-        greyRects.forEach((rect) => {
-          state.user.roundRect(rect.x, rect.y, rect.w, rect.h, userRadius)
+        incorrectSegments.forEach((seg) => {
+          const x0 = playheadX + (seg.t0 - songTimeSec) * pixelsPerSec
+          const x1 = playheadX + (seg.t1 - songTimeSec) * pixelsPerSec
+          const barW = Math.max(userBarW, x1 - x0)
+          if (barW <= 0) return
+          state.user.roundRect(x0, seg.y - userBarH / 2, barW, userBarH, userRadius)
         })
         state.user.fill()
         state.user.stroke()
@@ -478,8 +552,12 @@ function MelodyGuideCanvas({
             alpha: ALPHAS.userGlowStroke,
           })
           state.userGlow.beginPath()
-          glowRects.forEach((rect) => {
-            state.userGlow.roundRect(rect.x, rect.y, rect.w, rect.h, userRadius)
+          correctSegments.forEach((seg) => {
+            const x0 = playheadX + (seg.t0 - songTimeSec) * pixelsPerSec
+            const x1 = playheadX + (seg.t1 - songTimeSec) * pixelsPerSec
+            const barW = Math.max(userBarW, x1 - x0)
+            if (barW <= 0) return
+            state.userGlow.roundRect(x0, seg.y - userBarH / 2, barW, userBarH, userRadius)
           })
           state.userGlow.fill()
           state.userGlow.stroke()

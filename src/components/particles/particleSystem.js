@@ -19,7 +19,7 @@ const DEFAULT_PARTICLE_CONFIG = {
     min: -4,
     max: 6,
   },
-  spawnRadius: 20,
+  spawnRadius: 30,
   scale: {
     start: 2.0,
     end: 1.25,
