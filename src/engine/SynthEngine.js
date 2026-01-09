@@ -1,13 +1,151 @@
 import { Sequencer, WorkletSynthesizer } from 'spessasynth_lib'
 import processorUrl from 'spessasynth_lib/dist/spessasynth_processor.min.js?url'
-//import defaultSoundFontUrl from '../soundfont/xg.sf2'
 import defaultSoundFontUrl from '../soundfont/gmex.sf2'
-//import defaultSoundFontUrl from '../soundfont/sc55-hi.sf2'
-//import defaultSoundFontUrl from '../soundfont/gzdoom.sf2'
+import { createXgDrumToGsMapper } from './xgDrumMapper.js'
 import { findActiveLyricIndex, parseLrc } from './lrc.js'
 import { getKaraokeAudioEngine } from './audioEngine.js'
 import { PLAYER_CONFIG } from '../config.js'
 import { getKaraokeStoreState, setKaraokeStoreState } from '../state/karaokeStore.js'
+
+const DEFAULT_CONFIG = {
+  xgDrumMapEnabled: false,
+  xgPreferGsPlayback: false,
+}
+
+const MIDI_STATUS = {
+  NOTE_OFF: 0x80,
+  NOTE_ON: 0x90,
+  POLY_PRESSURE: 0xa0,
+  CC: 0xb0,
+  PROGRAM: 0xc0,
+  CHANNEL_PRESSURE: 0xd0,
+  PITCH: 0xe0,
+}
+
+const createMidiEvent = () => ({
+  type: 'unknown',
+  channel: 0,
+  note: 0,
+  velocity: 0,
+  controller: 0,
+  value: 0,
+  status: 0,
+  data: null,
+  raw: null,
+})
+
+const parseMidiMessage = (message, event) => {
+  const status = Number(message?.[0] ?? 0)
+  event.status = status
+  event.raw = message
+  event.data = null
+  event.note = 0
+  event.velocity = 0
+  event.controller = 0
+  event.value = 0
+  event.channel = status & 0x0f
+  event.type = 'unknown'
+
+  if (status >= 0x80 && status < 0xf0) {
+    const type = status & 0xf0
+    switch (type) {
+      case MIDI_STATUS.NOTE_OFF:
+        event.type = 'note_off'
+        event.note = Number(message?.[1] ?? 0)
+        event.velocity = Number(message?.[2] ?? 0)
+        break
+      case MIDI_STATUS.NOTE_ON:
+        event.type = 'note_on'
+        event.note = Number(message?.[1] ?? 0)
+        event.velocity = Number(message?.[2] ?? 0)
+        break
+      case MIDI_STATUS.POLY_PRESSURE:
+        event.type = 'poly_pressure'
+        event.note = Number(message?.[1] ?? 0)
+        event.value = Number(message?.[2] ?? 0)
+        break
+      case MIDI_STATUS.CC:
+        event.type = 'cc'
+        event.controller = Number(message?.[1] ?? 0)
+        event.value = Number(message?.[2] ?? 0)
+        break
+      case MIDI_STATUS.PROGRAM:
+        event.type = 'program'
+        event.value = Number(message?.[1] ?? 0)
+        break
+      case MIDI_STATUS.CHANNEL_PRESSURE:
+        event.type = 'channel_pressure'
+        event.value = Number(message?.[1] ?? 0)
+        break
+      case MIDI_STATUS.PITCH: {
+        event.type = 'pitch'
+        const lsb = Number(message?.[1] ?? 0) & 0x7f
+        const msb = Number(message?.[2] ?? 0) & 0x7f
+        event.value = (msb << 7) | lsb
+        break
+      }
+      default:
+        event.type = 'channel'
+        break
+    }
+    return event
+  }
+
+  if (status === 0xf0 || status === 0xf7) {
+    event.type = 'sysex'
+    event.data = message
+    return event
+  }
+
+  event.type = 'system'
+  event.data = message
+  return event
+}
+
+const encodeMidiEvent = (event, buffer3, buffer2) => {
+  switch (event.type) {
+    case 'note_on':
+      buffer3[0] = MIDI_STATUS.NOTE_ON | (event.channel & 0x0f)
+      buffer3[1] = event.note & 0x7f
+      buffer3[2] = event.velocity & 0x7f
+      return buffer3
+    case 'note_off':
+      buffer3[0] = MIDI_STATUS.NOTE_OFF | (event.channel & 0x0f)
+      buffer3[1] = event.note & 0x7f
+      buffer3[2] = event.velocity & 0x7f
+      return buffer3
+    case 'cc':
+      buffer3[0] = MIDI_STATUS.CC | (event.channel & 0x0f)
+      buffer3[1] = event.controller & 0x7f
+      buffer3[2] = event.value & 0x7f
+      return buffer3
+    case 'program':
+      buffer2[0] = MIDI_STATUS.PROGRAM | (event.channel & 0x0f)
+      buffer2[1] = event.value & 0x7f
+      return buffer2
+    case 'channel_pressure':
+      buffer2[0] = MIDI_STATUS.CHANNEL_PRESSURE | (event.channel & 0x0f)
+      buffer2[1] = event.value & 0x7f
+      return buffer2
+    case 'poly_pressure':
+      buffer3[0] = MIDI_STATUS.POLY_PRESSURE | (event.channel & 0x0f)
+      buffer3[1] = event.note & 0x7f
+      buffer3[2] = event.value & 0x7f
+      return buffer3
+    case 'pitch': {
+      const value = Number(event.value) || 0
+      buffer3[0] = MIDI_STATUS.PITCH | (event.channel & 0x0f)
+      buffer3[1] = value & 0x7f
+      buffer3[2] = (value >> 7) & 0x7f
+      return buffer3
+    }
+    case 'sysex':
+    case 'system':
+      return event.data || event.raw
+    default:
+      return event.raw
+  }
+}
 
 function extractChannelPatchesFromMIDI(midi) {
   if (!midi?.tracks?.length) return Array.from({ length: 16 }, () => null)
@@ -134,10 +272,26 @@ class SynthEngine {
     this._synth = null
     this._seq = null
 
+    this._xgMapper = createXgDrumToGsMapper()
+    this._midiEvent = createMidiEvent()
+    this._midiMessage3 = new Uint8Array(3)
+    this._midiMessage2 = new Uint8Array(2)
+
     this._raf = 0
     this._prevFinished = false
     this._isAdvancing = false
     this._isStopping = false
+
+    this._xgMapper.setEnabled(DEFAULT_CONFIG.xgDrumMapEnabled)
+    this._xgMapper.setPreferGsPlayback(DEFAULT_CONFIG.xgPreferGsPlayback)
+    this._xgMapper.onStateChange = (state) => {
+      this._setState({ xgDrumMapState: state })
+    }
+    this._setState({
+      xgDrumMapEnabled: DEFAULT_CONFIG.xgDrumMapEnabled,
+      xgPreferGsPlayback: DEFAULT_CONFIG.xgPreferGsPlayback,
+      xgDrumMapState: this._xgMapper.getState(),
+    })
   }
 
   _setState(patch) {
@@ -168,6 +322,7 @@ class SynthEngine {
       this._context = context
       this._synth = synth
       this._seq = seq
+      this._setupMidiMapper()
 
       try {
         this._setState({
@@ -231,6 +386,32 @@ class SynthEngine {
     this._raf = window.requestAnimationFrame(tick)
   }
 
+  _setupMidiMapper() {
+    if (!this._seq || !this._synth || !this._xgMapper) return
+    this._seq.connectMIDIOutput({
+      send: (data) => {
+        this._handleMidiOutputMessage(data)
+      },
+    })
+  }
+
+  _handleMidiOutputMessage(message) {
+    if (!this._synth) return
+    const event = parseMidiMessage(message, this._midiEvent)
+    const events = this._xgMapper ? this._xgMapper(event) : [event]
+    for (const nextEvent of events) {
+      if (!nextEvent) continue
+      const bytes = encodeMidiEvent(nextEvent, this._midiMessage3, this._midiMessage2)
+      if (!bytes) continue
+      this._synth.sendMessage(bytes)
+    }
+  }
+
+  _resetXgMapperState() {
+    if (!this._xgMapper) return
+    this._xgMapper.reset()
+  }
+
   async resumeAudio() {
     await this.ensureInitialized()
     const audioEngine = getKaraokeAudioEngine()
@@ -252,6 +433,7 @@ class SynthEngine {
 
   async loadMidiFromUrl(url, options = {}) {
     await this.ensureInitialized()
+    this._resetXgMapperState()
     this._setState({ status: `Loading MIDI: ${url}` })
     const response = await fetch(url)
     if (!response.ok) throw new Error(`MIDI HTTP ${response.status}`)
@@ -277,6 +459,7 @@ class SynthEngine {
 
   async loadMidiFromFile(file, options = {}) {
     await this.ensureInitialized()
+    this._resetXgMapperState()
     const buffer = await file.arrayBuffer()
     const midiName = file.name
     this._seq.pause()
@@ -507,6 +690,18 @@ class SynthEngine {
     this._setState({ transposition: v })
   }
 
+  setXgDrumMapEnabled(enabled) {
+    const next = Boolean(enabled)
+    this._xgMapper?.setEnabled(next)
+    this._setState({ xgDrumMapEnabled: next })
+  }
+
+  setXgPreferGsPlayback(preferGsPlayback) {
+    const next = Boolean(preferGsPlayback)
+    this._xgMapper?.setPreferGsPlayback(next)
+    this._setState({ xgPreferGsPlayback: next })
+  }
+
   shiftTransposition(deltaSemitones) {
     const next = (Number(getKaraokeStoreState().transposition) || 0) + (Number(deltaSemitones) || 0)
     this.setTransposition(next)
@@ -547,4 +742,4 @@ class SynthEngine {
 
 const synthEngine = new SynthEngine()
 
-export { synthEngine }
+export { synthEngine, DEFAULT_CONFIG }

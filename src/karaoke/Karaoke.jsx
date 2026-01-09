@@ -148,7 +148,7 @@ function Karaoke() {
   }, [pitchEngine])
 
   return (
-    <div className="karaokePage">
+    <div className={`karaokePage${showSongInfo ? ' karaokePage--intro' : ''}`}>
       <KeyChangeAlert />
       {showSongInfo ? (
         <div className="karaokeSongIntro">

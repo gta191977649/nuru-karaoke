@@ -500,6 +500,14 @@ function Synth({ onNavigateHome }) {
     if (pc == null) return 'n/a'
     return `${noteNames[pc]} (pc ${pc})`
   }
+  const formatChannelList = (channels) => {
+    if (!Array.isArray(channels)) return '—'
+    const list = []
+    channels.forEach((active, idx) => {
+      if (active) list.push(idx + 1)
+    })
+    return list.length ? list.join(', ') : '—'
+  }
 
   return (
     <Container className="py-3 synthDebug" style={{ maxWidth: 860 }}>
@@ -625,6 +633,47 @@ function Synth({ onNavigateHome }) {
             ) : (
               <div className="small text-muted mt-1">SysEx: none</div>
             )}
+          </div>
+        </Col>
+
+        <Col xs={12}>
+          <div className="p-3 border rounded-3">
+            <div className="fw-semibold mb-2">XG -> GS Drum Mapping</div>
+            <Row className="g-2 align-items-center">
+              <Col xs={12} md={6}>
+                <Form.Check
+                  type="switch"
+                  id="xg-drum-map-enabled"
+                  label="Enable mapping"
+                  checked={Boolean(state.xgDrumMapEnabled)}
+                  onChange={(e) => synthEngine.setXgDrumMapEnabled(e.currentTarget.checked)}
+                />
+              </Col>
+              <Col xs={12} md={6}>
+                <Form.Check
+                  type="switch"
+                  id="xg-drum-map-prefer-gs"
+                  label="Prefer GS playback"
+                  checked={Boolean(state.xgPreferGsPlayback)}
+                  onChange={(e) => synthEngine.setXgPreferGsPlayback(e.currentTarget.checked)}
+                />
+              </Col>
+            </Row>
+            <div className="small text-muted mt-2">
+              Mode: {state.xgDrumMapState?.globalMode || 'unknown'}
+            </div>
+            <div className="small text-muted">
+              Detected by: {state.xgDrumMapState?.detectedBy || '—'}
+            </div>
+            <div className="small text-muted">
+              XG bank pairs: {state.xgDrumMapState?.xgBankSelectPairs ?? 0}
+            </div>
+            <div className="small text-muted">
+              Drum channels: {formatChannelList(state.xgDrumMapState?.drumChannels)}
+            </div>
+            <div className="small text-muted">
+              Brush channels: {formatChannelList(state.xgDrumMapState?.brushChannels)}
+            </div>
           </div>
         </Col>
 

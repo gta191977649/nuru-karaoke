@@ -1,10 +1,8 @@
 import { create } from 'zustand'
-import defaultSoundFontUrl from '../soundfont/sc55-hi.sf2'
 
 const initialEngineState = {
   ready: false,
   status: 'Initializing…',
-  soundFontUrl: defaultSoundFontUrl,
   soundFontName: 'GM',
   midiUrl: '',
   midiName: '',
@@ -19,6 +17,17 @@ const initialEngineState = {
   history: [],
   enabledChannels: Array.from({ length: 16 }, () => true),
   channelInstrumentNames: Array.from({ length: 16 }, (_, i) => (i === 9 ? 'Drums' : '—')),
+  xgDrumMapEnabled: true,
+  xgPreferGsPlayback: true,
+  xgDrumMapState: {
+    globalMode: 'unknown',
+    detectedBy: null,
+    xgBankSelectPairs: 0,
+    drumChannels: Array.from({ length: 16 }, () => false),
+    brushChannels: Array.from({ length: 16 }, () => false),
+    bankMSB: Array.from({ length: 16 }, () => -1),
+    bankLSB: Array.from({ length: 16 }, () => -1),
+  },
 }
 
 const initialUiState = {

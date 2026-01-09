@@ -34,6 +34,13 @@
   align-items: stretch;
   justify-content: flex-start;
   overflow: hidden;
+  opacity: 1;
+  transition: opacity 1000ms ease;
+}
+
+.karaokePage--intro .karaoke-stage {
+  opacity: 0;
+  pointer-events: none;
 }
 
 .karaokeSongIntro {
@@ -46,6 +53,12 @@
   text-shadow: 0 6px 0 rgba(0, 0, 0, 0.55);
   color: #ffffff;
   pointer-events: none;
+  opacity: 0;
+  transition: opacity 1000ms ease;
+}
+
+.karaokePage--intro .karaokeSongIntro {
+  opacity: 1;
 }
 
 .karaokeSongIntro__title {

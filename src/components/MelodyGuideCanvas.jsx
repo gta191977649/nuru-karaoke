@@ -49,7 +49,7 @@ const STROKE_WIDTH = {
 const PLAYHEAD_DOT_RADIUS = 5
 const NOTE_MERGE_CONFIG = {
   // Semitone tolerance for considering the user's pitch "in range" of the target.
-  pitchToleranceSemis: 0.5,
+  pitchToleranceSemis: 1,
   // Minimum fraction of target note duration the user must cover to treat it as full-length.
   coverageRatio: 0.75,
   // Silence gap (seconds) to consider a note ended when RMS drops below the gate.
