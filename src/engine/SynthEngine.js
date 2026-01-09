@@ -1,6 +1,6 @@
 import { Sequencer, WorkletSynthesizer } from 'spessasynth_lib'
 import processorUrl from 'spessasynth_lib/dist/spessasynth_processor.min.js?url'
-import defaultSoundFontUrl from '../soundfont/gmex.sf2'
+import defaultSoundFontUrl from '../soundfont/sc55.sf2'
 import { createXgDrumToGsMapper } from './xgDrumMapper.js'
 import { findActiveLyricIndex, parseLrc } from './lrc.js'
 import { getKaraokeAudioEngine } from './audioEngine.js'
@@ -276,6 +276,10 @@ class SynthEngine {
     this._midiEvent = createMidiEvent()
     this._midiMessage3 = new Uint8Array(3)
     this._midiMessage2 = new Uint8Array(2)
+    this._channelActivityVelocity = Array.from({ length: 16 }, () => 0)
+    this._channelActivityTime = Array.from({ length: 16 }, () => -1)
+    this._activeNoteCounts = Array.from({ length: 16 }, () => Array.from({ length: 128 }, () => 0))
+    this._polyphonyCount = 0
 
     this._raf = 0
     this._prevFinished = false
@@ -404,12 +408,67 @@ class SynthEngine {
       const bytes = encodeMidiEvent(nextEvent, this._midiMessage3, this._midiMessage2)
       if (!bytes) continue
       this._synth.sendMessage(bytes)
+      this._trackChannelActivity(nextEvent)
+      this._trackPolyphony(nextEvent)
     }
   }
 
   _resetXgMapperState() {
     if (!this._xgMapper) return
     this._xgMapper.reset()
+  }
+
+  _resetChannelActivity() {
+    this._channelActivityVelocity.fill(0)
+    this._channelActivityTime.fill(-1)
+    this._setState({
+      channelActivityVelocity: this._channelActivityVelocity.slice(),
+      channelActivityTime: this._channelActivityTime.slice(),
+    })
+  }
+
+  _resetPolyphony() {
+    this._activeNoteCounts.forEach((notes) => notes.fill(0))
+    this._polyphonyCount = 0
+    this._setState({ polyphonyCount: 0 })
+  }
+
+  _trackChannelActivity(event) {
+    if (event?.type !== 'note_on') return
+    const velocity = Number(event.velocity)
+    if (!(velocity > 0)) return
+    const channel = Number(event.channel)
+    if (!Number.isInteger(channel) || channel < 0 || channel > 15) return
+    const now = this._seq?.currentHighResolutionTime ?? this._seq?.currentTime ?? 0
+    const level = Math.max(0, Math.min(1, velocity / 127))
+    const prev = this._channelActivityVelocity[channel] || 0
+    this._channelActivityVelocity[channel] = Math.max(prev * 0.6, level)
+    this._channelActivityTime[channel] = now
+    this._setState({
+      channelActivityVelocity: this._channelActivityVelocity.slice(),
+      channelActivityTime: this._channelActivityTime.slice(),
+    })
+  }
+
+  _trackPolyphony(event) {
+    if (!event) return
+    const channel = Number(event.channel)
+    if (!Number.isInteger(channel) || channel < 0 || channel > 15) return
+    const note = Number(event.note)
+    if (!Number.isInteger(note) || note < 0 || note > 127) return
+    const isNoteOn = event.type === 'note_on' && Number(event.velocity) > 0
+    const isNoteOff = event.type === 'note_off' || (event.type === 'note_on' && Number(event.velocity) === 0)
+    if (!isNoteOn && !isNoteOff) return
+
+    const counts = this._activeNoteCounts[channel]
+    if (isNoteOn) {
+      counts[note] += 1
+      this._polyphonyCount += 1
+    } else if (counts[note] > 0) {
+      counts[note] -= 1
+      this._polyphonyCount = Math.max(0, this._polyphonyCount - 1)
+    }
+    this._setState({ polyphonyCount: this._polyphonyCount })
   }
 
   async resumeAudio() {
@@ -434,6 +493,8 @@ class SynthEngine {
   async loadMidiFromUrl(url, options = {}) {
     await this.ensureInitialized()
     this._resetXgMapperState()
+    this._resetChannelActivity()
+    this._resetPolyphony()
     this._setState({ status: `Loading MIDI: ${url}` })
     const response = await fetch(url)
     if (!response.ok) throw new Error(`MIDI HTTP ${response.status}`)
@@ -460,6 +521,8 @@ class SynthEngine {
   async loadMidiFromFile(file, options = {}) {
     await this.ensureInitialized()
     this._resetXgMapperState()
+    this._resetChannelActivity()
+    this._resetPolyphony()
     const buffer = await file.arrayBuffer()
     const midiName = file.name
     this._seq.pause()
@@ -599,6 +662,8 @@ class SynthEngine {
     this._seq.pause()
     this._seq.currentTime = 0
     this._synth.stopAll(true)
+    this._resetChannelActivity()
+    this._resetPolyphony()
   }
 
   async stopAndAdvance(options = {}) {

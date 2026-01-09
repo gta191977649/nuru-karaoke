@@ -17,6 +17,9 @@ const initialEngineState = {
   history: [],
   enabledChannels: Array.from({ length: 16 }, () => true),
   channelInstrumentNames: Array.from({ length: 16 }, (_, i) => (i === 9 ? 'Drums' : '—')),
+  channelActivityVelocity: Array.from({ length: 16 }, () => 0),
+  channelActivityTime: Array.from({ length: 16 }, () => -1),
+  polyphonyCount: 0,
   xgDrumMapEnabled: true,
   xgPreferGsPlayback: true,
   xgDrumMapState: {

@@ -23,6 +23,10 @@ const formatSysExMessage = (msg) => [msg.status, ...msg.data].map(toHex).join(' 
 const clampNumber = (value, min, max) => Math.min(max, Math.max(min, value))
 const RAD_TO_DEG = 180 / Math.PI
 const DEG_TO_RAD = Math.PI / 180
+const LCD_SEGMENTS = 8
+const LCD_SEGMENT_INDEXES = Array.from({ length: LCD_SEGMENTS }, (_, idx) => idx)
+const LCD_HOLD_SEC = 0.12
+const LCD_DECAY_SEC = 0.65
 
 const formatHexColor = (value) => {
   const num = clampNumber(Number(value) || 0, 0, 0xffffff)
@@ -508,6 +512,21 @@ function Synth({ onNavigateHome }) {
     })
     return list.length ? list.join(', ') : '—'
   }
+  const lcdLevels = useMemo(() => {
+    const times = Array.isArray(state.channelActivityTime) ? state.channelActivityTime : []
+    const velocities = Array.isArray(state.channelActivityVelocity) ? state.channelActivityVelocity : []
+    const now = Number(state.currentTime) || 0
+    return Array.from({ length: 16 }, (_, idx) => {
+      const lastTime = Number(times[idx])
+      const lastVelocity = clampNumber(Number(velocities[idx]) || 0, 0, 1)
+      if (!Number.isFinite(lastTime) || lastTime < 0) return 0
+      if (now < lastTime) return 0
+      const delta = now - lastTime
+      if (delta <= LCD_HOLD_SEC) return lastVelocity
+      const decay = (delta - LCD_HOLD_SEC) / LCD_DECAY_SEC
+      return clampNumber(lastVelocity * (1 - decay), 0, 1)
+    })
+  }, [state.channelActivityTime, state.channelActivityVelocity, state.currentTime])
 
   return (
     <Container className="py-3 synthDebug" style={{ maxWidth: 860 }}>
@@ -719,6 +738,42 @@ function Synth({ onNavigateHome }) {
             />
             <div className="small text-muted">
               {state.currentTime.toFixed(2)} / {state.duration.toFixed(2)} s
+            </div>
+          </div>
+        </Col>
+
+        <Col xs={12}>
+          <div className="p-3 border rounded-3">
+            <div className="d-flex align-items-center justify-content-between mb-2">
+              <div className="fw-semibold">Sound Canvas LCD</div>
+              <div className="small text-muted">Channel Activity</div>
+            </div>
+            <div className="sc-lcd">
+              <div className="sc-lcd__meta">
+                <div className="sc-lcd__metaLabel">POLY:{state.polyphonyCount ?? 0}</div>
+              </div>
+              <div className="sc-lcd__grid">
+                {lcdLevels.map((level, idx) => {
+                  const activeCount = Math.max(0, Math.min(LCD_SEGMENTS, Math.ceil(level * LCD_SEGMENTS)))
+                  const muted = state.enabledChannels?.[idx] === false
+                  return (
+                    <div
+                      key={`sc-lcd-${idx}`}
+                      className={`sc-lcd__channel${muted ? ' sc-lcd__channel--muted' : ''}`}
+                    >
+                      <div className="sc-lcd__bars">
+                        {LCD_SEGMENT_INDEXES.map((seg) => (
+                          <span
+                            key={`sc-lcd-${idx}-${seg}`}
+                            className={`sc-lcd__segment${seg < activeCount ? ' sc-lcd__segment--active' : ''}`}
+                          />
+                        ))}
+                      </div>
+                      <div className="sc-lcd__label">{idx + 1}</div>
+                    </div>
+                  )
+                })}
+              </div>
             </div>
           </div>
         </Col>

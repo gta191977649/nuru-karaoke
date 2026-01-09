@@ -1,5 +1,13 @@
 @import url('https://fonts.googleapis.com/css2?family=Zen+Old+Mincho:wght@400;500;600;700;900&display=swap');
 
+@font-face {
+  font-family: 'VCR OSD Mono';
+  src: url('./assets/font/VCR_OSD_MONO.ttf') format('truetype');
+  font-weight: 400;
+  font-style: normal;
+  font-display: swap;
+}
+
 .wiiHome {
   height: 100vh;
   background: black;
@@ -1565,4 +1573,82 @@
   --synth-miss-note-fill: #b01212;
   --synth-miss-note-stroke: #ffffff;
   --synth-miss-note-shadow: rgba(120, 0, 0, 0.55);
+}
+
+.sc-lcd {
+  position: relative;
+  border: 1px solid rgba(110, 58, 0, 0.45);
+  padding: 12px 10px 10px;
+  background:  #e98d1a;
+  font-family: 'VCR OSD Mono', 'Courier New', monospace;
+  overflow: hidden;
+}
+
+.sc-lcd__meta {
+  position: relative;
+  z-index: 1;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 6px;
+  font-size: 0.7rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: rgba(80, 45, 0, 0.85);
+}
+
+.sc-lcd__metaValue {
+  font-variant-numeric: tabular-nums;
+  letter-spacing: 0.12em;
+}
+
+.sc-lcd__grid {
+  position: relative;
+  z-index: 1;
+  display: grid;
+  grid-template-columns: repeat(16, minmax(0, 1fr));
+  gap: 6px;
+}
+
+.sc-lcd__channel {
+  display: grid;
+  grid-template-rows: 1fr auto;
+  gap: 4px;
+  align-items: end;
+  text-align: center;
+  font-size: 0.62rem;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  color: rgba(80, 45, 0, 0.8);
+}
+
+.sc-lcd__channel--muted {
+  opacity: 0.55;
+}
+
+.sc-lcd__bars {
+  height: 64px;
+  display: flex;
+  flex-direction: column-reverse;
+  gap: 2px;
+}
+
+.sc-lcd__segment {
+  height: 6px;
+  background: rgba(110, 58, 0, 0.18);
+}
+
+.sc-lcd__segment--active {
+  background: rgba(70, 32, 0, 0.75);
+}
+
+@media (max-width: 575.98px) {
+  .sc-lcd__grid {
+    grid-template-columns: repeat(8, minmax(0, 1fr));
+    gap: 8px;
+  }
+
+  .sc-lcd__bars {
+    height: 56px;
+  }
 }
