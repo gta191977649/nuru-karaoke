@@ -280,6 +280,8 @@ class SynthEngine {
     this._channelActivityTime = Array.from({ length: 16 }, () => -1)
     this._activeNoteCounts = Array.from({ length: 16 }, () => Array.from({ length: 128 }, () => 0))
     this._polyphonyCount = 0
+    this._activityDirty = false
+    this._polyphonyDirty = false
 
     this._raf = 0
     this._prevFinished = false
@@ -374,7 +376,17 @@ class SynthEngine {
         }
 
         const isPlaying = !seq.paused && !seq.isFinished
-        this._setState({ currentTime, duration, isPlaying })
+        const patch = { currentTime, duration, isPlaying }
+        if (this._activityDirty) {
+          patch.channelActivityVelocity = this._channelActivityVelocity.slice()
+          patch.channelActivityTime = this._channelActivityTime.slice()
+          this._activityDirty = false
+        }
+        if (this._polyphonyDirty) {
+          patch.polyphonyCount = this._polyphonyCount
+          this._polyphonyDirty = false
+        }
+        this._setState(patch)
         setKaraokeStoreState({ activeLyricIndex, karaokeProgress })
 
         if (seq.isFinished && !this._prevFinished) {
@@ -421,6 +433,7 @@ class SynthEngine {
   _resetChannelActivity() {
     this._channelActivityVelocity.fill(0)
     this._channelActivityTime.fill(-1)
+    this._activityDirty = false
     this._setState({
       channelActivityVelocity: this._channelActivityVelocity.slice(),
       channelActivityTime: this._channelActivityTime.slice(),
@@ -430,6 +443,7 @@ class SynthEngine {
   _resetPolyphony() {
     this._activeNoteCounts.forEach((notes) => notes.fill(0))
     this._polyphonyCount = 0
+    this._polyphonyDirty = false
     this._setState({ polyphonyCount: 0 })
   }
 
@@ -444,10 +458,7 @@ class SynthEngine {
     const prev = this._channelActivityVelocity[channel] || 0
     this._channelActivityVelocity[channel] = Math.max(prev * 0.6, level)
     this._channelActivityTime[channel] = now
-    this._setState({
-      channelActivityVelocity: this._channelActivityVelocity.slice(),
-      channelActivityTime: this._channelActivityTime.slice(),
-    })
+    this._activityDirty = true
   }
 
   _trackPolyphony(event) {
@@ -468,7 +479,7 @@ class SynthEngine {
       counts[note] -= 1
       this._polyphonyCount = Math.max(0, this._polyphonyCount - 1)
     }
-    this._setState({ polyphonyCount: this._polyphonyCount })
+    this._polyphonyDirty = true
   }
 
   async resumeAudio() {
