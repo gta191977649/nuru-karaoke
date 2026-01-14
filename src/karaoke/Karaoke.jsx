@@ -94,7 +94,7 @@ function Karaoke() {
   })
 
   // Technique Detection
-  const { counts: techniqueCounts } = useSingingTechnique(pitchEngine)
+  const { counts: techniqueCounts, techniqueEventsRef } = useSingingTechnique(pitchEngine, currentTimeRef, reference, transpositionRef)
 
   const lines = useMemo(() => {
 
@@ -180,6 +180,7 @@ function Karaoke() {
                 kobushiCount={techniqueCounts.kobushi}
                 glissandoDownCount={techniqueCounts.glissdown}
                 vibratoCount={techniqueCounts.vibrato}
+                techniqueEventsRef={techniqueEventsRef}
               />
             </div>
           </div>

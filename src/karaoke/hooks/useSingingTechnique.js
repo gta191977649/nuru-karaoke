@@ -1,8 +1,30 @@
 import { useRef, useEffect, useState } from 'react'
-// We don't import direct detector or plugins here anymore.
-// They are loaded inside the worker.
+import { getTargetMidiAtTime } from '../../engine/audio/midi/referenceMelody.js'
 
-export function useSingingTechnique(pitchEngine) {
+// --- Helper Functions (Matched to MelodyGuideCanvas.jsx) ---
+function mod12(value) {
+    const m = value % 12
+    return m < 0 ? m + 12 : m
+}
+
+function mapUserMidiToTargetOctave(userMidi, targetMidi) {
+    const u = Number(userMidi)
+    const t = Number(targetMidi)
+    if (!Number.isFinite(u) || !Number.isFinite(t)) return null
+    const userKey = Math.round(u)
+    const targetKey = Math.round(t)
+    const userPc = mod12(userKey)
+    const targetPc = mod12(targetKey)
+    if (userPc === targetPc) return t
+    const detune = u - userKey
+    const base = t - targetPc
+    return base + userPc + detune
+}
+
+const freqToMidi = (f) => 69 + 12 * Math.log2(f / 440)
+// -----------------------------------------------------------
+
+export function useSingingTechnique(pitchEngine, currentTimeRef, reference, transpositionRef) {
     const workerRef = useRef(null)
 
     // Accumulated counts for the session
@@ -18,17 +40,23 @@ export function useSingingTechnique(pitchEngine) {
 
     // Trace history for debug graph (Circular buffers)
     const historySize = 300
+    const techniqueEventsRef = useRef([])
     const historyRef = useRef({
         vibrato: new Array(historySize).fill(0),
         kobushi: new Array(historySize).fill(0),
         glissando: new Array(historySize).fill(0)
     })
 
+    // Keep track of latest reference without triggering effect re-run
+    const activeReferenceRef = useRef(reference)
+    useEffect(() => {
+        activeReferenceRef.current = reference
+    }, [reference])
+
     useEffect(() => {
         if (!pitchEngine) return
 
         // Initialize Worker
-        // Note: Vite/Webpack handling of new URL(..., import.meta.url)
         const worker = new Worker(
             new URL('../../engine/analysis/worker/technique.worker.js', import.meta.url),
             { type: 'module' }
@@ -43,7 +71,7 @@ export function useSingingTechnique(pitchEngine) {
             const { type, events, activeTechniques: activeState } = e.data
 
             if (type === 'update') {
-                // 1. Update Counts
+                // 1. Update Counts & History Log
                 if (events && Object.keys(events).length > 0) {
                     setCounts(prev => {
                         const next = { ...prev }
@@ -56,27 +84,35 @@ export function useSingingTechnique(pitchEngine) {
                                     next[type]++
                                     changed = true
                                 }
+
+                                // Push to event history for visualization
+                                const songTime = currentTimeRef?.current ?? 0
+                                techniqueEventsRef.current.push({
+                                    type,
+                                    t: songTime,
+                                    ...evt
+                                })
                             }
+                        }
+                        // Prune old events
+                        if (techniqueEventsRef.current.length > 500) {
+                            techniqueEventsRef.current = techniqueEventsRef.current.slice(-500)
                         }
                         return changed ? next : prev
                     })
                 }
 
-                // 2. Update Active State & History
-                // We receive full 'activeState' from worker
+                // 2. Update Active State
                 if (activeState) {
                     const active = activeState
                     const hist = historyRef.current
 
-                    // Vibrato
                     hist.vibrato.push(active.vibrato ? 1.0 : 0.0)
                     if (hist.vibrato.length > historySize) hist.vibrato.shift()
 
-                    // Kobushi
                     hist.kobushi.push(active.kobushi ? 1.0 : 0.0)
                     if (hist.kobushi.length > historySize) hist.kobushi.shift()
 
-                    // Glissando
                     let gVal = 0.0
                     if (active.glissup) gVal = 1.0
                     else if (active.glissdown) gVal = -1.0
@@ -84,12 +120,7 @@ export function useSingingTechnique(pitchEngine) {
                     hist.glissando.push(gVal)
                     if (hist.glissando.length > historySize) hist.glissando.shift()
 
-                    // Force update for UI
-                    setActiveTechniques(prev => {
-                        // Always return new object to force re-render (for graphs scrolling)
-                        // Or we can just clone activeState
-                        return { ...active }
-                    })
+                    setActiveTechniques(prev => ({ ...active }))
                 }
             }
         }
@@ -98,17 +129,37 @@ export function useSingingTechnique(pitchEngine) {
         const unsubscribe = pitchEngine.onPitch((result) => {
             const time = result.time || (performance.now() / 1000)
             const f0 = result.f0Hz
-            // Push to Worker
-            worker.postMessage({
-                type: 'push',
-                payload: { time, f0 }
-            })
+
+            // STRICT FILTER matching MelodyGuideCanvas.jsx rules
+            const songTime = currentTimeRef?.current ?? 0
+            const currentReference = activeReferenceRef.current
+            const baseMidi = getTargetMidiAtTime(currentReference, songTime)
+
+            if (baseMidi !== null) {
+                const transposition = transpositionRef?.current ?? 0
+                const targetMidi = baseMidi + transposition
+                const userMidi = freqToMidi(f0)
+
+                const mappedMidi = mapUserMidiToTargetOctave(userMidi, targetMidi)
+
+                // NOTE_MERGE_CONFIG.pitchToleranceSemis is 2 in MelodyGuideCanvas
+                // We use <= 2.0 to be lenient and match visual
+                if (Math.abs(mappedMidi - targetMidi) <= 2.0) {
+                    // Passed!
+                    worker.postMessage({
+                        type: 'push',
+                        payload: { time, f0 }
+                    })
+                    // Optional: Debug log
+                    // if (Math.random() < 0.01) console.log('[Technique] Active')
+                }
+            }
         })
 
         return () => {
             unsubscribe()
-            worker.postMessage({ type: 'stop' })
-            worker.terminate()
+            workerRef.current?.postMessage({ type: 'stop' }) // Use ref specific check
+            workerRef.current?.terminate()
         }
     }, [pitchEngine])
 
@@ -117,7 +168,6 @@ export function useSingingTechnique(pitchEngine) {
         if (workerRef.current) {
             workerRef.current.postMessage({ type: 'reset' })
         }
-        // Reset history
         const hist = historyRef.current
         hist.vibrato.fill(0)
         hist.kobushi.fill(0)
@@ -132,6 +182,7 @@ export function useSingingTechnique(pitchEngine) {
             kobushi: [...historyRef.current.kobushi],
             glissando: [...historyRef.current.glissando]
         },
+        techniqueEventsRef,
         resetCounts
     }
 }

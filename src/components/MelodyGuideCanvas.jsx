@@ -1,14 +1,57 @@
 import { useEffect, useRef, forwardRef } from 'react'
-import { Application, Container, Graphics } from 'pixi.js'
+import { Application, Container, Graphics, Sprite, Texture, Assets } from 'pixi.js'
 import { BloomFilter } from 'pixi-filters'
 import { getTargetMidiAtTime } from '../engine/audio/midi/referenceMelody.js'
 import { DEFAULT_PARTICLE_CONFIG, createParticleSystem, createComboSystem } from './particles/particleSystem.js'
 
-const TECHNIQUE_COLORS = {
-  vibrato: 0x2CFF05,    // Green
-  kobushi: 0x00FFF0,    // Light Blue
-  shakuri: 0xFF13F0,    // Purple
-  fall: 0xFFBF00,       // Orange
+const TECHNIQUE_CONFIG = {
+  glissup: {
+    id: 'glissup',
+    label: 'しゃくり',
+    color: 0xFF13F0, // Purple
+    svg: '<svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M5 18 C5 18 10 18 12 14 C14 10 18 6 18 6" /><path d="M15 6 L19 6 L19 10" /></svg>',
+    icon: (
+      <svg viewBox="0 0 24 24" fill="currentColor" style={{ width: '100%', height: '100%' }}>
+        <path d="M5 18 C5 18 10 18 12 14 C14 10 18 6 18 6" stroke="currentColor" strokeWidth="3" fill="none" strokeLinecap="round" />
+        <path d="M15 6 L19 6 L19 10" stroke="currentColor" strokeWidth="3" fill="none" strokeLinecap="round" strokeLinejoin="round" />
+      </svg>
+    )
+  },
+  kobushi: {
+    id: 'kobushi',
+    label: 'こぶし',
+    color: 0x00FFF0, // Light Blue
+    svg: '<svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 24 24" fill="white" stroke="white" stroke-width="2"><circle cx="12" cy="12" r="3" fill="white" stroke="none" /><path d="M12 2 C 18 2 22 12 12 22 C 2 12 6 2 12 2" /></svg>',
+    icon: (
+      <svg viewBox="0 0 24 24" fill="currentColor" style={{ width: '100%', height: '100%' }}>
+        <circle cx="12" cy="12" r="3" />
+        <path d="M12 2 C 18 2 22 12 12 22 C 2 12 6 2 12 2" stroke="currentColor" strokeWidth="2" fill="none" />
+      </svg>
+    )
+  },
+  glissdown: {
+    id: 'glissdown',
+    label: 'フォール',
+    color: 0xFFBF00, // Orange
+    svg: '<svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M5 6 C5 6 10 6 12 10 C14 14 18 18 18 18" /><path d="M15 18 L19 18 L19 14" /></svg>',
+    icon: (
+      <svg viewBox="0 0 24 24" fill="currentColor" style={{ width: '100%', height: '100%' }}>
+        <path d="M5 6 C5 6 10 6 12 10 C14 14 18 18 18 18" stroke="currentColor" strokeWidth="3" fill="none" strokeLinecap="round" />
+        <path d="M15 18 L19 18 L19 14" stroke="currentColor" strokeWidth="3" fill="none" strokeLinecap="round" strokeLinejoin="round" />
+      </svg>
+    )
+  },
+  vibrato: {
+    id: 'vibrato',
+    label: 'ビブラート',
+    color: 0x2CFF05, // Green
+    svg: '<svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="3" stroke-linecap="round"><path d="M2 12 Q 5 6 8 12 T 14 12 T 20 12" /></svg>',
+    icon: (
+      <svg viewBox="0 0 24 24" fill="currentColor" style={{ width: '100%', height: '100%' }}>
+        <path d="M2 12 Q 5 6 8 12 T 14 12 T 20 12" stroke="currentColor" strokeWidth="3" fill="none" strokeLinecap="round" />
+      </svg>
+    )
+  }
 }
 
 const COLORS = {
@@ -23,6 +66,7 @@ const COLORS = {
   userGlowStroke: 0xfff2b8,
   userMissStroke: 0xffffff,
   playhead: 0xffffff,
+  technique: 0xffffff, // Default tint
 }
 
 const ALPHAS = {
@@ -54,9 +98,10 @@ const STROKE_WIDTH = {
 }
 
 const PLAYHEAD_DOT_RADIUS = 5
+const FILL_DELAY_SEC = 0.65
 const NOTE_MERGE_CONFIG = {
   // Semitone tolerance for considering the user's pitch "in range" of the target.
-  pitchToleranceSemis: 1,
+  pitchToleranceSemis: 2,
   // Minimum fraction of target note duration the user must cover to treat it as full-length.
   coverageRatio: 0.75,
   // Silence gap (seconds) to consider a note ended when RMS drops below the gate.
@@ -137,6 +182,7 @@ function MelodyGuideCanvas({
   kobushiCount = 0,
   glissandoDownCount = 0,
   vibratoCount = 0,
+  techniqueEventsRef,
   currentSection = 1,
   totalSections = 6,
   className,
@@ -171,8 +217,10 @@ function MelodyGuideCanvas({
       shakuri: 0,
       kobushi: 0,
       fall: 0,
+      fall: 0,
       vibrato: 0
-    }
+    },
+    techniqueSprites: [] // For tracking active sprites
   })
   const stateRef = useRef({
     reference,
@@ -224,7 +272,8 @@ function MelodyGuideCanvas({
       glissandoUpCount,
       kobushiCount,
       glissandoDownCount,
-      vibratoCount
+      vibratoCount,
+      techniqueEventsRef
     }
   }, [
     reference,
@@ -243,7 +292,8 @@ function MelodyGuideCanvas({
     glissandoUpCount,
     kobushiCount,
     glissandoDownCount,
-    vibratoCount
+    vibratoCount,
+    techniqueEventsRef
   ])
 
   useEffect(() => {
@@ -279,11 +329,14 @@ function MelodyGuideCanvas({
       const user = new Graphics()
       const userGlowContainer = new Container()
       const userGlow = new Graphics()
+      const trail = new Graphics() // F0 Trail
+      const techniqueIcons = new Container() // Technique Icons
+      const techniqueSpritePool = [] // Pool of sprites
       const particleSystem = createParticleSystem(particleConfig)
       const comboSystem = createComboSystem()
       const playhead = new Graphics()
 
-      userGlowContainer.addChild(particleSystem.container, comboSystem.container, userGlow)
+      userGlowContainer.addChild(particleSystem.container, comboSystem.container, userGlow, trail)
       userGlowContainer.filters = [
         new BloomFilter({
           strength: 8,
@@ -291,7 +344,7 @@ function MelodyGuideCanvas({
           threshold: 0.2,
         }),
       ]
-      app.stage.addChild(bg, grid, notes, miss, user, userGlowContainer, playhead)
+      app.stage.addChild(bg, grid, notes, miss, user, userGlowContainer, playhead, techniqueIcons)
 
       pixiRef.current = {
         app,
@@ -302,6 +355,9 @@ function MelodyGuideCanvas({
         user,
         userGlowContainer,
         userGlow,
+        trail,
+        techniqueIcons,
+        techniqueSpritePool,
         particleSystem,
         comboSystem,
         playhead,
@@ -315,7 +371,8 @@ function MelodyGuideCanvas({
           kobushi: kobushiCount,
           fall: glissandoDownCount,
           vibrato: vibratoCount
-        }
+        },
+        techniqueSprites: []
       }
 
       app.ticker.add(() => {
@@ -355,23 +412,23 @@ function MelodyGuideCanvas({
           const targetY = h - 30
 
           if (curShakuri > last.shakuri) {
-            state.comboSystem.spawnCombo(startX, startY, 60, targetY, TECHNIQUE_COLORS.shakuri)
-            setTimeout(() => triggerComboHit(shakuriRef, toCssColor(TECHNIQUE_COLORS.shakuri)), 600)
+            state.comboSystem.spawnCombo(startX, startY, 60, targetY, TECHNIQUE_CONFIG.glissup.color)
+            setTimeout(() => triggerComboHit(shakuriRef, toCssColor(TECHNIQUE_CONFIG.glissup.color)), 600)
             last.shakuri = curShakuri
           }
           if (curKobushi > last.kobushi) {
-            state.comboSystem.spawnCombo(startX, startY, 170, targetY, TECHNIQUE_COLORS.kobushi)
-            setTimeout(() => triggerComboHit(kobushiRef, toCssColor(TECHNIQUE_COLORS.kobushi)), 600)
+            state.comboSystem.spawnCombo(startX, startY, 170, targetY, TECHNIQUE_CONFIG.kobushi.color)
+            setTimeout(() => triggerComboHit(kobushiRef, toCssColor(TECHNIQUE_CONFIG.kobushi.color)), 600)
             last.kobushi = curKobushi
           }
           if (curFall > last.fall) {
-            state.comboSystem.spawnCombo(startX, startY, 280, targetY, TECHNIQUE_COLORS.fall)
-            setTimeout(() => triggerComboHit(fallRef, toCssColor(TECHNIQUE_COLORS.fall)), 600)
+            state.comboSystem.spawnCombo(startX, startY, 280, targetY, TECHNIQUE_CONFIG.glissdown.color)
+            setTimeout(() => triggerComboHit(fallRef, toCssColor(TECHNIQUE_CONFIG.glissdown.color)), 600)
             last.fall = curFall
           }
           if (curVibrato > last.vibrato) {
-            state.comboSystem.spawnCombo(startX, startY, 390, targetY, TECHNIQUE_COLORS.vibrato)
-            setTimeout(() => triggerComboHit(vibratoRef, toCssColor(TECHNIQUE_COLORS.vibrato)), 600)
+            state.comboSystem.spawnCombo(startX, startY, 390, targetY, TECHNIQUE_CONFIG.vibrato.color)
+            setTimeout(() => triggerComboHit(vibratoRef, toCssColor(TECHNIQUE_CONFIG.vibrato.color)), 600)
             last.vibrato = curVibrato
           }
         }
@@ -485,9 +542,10 @@ function MelodyGuideCanvas({
         state.notes.clear()
         state.notes.setStrokeStyle({
           width: STROKE_WIDTH.melody,
-          color: COLORS.grid,
+          color: COLORS.grid, // Keeping grid color for stroke?
           alpha: ALPHAS.melodyStroke,
         })
+
         drawMelodyNotes(COLORS.melodyFill, ALPHAS.melodyFill, true)
         drawMelodyNotes(COLORS.melodyOutFill, ALPHAS.melodyOutFill, false)
 
@@ -660,8 +718,14 @@ function MelodyGuideCanvas({
           })
           state.userGlow.beginPath()
           correctSegments.forEach((seg) => {
+            const renderEndTime = songTimeSec - FILL_DELAY_SEC
+            if (seg.t0 > renderEndTime) return
+
+            const effectiveT1 = Math.min(seg.t1, renderEndTime)
+            if (effectiveT1 <= seg.t0) return
+
             const x0 = playheadX + (seg.t0 - songTimeSec) * pixelsPerSec
-            const x1 = playheadX + (seg.t1 - songTimeSec) * pixelsPerSec
+            const x1 = playheadX + (effectiveT1 - songTimeSec) * pixelsPerSec
             const barW = Math.max(userBarW, x1 - x0)
             if (barW <= 0) return
             state.userGlow.roundRect(x0, seg.y - userBarH / 2, barW, userBarH, userRadius)
@@ -713,6 +777,147 @@ function MelodyGuideCanvas({
               mod12(Math.round(userMidi)) === mod12(Math.round(transposedTarget))
             emitParticles = isCorrectKey && inRange
           }
+        }
+
+        // F0 Trail Rendering
+        state.trail.clear()
+        const trailDuration = 2.0
+        const trailPoints = history.filter(h => h.t > songTimeSec - trailDuration && h.t <= songTimeSec)
+
+        if (trailPoints.length > 1) {
+          for (let i = 0; i < trailPoints.length - 1; i++) {
+            const p1 = trailPoints[i]
+            const p2 = trailPoints[i + 1]
+
+            // Check if this segment is "correct". 
+            // We verify if the time t covers any correct segment.
+            // Since correctSegments are time-ranges, we check overlap.
+            const isCorrect1 = correctSegments.some(seg => p1.t >= seg.t0 && p1.t <= seg.t1)
+
+            // Optimize: If not correct, maybe skip? User wants "correct notes" drawn in yellow.
+            // If we want a continuous line specifically for correct parts:
+            if (!isCorrect1) continue
+
+            // We also need screen coordinates
+            // p1.y might not be computed yet if we didn't map it.
+            // We need to re-map or store mapped values.
+            // Let's re-map quickly.
+            const getPointY = (p) => {
+              let tm = null
+              if (snap.reference) {
+                if (snap.gateUserByTarget) {
+                  const offset = Math.max(0, Number(snap.userOffsetSec) || 0)
+                  tm = getTargetMidiAtTime(snap.reference, p.t - offset) ?? getTargetMidiAtTime(snap.reference, p.t + offset)
+                } else {
+                  tm = getTargetMidiAtTime(snap.reference, p.t)
+                }
+              }
+              if (tm == null) return null // No target, can't map correct
+              const userMidi = Number(p.userMidi)
+              if (!Number.isFinite(userMidi)) return null
+              const mapped = mapUserMidiToTargetOctave(userMidi, tm)
+              const { y } = midiToY(mapped) // uses closure variables !
+              return y
+            }
+
+            const y1 = getPointY(p1)
+            const y2 = getPointY(p2)
+
+            if (y1 === null || y2 === null) continue
+
+            const x1 = playheadX + (p1.t - songTimeSec) * pixelsPerSec
+            const x2 = playheadX + (p2.t - songTimeSec) * pixelsPerSec
+
+            // Alpha fade
+            const age = songTimeSec - p1.t
+            const alpha = Math.max(0, 1 - age / trailDuration)
+
+            state.trail.setStrokeStyle({
+              width: 4, // Slightly thicker than melody
+              color: COLORS.userGlowFill, // Yellow from config
+              alpha: alpha,
+              cap: 'round',
+              join: 'round'
+            })
+
+            state.trail.moveTo(x1, y1)
+            state.trail.lineTo(x2, y2)
+            state.trail.stroke()
+          }
+        }
+
+        // Technique Icons Rendering (Sprites)
+        const events = snap.techniqueEventsRef?.current || []
+        const visibleEvents = events.filter(e => e.t >= visibleStart && e.t <= visibleEnd)
+
+        // Using sprite pool to avoid GC
+        const pool = state.techniqueSpritePool || []
+        // Ensure pool is stored
+        if (!state.techniqueSpritePool) state.techniqueSpritePool = pool
+
+        let poolIdx = 0
+        const processedNotes = new Set()
+
+        visibleEvents.forEach(evt => {
+          const config = TECHNIQUE_CONFIG[evt.type]
+          if (!config) return
+
+          // Find corresponding note to align Y
+          // Robust search: strict overlap first, then closest distance
+          let note = notesData.find(n => evt.t >= n.t0Sec - 0.2 && evt.t <= n.t1Sec + 0.2)
+
+          if (!note) {
+            const threshold = 1.0
+            const candidates = notesData.filter(n =>
+              evt.t >= n.t0Sec - threshold && evt.t <= n.t1Sec + threshold
+            )
+            if (candidates.length > 0) {
+              // Sort by closeness to event time
+              candidates.sort((a, b) => {
+                const distA = Math.min(Math.abs(evt.t - a.t0Sec), Math.abs(evt.t - a.t1Sec))
+                const distB = Math.min(Math.abs(evt.t - b.t0Sec), Math.abs(evt.t - b.t1Sec))
+                return distA - distB
+              })
+              note = candidates[0]
+            }
+          }
+
+          // If still no note, strictly do not render (per user request to obtain Y from melody)
+          if (!note) return
+
+          const midi = note.midi + transposition
+          const { y: noteY } = midiToY(midi)
+          const y = noteY - 5 // User preferred offset
+
+          const x = playheadX + (evt.t - songTimeSec) * pixelsPerSec
+
+          let graphic = pool[poolIdx]
+          if (!graphic) {
+            graphic = new Graphics()
+            // Set Pivot to bottom center (32 width / 2 = 16, 32 height)
+            graphic.pivot.set(16, 32)
+            graphic.scale.set(0.65)
+            state.techniqueIcons.addChild(graphic)
+            pool.push(graphic)
+          }
+
+          if (graphic.lastType !== evt.type) {
+            graphic.clear()
+            graphic.svg(config.svg)
+            graphic.lastType = evt.type
+          }
+
+          graphic.tint = config.color
+          graphic.x = x
+          graphic.y = y
+          graphic.visible = true
+
+          poolIdx++
+        })
+
+        // Hide unused sprites
+        for (let i = poolIdx; i < pool.length; i++) {
+          pool[i].visible = false
         }
 
         state.playhead.clear()
@@ -909,6 +1114,19 @@ function KaraokeOverlay({
   fallRef,
   vibratoRef,
 }) {
+  const counts = {
+    shakuri: glissandoUpCount,
+    kobushi: kobushiCount,
+    fall: glissandoDownCount,
+    vibrato: vibratoCount
+  }
+  const refs = {
+    shakuri: shakuriRef,
+    kobushi: kobushiRef,
+    fall: fallRef,
+    vibrato: vibratoRef
+  }
+
   return (
     <div style={OVERLAY_STYLE.container}>
       <div style={OVERLAY_STYLE.perfInterval.container}>
@@ -929,57 +1147,17 @@ function KaraokeOverlay({
       </div>
 
       <div style={OVERLAY_STYLE.countBox.container}>
-        <CountBox
-          ref={shakuriRef}
-          label="しゃくり"
-          count={glissandoUpCount}
-          color={toCssColor(TECHNIQUE_COLORS.shakuri)}
-          borderColor={toCssColor(TECHNIQUE_COLORS.shakuri)}
-          icon={
-            <svg viewBox="0 0 24 24" fill="currentColor" style={OVERLAY_STYLE.countBox.iconSize}>
-              <path d="M5 18 C5 18 10 18 12 14 C14 10 18 6 18 6" stroke="currentColor" strokeWidth="3" fill="none" strokeLinecap="round" />
-              <path d="M15 6 L19 6 L19 10" stroke="currentColor" strokeWidth="3" fill="none" strokeLinecap="round" strokeLinejoin="round" />
-            </svg>
-          }
-        />
-        <CountBox
-          ref={kobushiRef}
-          label="こぶし"
-          count={kobushiCount}
-          color={toCssColor(TECHNIQUE_COLORS.kobushi)}
-          borderColor={toCssColor(TECHNIQUE_COLORS.kobushi)}
-          icon={
-            <svg viewBox="0 0 24 24" fill="currentColor" style={OVERLAY_STYLE.countBox.iconSize}>
-              <circle cx="12" cy="12" r="3" />
-              <path d="M12 2 C 18 2 22 12 12 22 C 2 12 6 2 12 2" stroke="currentColor" strokeWidth="2" fill="none" />
-            </svg>
-          }
-        />
-        <CountBox
-          ref={fallRef}
-          label="フォール"
-          count={glissandoDownCount}
-          color={toCssColor(TECHNIQUE_COLORS.fall)}
-          borderColor={toCssColor(TECHNIQUE_COLORS.fall)}
-          icon={
-            <svg viewBox="0 0 24 24" fill="currentColor" style={OVERLAY_STYLE.countBox.iconSize}>
-              <path d="M5 6 C5 6 10 6 12 10 C14 14 18 18 18 18" stroke="currentColor" strokeWidth="3" fill="none" strokeLinecap="round" />
-              <path d="M15 18 L19 18 L19 14" stroke="currentColor" strokeWidth="3" fill="none" strokeLinecap="round" strokeLinejoin="round" />
-            </svg>
-          }
-        />
-        <CountBox
-          ref={vibratoRef}
-          label="ビブラート"
-          count={vibratoCount}
-          color={toCssColor(TECHNIQUE_COLORS.vibrato)}
-          borderColor={toCssColor(TECHNIQUE_COLORS.vibrato)}
-          icon={
-            <svg viewBox="0 0 24 24" fill="currentColor" style={OVERLAY_STYLE.countBox.iconSize}>
-              <path d="M2 12 Q 5 6 8 12 T 14 12 T 20 12" stroke="currentColor" strokeWidth="3" fill="none" strokeLinecap="round" />
-            </svg>
-          }
-        />
+        {Object.values(TECHNIQUE_CONFIG).map((conf) => (
+          <CountBox
+            key={conf.id}
+            ref={refs[conf.id]}
+            label={conf.label}
+            count={counts[conf.id]}
+            color={toCssColor(conf.color)}
+            borderColor={toCssColor(conf.color)}
+            icon={<div style={{ ...OVERLAY_STYLE.countBox.iconSize, display: 'flex', alignItems: 'center', justifyContent: 'center', marginTop: '-2px' }}>{conf.icon}</div>}
+          />
+        ))}
       </div>
     </div>
   )
