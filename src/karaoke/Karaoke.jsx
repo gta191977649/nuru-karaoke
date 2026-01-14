@@ -158,115 +158,58 @@ function Karaoke() {
       ) : null}
       <div className="karaoke-stage">
         <div className="karaoke-screen">
-        <div className="top-section">
-          <div className="pitch-monitor-bar">
-            <div className="pitch-label">音程</div>
-
-            <div className="pitch-graph">
-              <svg className="karaokeVisual" preserveAspectRatio="none" viewBox="0 0 300 50" aria-hidden="true">
-                <path
-                  d="M0,10 L300,10 M0,20 L300,20 M0,30 L300,30 M0,40 L300,40"
-                  stroke="rgba(255,255,255,0.1)"
-                  strokeWidth="1"
-                  fill="none"
-                />
-                <text x="150" y="25" fill="#00ccff" fontSize="10" textAnchor="middle">
-                  間奏
-                </text>
-                <polyline
-                  points="0,40 20,30 40,10 60,10 80,20 100,20 120,35 140,30 160,10 180,10 200,25 220,25 240,40"
-                  fill="none"
-                  stroke="#f1c40f"
-                  strokeWidth="2"
-                  markerMid="url(#dot)"
-                />
-                <defs>
-                  <marker id="dot" viewBox="0 0 10 10" refX="5" refY="5" markerWidth="6" markerHeight="6">
-                    <circle cx="5" cy="5" r="4" fill="#f1c40f" />
-                  </marker>
-                </defs>
-              </svg>
+          <div className="top-section">
+            <div className="melody-guide">
+              <MelodyGuideCanvas
+                className="melodyGuideCanvas"
+                reference={reference}
+                historyRef={pitchHistoryRef}
+                lastPitchRef={lastPitchRef}
+                currentTimeRef={currentTimeRef}
+                transpositionRef={transpositionRef}
+                rmsGate={micRmsGate}
+                gateUserByTarget
+                width={1500}
+                height={200}
+              />
             </div>
+          </div>
 
-            <div className="scoring-panel">
-              <div className="score-status">
-                <span className="score-percent">{scorePercent}%</span>
-                <div className="status-badge">採点中</div>
+          <div className="bottom-section">
+            <div className="lyrics-container">
+              <div className={`lyric-row ${lines.currentAlign}`}>
+                <span className="text">
+                  <span
+                    className="karaokeTextWrap"
+                    style={{
+                      '--karaoke-progress': `${lines.activeInPair === 0 ? progressPercent : 100}%`,
+                    }}
+                  >
+                    <span className="karaokeTextBase">{renderRubySegments(lines.current.segments)}</span>
+                    <span className="karaokeTextFill" aria-hidden="true">
+                      {renderRubySegments(lines.current.segments)}
+                    </span>
+                  </span>
+                </span>
               </div>
-              <div className="technique-counters">
-                <div className="tech-item blue">
-                  <span>こぶし</span>
-                  <span className="tech-count">
-                    000<small>回</small>
+
+              <div className={`lyric-row ${lines.nextAlign}`}>
+                <span className="text">
+                  <span
+                    className="karaokeTextWrap"
+                    style={{
+                      '--karaoke-progress': `${lines.activeInPair === 1 ? progressPercent : 0}%`,
+                    }}
+                  >
+                    <span className="karaokeTextBase">{renderRubySegments(lines.next.segments)}</span>
+                    <span className="karaokeTextFill" aria-hidden="true">
+                      {renderRubySegments(lines.next.segments)}
+                    </span>
                   </span>
-                </div>
-                <div className="tech-item red">
-                  <span>しゃくり</span>
-                  <span className="tech-count">
-                    004<small>回</small>
-                  </span>
-                </div>
-                <div className="tech-item yellow">
-                  <span>ビブラート</span>
-                  <span className="tech-count">
-                    044<small>秒</small>
-                  </span>
-                </div>
+                </span>
               </div>
             </div>
           </div>
-
-          <div className="melody-guide">
-            <MelodyGuideCanvas
-              className="melodyGuideCanvas"
-              reference={reference}
-              historyRef={pitchHistoryRef}
-              lastPitchRef={lastPitchRef}
-              currentTimeRef={currentTimeRef}
-              transpositionRef={transpositionRef}
-              rmsGate={micRmsGate}
-              gateUserByTarget
-              width={900}
-              height={200}
-            />
-          </div>
-        </div>
-
-        <div className="bottom-section">
-          <div className="lyrics-container">
-            <div className={`lyric-row ${lines.currentAlign}`}>
-              <span className="text">
-                <span
-                  className="karaokeTextWrap"
-                  style={{
-                    '--karaoke-progress': `${lines.activeInPair === 0 ? progressPercent : 100}%`,
-                  }}
-                >
-                  <span className="karaokeTextBase">{renderRubySegments(lines.current.segments)}</span>
-                  <span className="karaokeTextFill" aria-hidden="true">
-                    {renderRubySegments(lines.current.segments)}
-                  </span>
-                </span>
-              </span>
-            </div>
-
-            <div className={`lyric-row ${lines.nextAlign}`}>
-              <span className="text">
-                <span
-                  className="karaokeTextWrap"
-                  style={{
-                    '--karaoke-progress': `${lines.activeInPair === 1 ? progressPercent : 0}%`,
-                  }}
-                >
-                  <span className="karaokeTextBase">{renderRubySegments(lines.next.segments)}</span>
-                  <span className="karaokeTextFill" aria-hidden="true">
-                    {renderRubySegments(lines.next.segments)}
-                  </span>
-                </span>
-              </span>
-            </div>
-          </div>
-        </div>
         </div>
       </div>
     </div>

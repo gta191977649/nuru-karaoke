@@ -388,9 +388,9 @@ function MelodyGuideCanvas({
         const gapThreshold = NOTE_MERGE_CONFIG.gapThresholdSec
         const historyStep = history.length > 1
           ? Math.max(
-              0.02,
-              Math.min(0.2, (history[history.length - 1].t - history[0].t) / (history.length - 1)),
-            )
+            0.02,
+            Math.min(0.2, (history[history.length - 1].t - history[0].t) / (history.length - 1)),
+          )
           : 0.08
         const nextTime = (idx) =>
           idx + 1 < history.length ? history[idx + 1].t : history[idx].t + historyStep
@@ -682,7 +682,193 @@ function MelodyGuideCanvas({
     app.renderer.resize(width, height)
   }, [width, height])
 
-  return <div ref={containerRef} className={className} style={style} />
+  return (
+    <div className={className} style={{ ...style, position: 'relative' }}>
+      <div ref={containerRef} style={{ width: '100%', height: '100%' }} />
+      <KaraokeOverlay
+        shakuriCount={15}
+        kobushiCount={7}
+        vibratoCount={33}
+        currentSection={1}
+        totalSections={6}
+      />
+    </div>
+  )
+}
+
+// Styling Configuration
+const OVERLAY_STYLE = {
+  container: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    width: '100%',
+    height: '100%',
+    pointerEvents: 'none',
+    display: 'flex',
+    flexDirection: 'column',
+    justifyContent: 'space-between',
+    padding: '8px 12px',
+    boxSizing: 'border-box',
+    fontFamily: '"Hiragino Kaku Gothic ProN", "Meiryo", sans-serif',
+  },
+  perfInterval: {
+    container: { alignSelf: 'flex-end', display: 'flex', alignItems: 'center', gap: 8 },
+    label: {
+      color: '#fff',
+      fontSize: 14,
+      fontWeight: 'bold',
+      textShadow: '0 1px 2px rgba(0,0,0,0.8)',
+      marginRight: 6,
+    },
+    circle: {
+      width: 24,
+      height: 24,
+      borderRadius: '50%',
+      display: 'flex',
+      alignItems: 'center',
+      justifyContent: 'center',
+      fontSize: 14,
+      fontWeight: '900',
+    },
+    activeCircle: {
+      background: 'linear-gradient(180deg, #ffeb3b 0%, #fbc02d 100%)',
+      border: '2px solid #fff',
+      color: '#000',
+      boxShadow: '0 0 8px rgba(255, 235, 59, 0.6)',
+    },
+    inactiveCircle: {
+      background: 'rgba(0,0,0,0.6)',
+      border: '1px solid #555',
+      color: '#888',
+      boxShadow: 'none',
+    },
+  },
+  countBox: {
+    container: {
+      display: 'flex',
+      gap: 12,
+      alignItems: 'flex-end',
+    },
+    box: {
+      background: 'linear-gradient(180deg, rgba(30,30,30,0.9) 0%, rgba(10,10,10,0.95) 100%)',
+      borderRadius: 8,
+      padding: '4px 10px',
+      display: 'flex',
+      alignItems: 'center',
+      gap: 10,
+      height: 32,
+      minWidth: 90,
+    },
+    label: { fontSize: 13, fontWeight: 'bold' },
+    count: {
+      color: '#fff',
+      fontSize: 18,
+      fontWeight: '900',
+      marginLeft: 'auto',
+      fontFamily: 'Arial, sans-serif',
+      lineHeight: 1,
+    },
+    iconSize: { width: 15, height: 15 },
+  },
+}
+
+function KaraokeOverlay({
+  shakuriCount = 0,
+  kobushiCount = 0,
+  vibratoCount = 0,
+  currentSection = 0,
+  totalSections = 6,
+}) {
+  return (
+    <div style={OVERLAY_STYLE.container}>
+      <div style={OVERLAY_STYLE.perfInterval.container}>
+        <span style={OVERLAY_STYLE.perfInterval.label}>演奏区間</span>
+        {Array.from({ length: totalSections }).map((_, i) => {
+          const num = i + 1
+          const isActive = num === currentSection
+          const style = {
+            ...OVERLAY_STYLE.perfInterval.circle,
+            ...(isActive ? OVERLAY_STYLE.perfInterval.activeCircle : OVERLAY_STYLE.perfInterval.inactiveCircle),
+          }
+          return (
+            <div key={num} style={style}>
+              {num}
+            </div>
+          )
+        })}
+      </div>
+
+      <div style={OVERLAY_STYLE.countBox.container}>
+        <CountBox
+          label="しゃくり"
+          count={shakuriCount}
+          color="#d35400"
+          borderColor="#e67e22"
+          icon={
+            <svg viewBox="0 0 24 24" fill="currentColor" style={OVERLAY_STYLE.countBox.iconSize}>
+              <path d="M5 18 C5 18 10 18 12 14 C14 10 18 6 18 6" stroke="currentColor" strokeWidth="3" fill="none" strokeLinecap="round" />
+              <path d="M15 6 L19 6 L19 10" stroke="currentColor" strokeWidth="3" fill="none" strokeLinecap="round" strokeLinejoin="round" />
+            </svg>
+          }
+        />
+        <CountBox
+          label="こぶし"
+          count={kobushiCount}
+          color="#00838f"
+          borderColor="#00bcd4"
+          icon={
+            <svg viewBox="0 0 24 24" fill="currentColor" style={OVERLAY_STYLE.countBox.iconSize}>
+              <circle cx="12" cy="12" r="7" stroke="currentColor" strokeWidth="3" fill="none" />
+              <circle cx="12" cy="12" r="2" fill="currentColor" />
+            </svg>
+          }
+        />
+        <CountBox
+          label="フォール"
+          count={8}
+          color="#6a1b9a"
+          borderColor="#ab47bc"
+          icon={
+            <svg viewBox="0 0 24 24" fill="currentColor" style={OVERLAY_STYLE.countBox.iconSize}>
+              <path d="M5 6 C5 6 10 6 12 10 C14 14 18 18 18 18" stroke="currentColor" strokeWidth="3" fill="none" strokeLinecap="round" />
+              <path d="M15 18 L19 18 L19 14" stroke="currentColor" strokeWidth="3" fill="none" strokeLinecap="round" strokeLinejoin="round" />
+            </svg>
+          }
+        />
+        <CountBox
+          label="ビブラート"
+          count={vibratoCount}
+          color="#2e7d32"
+          borderColor="#66bb6a"
+          labelColor="#4caf50"
+          icon={
+            <svg viewBox="0 0 24 24" fill="currentColor" style={{ ...OVERLAY_STYLE.countBox.iconSize, width: 22, height: 22 }}>
+              <path d="M2 12 Q 5 20, 8 12 T 14 12 T 20 12" stroke="currentColor" strokeWidth="3" fill="none" />
+            </svg>
+          }
+        />
+      </div>
+    </div>
+  )
+}
+
+function CountBox({ label, count, color, borderColor, icon, labelColor }) {
+  return (
+    <div
+      style={{
+        ...OVERLAY_STYLE.countBox.box,
+        border: `2px solid ${borderColor}`,
+        boxShadow: `0 0 5px ${borderColor}40, inset 0 1px 0 rgba(255,255,255,0.2)`,
+      }}
+    >
+      <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+        <span style={{ ...OVERLAY_STYLE.countBox.label, color: labelColor || '#eee' }}>{label}</span>
+        <span style={{ color: borderColor, display: 'flex', alignItems: 'center' }}>{icon}</span>
+      </div>
+      <div style={OVERLAY_STYLE.countBox.count}>{count}</div>
+    </div>
+  )
 }
 
 export default MelodyGuideCanvas
