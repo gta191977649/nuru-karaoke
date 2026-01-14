@@ -19,7 +19,7 @@ const COLORS = {
 }
 
 const ALPHAS = {
-  background: 0.3,
+  background: 0.0,
   grid: 0.2,
   melodyFill: 0.5,
   melodyOutFill: 0.5,

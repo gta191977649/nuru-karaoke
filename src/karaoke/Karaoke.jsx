@@ -170,7 +170,7 @@ function Karaoke() {
                 rmsGate={micRmsGate}
                 gateUserByTarget
                 width={800}
-                height={200}
+                height={220}
               />
             </div>
           </div>
