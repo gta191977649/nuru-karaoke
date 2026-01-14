@@ -1,12 +1,9 @@
 import { useRef, useEffect, useState } from 'react'
-import { SingingTechniqueDetector } from '../../engine/analysis/SingingTechniqueDetector.js'
-// Ensure plugins are registered by importing them (side-effect)
-import '../../engine/analysis/plugins/VibratoPlugin.js'
-import '../../engine/analysis/plugins/KobushiPlugin.js'
-import '../../engine/analysis/plugins/GlissandoPlugin.js'
+// We don't import direct detector or plugins here anymore.
+// They are loaded inside the worker.
 
 export function useSingingTechnique(pitchEngine) {
-    const detectorRef = useRef(null)
+    const workerRef = useRef(null)
 
     // Accumulated counts for the session
     const [counts, setCounts] = useState({
@@ -20,126 +17,106 @@ export function useSingingTechnique(pitchEngine) {
     const [activeTechniques, setActiveTechniques] = useState({})
 
     // Trace history for debug graph (Circular buffers)
-    const historySize = 300 // Approx 5s at 60fps? No, we update at 15fps... 300 frames * 60ms = 18s. Let's stick to ~300.
+    const historySize = 300
     const historyRef = useRef({
         vibrato: new Array(historySize).fill(0),
         kobushi: new Array(historySize).fill(0),
         glissando: new Array(historySize).fill(0)
     })
 
-    // Initialize detector only once
-    if (!detectorRef.current) {
-        detectorRef.current = new SingingTechniqueDetector()
-    }
-
     useEffect(() => {
         if (!pitchEngine) return
 
-        const detector = detectorRef.current
-        let frameId
-        let lastAnalyze = 0
-        let lastHistoryUpdate = 0
-        const historyUpdateInterval = 50 // Update history ~20fps?
+        // Initialize Worker
+        // Note: Vite/Webpack handling of new URL(..., import.meta.url)
+        const worker = new Worker(
+            new URL('../../engine/analysis/worker/technique.worker.js', import.meta.url),
+            { type: 'module' }
+        )
+        workerRef.current = worker
+
+        // Init Worker Loop
+        worker.postMessage({ type: 'init' })
+
+        // Handle Worker Messages
+        worker.onmessage = (e) => {
+            const { type, events, activeTechniques: activeState } = e.data
+
+            if (type === 'update') {
+                // 1. Update Counts
+                if (events && Object.keys(events).length > 0) {
+                    setCounts(prev => {
+                        const next = { ...prev }
+                        let changed = false
+                        for (const key in events) {
+                            if (events[key]) {
+                                const evt = events[key]
+                                const type = evt.type || key
+                                if (next[type] !== undefined) {
+                                    next[type]++
+                                    changed = true
+                                }
+                            }
+                        }
+                        return changed ? next : prev
+                    })
+                }
+
+                // 2. Update Active State & History
+                // We receive full 'activeState' from worker
+                if (activeState) {
+                    const active = activeState
+                    const hist = historyRef.current
+
+                    // Vibrato
+                    hist.vibrato.push(active.vibrato ? 1.0 : 0.0)
+                    if (hist.vibrato.length > historySize) hist.vibrato.shift()
+
+                    // Kobushi
+                    hist.kobushi.push(active.kobushi ? 1.0 : 0.0)
+                    if (hist.kobushi.length > historySize) hist.kobushi.shift()
+
+                    // Glissando
+                    let gVal = 0.0
+                    if (active.glissup) gVal = 1.0
+                    else if (active.glissdown) gVal = -1.0
+
+                    hist.glissando.push(gVal)
+                    if (hist.glissando.length > historySize) hist.glissando.shift()
+
+                    // Force update for UI
+                    setActiveTechniques(prev => {
+                        // Always return new object to force re-render (for graphs scrolling)
+                        // Or we can just clone activeState
+                        return { ...active }
+                    })
+                }
+            }
+        }
 
         // Subscribe to high-frequency pitch updates
         const unsubscribe = pitchEngine.onPitch((result) => {
             const time = result.time || (performance.now() / 1000)
             const f0 = result.f0Hz
-
-            // Push data
-            detector.push(time, f0)
-        })
-
-        // Setup Analysis Loop
-        const loop = (timestamp) => {
-            frameId = requestAnimationFrame(loop)
-
-            // Throttle analysis to ~15fps (every 60ms) to save CPU
-            if (timestamp - lastAnalyze < 60) return;
-            lastAnalyze = timestamp;
-
-            // Run detection
-            const newEvents = detector.analyze()
-
-            // Update Counts if events detected
-            if (Object.keys(newEvents).length > 0) {
-                setCounts(prev => {
-                    const next = { ...prev }
-                    let changed = false
-                    for (const key in newEvents) {
-                        if (newEvents[key]) {
-                            const evt = newEvents[key]
-                            const type = evt.type || key
-
-                            if (next[type] !== undefined) {
-                                next[type]++
-                                changed = true
-                            }
-                        }
-                    }
-                    return changed ? next : prev
-                })
-            }
-
-            // Update History Buffers
-            const active = detector.activeTechniques
-            const hist = historyRef.current
-
-            // Vibrato
-            hist.vibrato.push(active.vibrato ? 1.0 : 0.0)
-            if (hist.vibrato.length > historySize) hist.vibrato.shift()
-
-            // Kobushi
-            hist.kobushi.push(active.kobushi ? 1.0 : 0.0)
-            if (hist.kobushi.length > historySize) hist.kobushi.shift()
-
-            // Glissando (Up = 1, Down = -1, None = 0)
-            let gVal = 0.0
-            if (active.glissup) gVal = 1.0
-            else if (active.glissdown) gVal = -1.0 // WaveformPixi centers 0, so -1 is bottom, 1 is top.
-
-            hist.glissando.push(gVal)
-            if (hist.glissando.length > historySize) hist.glissando.shift()
-
-            // Update Active State (for debug UI)
-            // This triggers the re-render which will pass the updated arrays to children
-            // Creating new object ref for history arrays not needed if WaveformPixi reads direct,
-            // but typically React needs prop check. WaveformPixi memoizes on `data`.
-            // We should stick to passing the Ref or clones.
-
-            setActiveTechniques(prev => {
-                const next = { ...active }
-                // Shallow compare
-                let diff = false
-                const keys = new Set([...Object.keys(prev), ...Object.keys(next)])
-                for (const k of keys) {
-                    if (prev[k] !== next[k]) {
-                        diff = true
-                        break
-                    }
-                }
-                // Always trigger update if history changed?
-                // If we rely on activeTechniques state to drive the render loop,
-                // we might not render if active state is constant (e.g. constant off).
-                // But we want the graph to scroll!
-                // So we MUST force update every frame or at least frequently.
-                // Let's modify the comparison to always return new object if we want continuous graph updates?
-                // Yes, graph needs to scroll.
-                return next
+            // Push to Worker
+            worker.postMessage({
+                type: 'push',
+                payload: { time, f0 }
             })
-        }
-
-        frameId = requestAnimationFrame(loop)
+        })
 
         return () => {
             unsubscribe()
-            cancelAnimationFrame(frameId)
+            worker.postMessage({ type: 'stop' })
+            worker.terminate()
         }
     }, [pitchEngine])
 
     const resetCounts = () => {
         setCounts({ vibrato: 0, kobushi: 0, glissup: 0, glissdown: 0 })
-        detectorRef.current.reset()
+        if (workerRef.current) {
+            workerRef.current.postMessage({ type: 'reset' })
+        }
         // Reset history
         const hist = historyRef.current
         hist.vibrato.fill(0)
@@ -149,7 +126,7 @@ export function useSingingTechnique(pitchEngine) {
 
     return {
         counts,
-        activeTechniques, // { vibrato: bool, kobushi: bool, glissando: bool }
+        activeTechniques,
         techniqueHistory: {
             vibrato: [...historyRef.current.vibrato],
             kobushi: [...historyRef.current.kobushi],

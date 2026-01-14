@@ -190,4 +190,153 @@ const createParticleSystem = (initialConfig) => {
   }
 }
 
-export { DEFAULT_PARTICLE_CONFIG, cloneParticleConfig, createParticleSystem }
+// ... existing code ...
+
+const createComboSystem = () => {
+  const particleContainer = new ParticleContainer({
+    dynamicProperties: {
+      position: true,
+      scale: true,
+      rotation: true,
+      color: true,
+      alpha: true
+    }
+  })
+  particleContainer.texture = Texture.WHITE
+
+  // Pool for standard particles (trails/bursts)
+  const particlePool = []
+  const activeParticles = [] // Visual particles (trails/sparks)
+
+  // Active "Heads" (logical agents moving from A to B)
+  const activeHeads = []
+
+  // Helper: Spawn a visual particle
+  const spawnVisual = (x, y, color, type = 'trail') => {
+    const p = particlePool.pop() || new Particle({ texture: Texture.WHITE })
+    p.x = x
+    p.y = y
+    p.anchorX = 0.5
+    p.anchorY = 0.5
+    p.rotation = Math.random() * Math.PI * 2
+    p.tint = color
+
+    let life = 0.5
+    let vx = 0
+    let vy = 0
+    let scale = 1.0
+    let decay = 1.0 // alpha decay
+
+    if (type === 'trail') {
+      life = randRange(0.3, 0.6)
+      scale = randRange(2.5, 5.0)
+      p.alpha = 0.6
+      p.scaleX = scale
+      p.scaleY = scale
+      // Slight drift
+      vx = randRange(-20, 20)
+      vy = randRange(-20, 20)
+    } else if (type === 'burst') {
+      life = randRange(0.4, 0.8)
+      scale = randRange(4.0, 8.0)
+      p.alpha = 1.0
+      p.scaleX = scale
+      p.scaleY = scale
+      // Explosion
+      const angle = randRange(0, Math.PI * 2)
+      const speed = randRange(50, 200)
+      vx = Math.cos(angle) * speed
+      vy = Math.sin(angle) * speed
+    } else if (type === 'head') {
+      // The glowing head itself (drawn as a particle for simplicity?)
+      // Actually head is managed separately, but we can emit a "glare" particle
+      // that lives for 1 frame? No, better to just emit trails.
+    }
+
+    particleContainer.addParticle(p)
+    activeParticles.push({ p, vx, vy, life, maxLife: life, scale, type })
+  }
+
+  // API: Spawn a Combo Comet
+  const spawnCombo = (x, y, targetX, targetY, color) => {
+    activeHeads.push({
+      x, y,
+      targetX, targetY,
+      color,
+      progress: 0,
+      duration: 0.6 // Seconds to reach target
+    })
+  }
+
+  const update = (deltaSec) => {
+    // 1. Update Heads
+    for (let i = activeHeads.length - 1; i >= 0; i--) {
+      const head = activeHeads[i]
+      head.progress += deltaSec / head.duration
+
+      if (head.progress >= 1) {
+        // Reached target -> Burst!
+        for (let k = 0; k < 20; k++) {
+          spawnVisual(head.targetX, head.targetY, head.color, 'burst')
+        }
+        activeHeads.splice(i, 1)
+        continue
+      }
+
+      // Move logic (Ease In Out?)
+      // Simple lerp:
+      // const t = head.progress
+      const t = head.progress * (2 - head.progress) // Ease out? 
+
+      const curX = lerp(head.x, head.targetX, t)
+      const curY = lerp(head.y, head.targetY, t)
+
+      // Emit Trail
+      // Dense trails: emit multiple per frame?
+      // e.g. 2 per frame
+      for (let k = 0; k < 2; k++) {
+        // Jitter position slightly
+        spawnVisual(curX + randRange(-5, 5), curY + randRange(-5, 5), head.color, 'trail')
+      }
+    }
+
+    // 2. Update Visual Particles
+    for (let i = activeParticles.length - 1; i >= 0; i--) {
+      const entry = activeParticles[i]
+      entry.life -= deltaSec
+
+      if (entry.life <= 0) {
+        particleContainer.removeParticle(entry.p)
+        particlePool.push(entry.p)
+        activeParticles.splice(i, 1)
+        continue
+      }
+
+      entry.p.x += entry.vx * deltaSec
+      entry.p.y += entry.vy * deltaSec
+
+      const t = 1 - (entry.life / entry.maxLife) // 0 to 1
+
+      // Fade out
+      entry.p.alpha = 1 - t
+
+      // Scale down
+      const s = entry.scale * (1 - t * 0.5)
+      entry.p.scaleX = s
+      entry.p.scaleY = s
+    }
+  }
+
+  const destroy = () => {
+    particleContainer.destroy()
+  }
+
+  return {
+    container: particleContainer,
+    spawnCombo,
+    update,
+    destroy
+  }
+}
+
+export { DEFAULT_PARTICLE_CONFIG, cloneParticleConfig, createParticleSystem, createComboSystem }

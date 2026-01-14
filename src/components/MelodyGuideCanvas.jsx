@@ -1,8 +1,15 @@
-import { useEffect, useRef } from 'react'
+import { useEffect, useRef, forwardRef } from 'react'
 import { Application, Container, Graphics } from 'pixi.js'
 import { BloomFilter } from 'pixi-filters'
 import { getTargetMidiAtTime } from '../engine/audio/midi/referenceMelody.js'
-import { DEFAULT_PARTICLE_CONFIG, createParticleSystem } from './particles/particleSystem.js'
+import { DEFAULT_PARTICLE_CONFIG, createParticleSystem, createComboSystem } from './particles/particleSystem.js'
+
+const TECHNIQUE_COLORS = {
+  vibrato: 0x2CFF05,    // Green
+  kobushi: 0x00FFF0,    // Light Blue
+  shakuri: 0xFF13F0,    // Purple
+  fall: 0xFFBF00,       // Orange
+}
 
 const COLORS = {
   background: 0x000000,
@@ -136,6 +143,13 @@ function MelodyGuideCanvas({
   style,
 }) {
   const containerRef = useRef(null)
+
+  // Refs for animation targets
+  const shakuriRef = useRef(null)
+  const kobushiRef = useRef(null)
+  const fallRef = useRef(null)
+  const vibratoRef = useRef(null)
+
   const pixiRef = useRef({
     app: null,
     bg: null,
@@ -146,12 +160,19 @@ function MelodyGuideCanvas({
     userGlowContainer: null,
     userGlow: null,
     particleSystem: null,
+    comboSystem: null,
     playhead: null,
     lastSize: { w: 0, h: 0 },
     lastGrid: { w: 0, h: 0, lineCount: 12 },
     lastCenterPitch: null,
     lastCenterSnap: null,
     centerSnap: null,
+    lastCounts: {
+      shakuri: 0,
+      kobushi: 0,
+      fall: 0,
+      vibrato: 0
+    }
   })
   const stateRef = useRef({
     reference,
@@ -167,7 +188,23 @@ function MelodyGuideCanvas({
     maxMidi,
     smoothAlpha,
     particleConfig,
+    glissandoUpCount,
+    kobushiCount,
+    glissandoDownCount,
+    vibratoCount
   })
+
+  const triggerComboHit = (ref, color) => {
+    if (!ref.current) return
+    ref.current.animate([
+      { transform: 'scale(1)', filter: 'brightness(1)', backgroundColor: 'transparent' },
+      { transform: 'scale(1.3)', filter: 'brightness(2)', backgroundColor: color, offset: 0.1 },
+      { transform: 'scale(1)', filter: 'brightness(1)', backgroundColor: 'transparent' }
+    ], {
+      duration: 800,
+      easing: 'ease-out'
+    })
+  }
 
   useEffect(() => {
     stateRef.current = {
@@ -184,6 +221,10 @@ function MelodyGuideCanvas({
       maxMidi,
       smoothAlpha,
       particleConfig,
+      glissandoUpCount,
+      kobushiCount,
+      glissandoDownCount,
+      vibratoCount
     }
   }, [
     reference,
@@ -199,6 +240,10 @@ function MelodyGuideCanvas({
     maxMidi,
     smoothAlpha,
     particleConfig,
+    glissandoUpCount,
+    kobushiCount,
+    glissandoDownCount,
+    vibratoCount
   ])
 
   useEffect(() => {
@@ -235,12 +280,13 @@ function MelodyGuideCanvas({
       const userGlowContainer = new Container()
       const userGlow = new Graphics()
       const particleSystem = createParticleSystem(particleConfig)
+      const comboSystem = createComboSystem()
       const playhead = new Graphics()
 
-      userGlowContainer.addChild(particleSystem.container, userGlow)
+      userGlowContainer.addChild(particleSystem.container, comboSystem.container, userGlow)
       userGlowContainer.filters = [
         new BloomFilter({
-          strength: 5,
+          strength: 8,
           quality: 4,
           threshold: 0.2,
         }),
@@ -257,12 +303,19 @@ function MelodyGuideCanvas({
         userGlowContainer,
         userGlow,
         particleSystem,
+        comboSystem,
         playhead,
         lastSize: { w: 0, h: 0 },
         lastGrid: { w: 0, h: 0, lineCount: 12 },
         lastCenterPitch: null,
         lastCenterSnap: null,
         centerSnap: null,
+        lastCounts: {
+          shakuri: glissandoUpCount,
+          kobushi: kobushiCount,
+          fall: glissandoDownCount,
+          vibrato: vibratoCount
+        }
       }
 
       app.ticker.add(() => {
@@ -275,6 +328,54 @@ function MelodyGuideCanvas({
         const deltaSec = activeApp.ticker.deltaMS / 1000
 
         const snap = stateRef.current
+
+        // Update Combo System logic
+        if (state.comboSystem) {
+          state.comboSystem.update(deltaSec)
+
+          // Check for new techniques
+          const curShakuri = snap.glissandoUpCount || 0
+          const curKobushi = snap.kobushiCount || 0
+          const curFall = snap.glissandoDownCount || 0
+          const curVibrato = snap.vibratoCount || 0
+
+          const last = state.lastCounts
+
+          // Detect changes (trigger on increase)
+          // Start Position: Playhead
+          const startX = activeApp.screen.width * 0.7
+          const startY = Number.isFinite(state.playheadDotY) ? state.playheadDotY : h / 2
+
+          // Targets (Relative to canvas size)
+          // Approx based on layout:
+          // Shakuri: ~60px
+          // Kobushi: ~170px
+          // Fall: ~280px
+          // Vibrato: ~390px
+          const targetY = h - 30
+
+          if (curShakuri > last.shakuri) {
+            state.comboSystem.spawnCombo(startX, startY, 60, targetY, TECHNIQUE_COLORS.shakuri)
+            setTimeout(() => triggerComboHit(shakuriRef, toCssColor(TECHNIQUE_COLORS.shakuri)), 600)
+            last.shakuri = curShakuri
+          }
+          if (curKobushi > last.kobushi) {
+            state.comboSystem.spawnCombo(startX, startY, 170, targetY, TECHNIQUE_COLORS.kobushi)
+            setTimeout(() => triggerComboHit(kobushiRef, toCssColor(TECHNIQUE_COLORS.kobushi)), 600)
+            last.kobushi = curKobushi
+          }
+          if (curFall > last.fall) {
+            state.comboSystem.spawnCombo(startX, startY, 280, targetY, TECHNIQUE_COLORS.fall)
+            setTimeout(() => triggerComboHit(fallRef, toCssColor(TECHNIQUE_COLORS.fall)), 600)
+            last.fall = curFall
+          }
+          if (curVibrato > last.vibrato) {
+            state.comboSystem.spawnCombo(startX, startY, 390, targetY, TECHNIQUE_COLORS.vibrato)
+            setTimeout(() => triggerComboHit(vibratoRef, toCssColor(TECHNIQUE_COLORS.vibrato)), 600)
+            last.vibrato = curVibrato
+          }
+        }
+
         const songTimeSec = snap.currentTimeRef?.current ?? 0
         const transposition = snap.transpositionRef?.current ?? 0
         const notesData = snap.reference?.notes || []
@@ -604,6 +705,9 @@ function MelodyGuideCanvas({
               : userMidi
             const { y, inRange } = midiToY(mappedMidi)
             playheadDotY = y
+            // Expose y for combo system
+            state.playheadDotY = y
+
             const isCorrectKey =
               Number.isFinite(transposedTarget) &&
               mod12(Math.round(userMidi)) === mod12(Math.round(transposedTarget))
@@ -659,7 +763,9 @@ function MelodyGuideCanvas({
       active = false
       const app = pixiRef.current.app
       const particleSystem = pixiRef.current.particleSystem
+      const comboSystem = pixiRef.current.comboSystem
       if (particleSystem) particleSystem.destroy()
+      if (comboSystem) comboSystem.destroy()
       if (app) app.destroy(true)
       if (containerRef.current) containerRef.current.innerHTML = ''
       pixiRef.current = {
@@ -672,12 +778,16 @@ function MelodyGuideCanvas({
         userGlowContainer: null,
         userGlow: null,
         particleSystem: null,
+        comboSystem: null,
         playhead: null,
         lastSize: { w: 0, h: 0 },
         lastGrid: { w: 0, h: 0, lineCount: 12 },
         lastCenterPitch: null,
         lastCenterSnap: null,
         centerSnap: null,
+        lastCounts: {
+          shakuri: 0, kobushi: 0, fall: 0, vibrato: 0
+        }
       }
     }
   }, [])
@@ -698,6 +808,10 @@ function MelodyGuideCanvas({
         vibratoCount={vibratoCount}
         currentSection={currentSection}
         totalSections={totalSections}
+        shakuriRef={shakuriRef}
+        kobushiRef={kobushiRef}
+        fallRef={fallRef}
+        vibratoRef={vibratoRef}
       />
     </div>
   )
@@ -780,6 +894,9 @@ const OVERLAY_STYLE = {
   },
 }
 
+// Helper to convert Pixi hex to CSS hex
+const toCssColor = (hex) => '#' + hex.toString(16).padStart(6, '0')
+
 function KaraokeOverlay({
   glissandoUpCount = 0,
   kobushiCount = 0,
@@ -787,6 +904,10 @@ function KaraokeOverlay({
   vibratoCount = 0,
   currentSection = 0,
   totalSections = 6,
+  shakuriRef,
+  kobushiRef,
+  fallRef,
+  vibratoRef,
 }) {
   return (
     <div style={OVERLAY_STYLE.container}>
@@ -809,10 +930,11 @@ function KaraokeOverlay({
 
       <div style={OVERLAY_STYLE.countBox.container}>
         <CountBox
+          ref={shakuriRef}
           label="しゃくり"
           count={glissandoUpCount}
-          color="#d35400"
-          borderColor="#e67e22"
+          color={toCssColor(TECHNIQUE_COLORS.shakuri)}
+          borderColor={toCssColor(TECHNIQUE_COLORS.shakuri)}
           icon={
             <svg viewBox="0 0 24 24" fill="currentColor" style={OVERLAY_STYLE.countBox.iconSize}>
               <path d="M5 18 C5 18 10 18 12 14 C14 10 18 6 18 6" stroke="currentColor" strokeWidth="3" fill="none" strokeLinecap="round" />
@@ -821,22 +943,24 @@ function KaraokeOverlay({
           }
         />
         <CountBox
+          ref={kobushiRef}
           label="こぶし"
           count={kobushiCount}
-          color="#00838f"
-          borderColor="#00bcd4"
+          color={toCssColor(TECHNIQUE_COLORS.kobushi)}
+          borderColor={toCssColor(TECHNIQUE_COLORS.kobushi)}
           icon={
             <svg viewBox="0 0 24 24" fill="currentColor" style={OVERLAY_STYLE.countBox.iconSize}>
-              <circle cx="12" cy="12" r="7" stroke="currentColor" strokeWidth="3" fill="none" />
-              <circle cx="12" cy="12" r="2" fill="currentColor" />
+              <circle cx="12" cy="12" r="3" />
+              <path d="M12 2 C 18 2 22 12 12 22 C 2 12 6 2 12 2" stroke="currentColor" strokeWidth="2" fill="none" />
             </svg>
           }
         />
         <CountBox
+          ref={fallRef}
           label="フォール"
           count={glissandoDownCount}
-          color="#6a1b9a"
-          borderColor="#ab47bc"
+          color={toCssColor(TECHNIQUE_COLORS.fall)}
+          borderColor={toCssColor(TECHNIQUE_COLORS.fall)}
           icon={
             <svg viewBox="0 0 24 24" fill="currentColor" style={OVERLAY_STYLE.countBox.iconSize}>
               <path d="M5 6 C5 6 10 6 12 10 C14 14 18 18 18 18" stroke="currentColor" strokeWidth="3" fill="none" strokeLinecap="round" />
@@ -845,14 +969,14 @@ function KaraokeOverlay({
           }
         />
         <CountBox
+          ref={vibratoRef}
           label="ビブラート"
           count={vibratoCount}
-          color="#2e7d32"
-          borderColor="#66bb6a"
-          labelColor="#4caf50"
+          color={toCssColor(TECHNIQUE_COLORS.vibrato)}
+          borderColor={toCssColor(TECHNIQUE_COLORS.vibrato)}
           icon={
-            <svg viewBox="0 0 24 24" fill="currentColor" style={{ ...OVERLAY_STYLE.countBox.iconSize, width: 22, height: 22 }}>
-              <path d="M2 12 Q 5 20, 8 12 T 14 12 T 20 12" stroke="currentColor" strokeWidth="3" fill="none" />
+            <svg viewBox="0 0 24 24" fill="currentColor" style={OVERLAY_STYLE.countBox.iconSize}>
+              <path d="M2 12 Q 5 6 8 12 T 14 12 T 20 12" stroke="currentColor" strokeWidth="3" fill="none" strokeLinecap="round" />
             </svg>
           }
         />
@@ -861,9 +985,10 @@ function KaraokeOverlay({
   )
 }
 
-function CountBox({ label, count, color, borderColor, icon, labelColor }) {
+const CountBox = forwardRef(({ label, count, color, borderColor, icon, labelColor }, ref) => {
   return (
     <div
+      ref={ref}
       style={{
         ...OVERLAY_STYLE.countBox.box,
         border: `2px solid ${borderColor}`,
@@ -877,6 +1002,7 @@ function CountBox({ label, count, color, borderColor, icon, labelColor }) {
       <div style={OVERLAY_STYLE.countBox.count}>{count}</div>
     </div>
   )
-}
+})
+CountBox.displayName = 'CountBox'
 
 export default MelodyGuideCanvas
