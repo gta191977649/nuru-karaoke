@@ -1157,11 +1157,11 @@ function Synth({ onNavigateHome }) {
                   <Col xs={12} md={7}>
                     <div className="small text-muted mb-2">Mic Input</div>
                     <WaveformPixi data={pipelineStages.input} height={70} />
-                    <div className="small text-muted mt-3 mb-2">After DC Removal filter</div>
+                    <div className="small text-muted mt-3 mb-2">Post DC Removal filter</div>
                     <WaveformPixi data={pipelineStages.dcRemoved} height={70} />
-                    <div className="small text-muted mt-3 mb-2">After High Pass Filter (80HzCut)</div>
+                    <div className="small text-muted mt-3 mb-2">Post High Pass Filter (80HzCut)</div>
                     <WaveformPixi data={pipelineStages.hpf} height={70} />
-                    <div className="small text-muted mt-3 mb-2">After RMS Gate</div>
+                    <div className="small text-muted mt-3 mb-2">Post RMS Gate</div>
                     <WaveformPixi data={pipelineStages.gated} height={70} />
                     <div className="small text-muted mt-3 mb-2">Raw f0 Trace</div>
                     <WaveformPixi data={f0History.raw} height={60} color="#f1c40f" />
