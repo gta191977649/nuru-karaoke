@@ -239,14 +239,65 @@ function Synth({ onNavigateHome }) {
       return
     }
 
-    const analyser = pitchEngine.ensureDebugAnalyser?.({
-      fftSize: 2048,
-      smoothingTimeConstant: 0,
-      enableHpf,
-      hpfCutoffHz: DEFAULT_CONFIG.hpfCutoffHz,
-    })
-    setDebugAnalyser(analyser || null)
+    let cancelled = false
+    const attach = () => {
+      if (cancelled) return
+      const analyser = pitchEngine.ensureDebugAnalyser?.({
+        fftSize: 2048,
+        smoothingTimeConstant: 0,
+        enableHpf,
+        hpfCutoffHz: DEFAULT_CONFIG.hpfCutoffHz,
+      })
+      if (!analyser) {
+        console.warn('[Synth] debugAnalyser not ready, retrying...')
+        window.setTimeout(attach, 200)
+        return
+      }
+      // Validate analyser before setting
+      if (analyser instanceof AnalyserNode && analyser.frequencyBinCount > 0) {
+        setDebugAnalyser(analyser)
+      } else {
+        console.warn('[Synth] debugAnalyser invalid on attach', analyser)
+        // Retry if invalid? Or just wait for next attempt
+        window.setTimeout(attach, 200)
+      }
+    }
+    attach()
+    return () => {
+      cancelled = true
+    }
   }, [pitchEngine, micActive, enableHpf])
+
+  useEffect(() => {
+    if (!debugAnalyser || !micActive) return () => { }
+    const buffer = new Uint8Array(debugAnalyser.frequencyBinCount || 1)
+    let rafId = 0
+    let lastLog = 0
+    const tick = () => {
+      rafId = window.requestAnimationFrame(tick)
+      const now = performance.now()
+      if (now - lastLog < 500) return
+      lastLog = now
+      debugAnalyser.getByteFrequencyData(buffer)
+      let max = 0
+      let sum = 0
+      for (let i = 0; i < buffer.length; i += 1) {
+        const v = buffer[i]
+        if (v > max) max = v
+        sum += v
+      }
+      const avg = buffer.length ? sum / buffer.length : 0
+      console.debug('[debugAnalyser]', {
+        bins: buffer.length,
+        max: Math.round(max),
+        avg: Math.round(avg),
+      })
+    }
+    tick()
+    return () => {
+      if (rafId) window.cancelAnimationFrame(rafId)
+    }
+  }, [debugAnalyser, micActive])
 
   useEffect(() => {
     if (!state.midiName) {
@@ -876,6 +927,22 @@ function Synth({ onNavigateHome }) {
                       onClick={async () => {
                         try {
                           await startSharedMic()
+                          const analyser = pitchEngine.ensureDebugAnalyser?.({
+                            fftSize: 2048,
+                            smoothingTimeConstant: 0,
+                            enableHpf,
+                            hpfCutoffHz: DEFAULT_CONFIG.hpfCutoffHz,
+                          })
+                          if (!analyser) {
+                            console.warn('[Synth] debugAnalyser not ready after start')
+                          }
+                          // Extended validation
+                          if (analyser && analyser instanceof AnalyserNode && analyser.frequencyBinCount > 0) {
+                            setDebugAnalyser(analyser)
+                          } else {
+                            console.warn('[Synth] Got invalid debugAnalyser from startMic', analyser)
+                            setDebugAnalyser(null)
+                          }
                           const audioContext = pitchEngine.getAudioContext?.()
                           setDebugInfo((prev) => ({
                             ...prev,
@@ -1039,7 +1106,22 @@ function Synth({ onNavigateHome }) {
                       id="pipeline-debug-enabled"
                       label="Debug Stream"
                       checked={debugPipeline}
-                      onChange={(e) => setDebugPipeline(e.currentTarget.checked)}
+                      onChange={(e) => {
+                        const next = e.currentTarget.checked
+                        setDebugPipeline(next)
+                        if (next && micActive) {
+                          const analyser = pitchEngine.ensureDebugAnalyser?.({
+                            fftSize: 2048,
+                            smoothingTimeConstant: 0,
+                            enableHpf,
+                            hpfCutoffHz: DEFAULT_CONFIG.hpfCutoffHz,
+                          })
+                          if (!analyser) {
+                            console.warn('[Synth] debugAnalyser not ready after toggle')
+                          }
+                          setDebugAnalyser(analyser || null)
+                        }
+                      }}
                     />
                     <Form.Label className="small mt-2">Debug Stride: {debugPipelineStride} frame(s)</Form.Label>
                     <Form.Range
@@ -1101,7 +1183,7 @@ function Synth({ onNavigateHome }) {
                     <div className="small text-muted mt-3 mb-2">Post f0 Vaildate</div>
                     <WaveformPixi data={f0History.post} height={60} color="#8bd17c" />
                     <div className="small text-muted mt-3 mb-2">Spectrogram + F0</div>
-                    {debugPipeline ? (
+                    {debugAnalyser && debugAnalyser.frequencyBinCount > 0 ? (
                       <Spectrogram
                         analyser={debugAnalyser}
                         f0Hz={pipelineMetrics.result?.f0Hz}

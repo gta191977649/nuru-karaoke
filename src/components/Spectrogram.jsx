@@ -1,5 +1,4 @@
 import { useEffect, useRef } from 'react'
-import { Application, Container, Graphics, RenderTexture, Sprite } from 'pixi.js'
 
 const VOCAL_MIN_HZ = 60
 const VOCAL_MAX_HZ = 1000
@@ -16,7 +15,7 @@ const COLOR_STOPS = [
   { t: 0.88, c: [251, 155, 6] },
   { t: 1.0, c: [252, 255, 164] },
 ]
-const F0_COLOR = 0x8bd17c
+const F0_COLOR = '#8bd17c'
 
 const buildColorMap = (steps) => {
   const total = Math.max(1, steps)
@@ -37,7 +36,7 @@ const buildColorMap = (steps) => {
     const r = Math.round(a.c[0] + (b.c[0] - a.c[0]) * local)
     const g = Math.round(a.c[1] + (b.c[1] - a.c[1]) * local)
     const bl = Math.round(a.c[2] + (b.c[2] - a.c[2]) * local)
-    colors[i] = (r << 16) | (g << 8) | bl
+    colors[i] = `rgb(${r},${g},${bl})`
   }
   return colors
 }
@@ -60,27 +59,27 @@ function Spectrogram({
   className,
   style,
 }) {
-  const clampedMinHz = clampHz(minHz, DEFAULT_MIN_HZ)
-  const clampedMaxHz = clampHz(maxHz, DEFAULT_MAX_HZ)
-  const effectiveMinHz = Math.min(clampedMinHz, clampedMaxHz)
-  const effectiveMaxHz = Math.max(clampedMinHz, clampedMaxHz)
   const containerRef = useRef(null)
+  const canvasRef = useRef(null)
+  const offscreenRef = useRef(null) // To act as backbuffer if needed, but we can drawImage self
+
   const analyserRef = useRef(analyser)
   const f0Ref = useRef(f0Hz)
-  const pixiRef = useRef({
-    app: null,
-    bg: null,
-    frameContainer: null,
-    scrollSprite: null,
-    columnGfx: null,
-    outputSprite: null,
-    currentTexture: null,
-    nextTexture: null,
-    scrollSpeed: 1,
-    lastSize: { w: 0, h: 0 },
+  const reqRef = useRef(0)
+
+  // State for rendering
+  const renderState = useRef({
+    width: 0,
+    height: 0,
     data: null,
     melMap: null,
   })
+
+  // Props refs for access in animation loop
+  const propsRef = useRef({ minHz, maxHz, height })
+  useEffect(() => {
+    propsRef.current = { minHz, maxHz, height }
+  }, [minHz, maxHz, height])
 
   useEffect(() => {
     analyserRef.current = analyser
@@ -91,215 +90,147 @@ function Spectrogram({
   }, [f0Hz])
 
   useEffect(() => {
+    const canvas = canvasRef.current
+    const ctx = canvas?.getContext('2d', { willReadFrequently: false, alpha: false })
+    if (!canvas || !ctx) return
+
     let active = true
-    const init = async () => {
-      const root = containerRef.current
-      if (!root) return
-      const app = new Application()
-      await app.init({
-        width: Math.max(1, Math.floor(root.clientWidth || 1)),
-        height: Math.max(1, Math.floor(height)),
-        backgroundAlpha: 0,
-        antialias: true,
-        autoDensity: true,
-        resolution: window.devicePixelRatio || 1,
-        powerPreference: 'high-performance',
-        preference: 'webgl',
-      })
-      if (!active) {
-        app.destroy(true)
-        return
+
+    const draw = () => {
+      if (!active) return
+      reqRef.current = requestAnimationFrame(draw)
+
+      // 1. Resize handling
+      const container = containerRef.current
+      if (!container) return
+
+      const clientWidth = Math.max(1, Math.floor(container.clientWidth))
+      const clientHeight = Math.max(1, Math.floor(propsRef.current.height))
+
+      if (canvas.width !== clientWidth || canvas.height !== clientHeight) {
+        // Save existing content? 
+        // When resizing, we usually lose history or have to stretch it.
+        // For simplicity, we just clear/reset on resize for now to avoid complexity of scaling history.
+        // A better approach is to draw existing canvas to temp, resize, draw back.
+
+        const temp = document.createElement('canvas')
+        temp.width = canvas.width
+        temp.height = canvas.height
+        temp.getContext('2d').drawImage(canvas, 0, 0)
+
+        canvas.width = clientWidth
+        canvas.height = clientHeight
+
+        ctx.fillStyle = '#000'
+        ctx.fillRect(0, 0, clientWidth, clientHeight)
+
+        // Restore?
+        ctx.drawImage(temp, 0, 0, clientWidth, clientHeight) // Stretch or clip?
       }
 
-      root.appendChild(app.canvas)
-      app.canvas.style.width = '100%'
-      app.canvas.style.height = '100%'
-      app.canvas.style.display = 'block'
+      const w = canvas.width
+      const h = canvas.height
+      const analyser = analyserRef.current
 
-      const bg = new Graphics()
-      const frameContainer = new Container()
-      const scrollSprite = new Sprite()
-      const columnGfx = new Graphics()
-      frameContainer.addChild(scrollSprite, columnGfx)
+      // Shift canvas left by 1 pixel
+      // We use drawImage(canvas, ...)
+      // Note: we can't draw canvas onto itself directly if regions overlap?
+      // Actually standard says source is copied before draw. Browsers handle this.
+      // But typically it's safer to have an offscreen buffer or drawImage with shift.
+      // Optimization: Using a composite operation or just standard drawImage.
+      ctx.globalCompositeOperation = 'copy'
+      ctx.drawImage(canvas, -1, 0)
+      ctx.globalCompositeOperation = 'source-over'
 
-      const outputSprite = new Sprite()
-      app.stage.addChild(bg, outputSprite)
+      // Draw new column at x = w - 1
+      if (!analyser) return
 
-      pixiRef.current = {
-        app,
-        bg,
-        frameContainer,
-        scrollSprite,
-        columnGfx,
-        outputSprite,
-        currentTexture: null,
-        nextTexture: null,
-        scrollSpeed: 1,
-        lastSize: { w: 0, h: 0 },
-        data: null,
+      const binCount = analyser.frequencyBinCount || 1
+      const state = renderState.current
+      if (!state.data || state.data.length !== binCount) {
+        state.data = new Uint8Array(binCount)
+      }
+      analyser.getByteFrequencyData(state.data)
+
+      const { minHz, maxHz } = propsRef.current
+      const clampedMinHz = clampHz(minHz, DEFAULT_MIN_HZ)
+      const clampedMaxHz = clampHz(maxHz, DEFAULT_MAX_HZ)
+      const effectiveMinHz = Math.min(clampedMinHz, clampedMaxHz)
+      const effectiveMaxHz = Math.max(clampedMinHz, clampedMaxHz)
+
+      const nyquist = analyser.context.sampleRate / 2
+      const rowCount = h
+      const melMin = hzToMel(effectiveMinHz)
+      const melMax = hzToMel(effectiveMaxHz)
+      const melSpan = Math.max(1e-6, melMax - melMin)
+
+      const mapKey = `${h}-${binCount}-${nyquist}-${effectiveMinHz}-${effectiveMaxHz}`
+      if (state.melMap?.key !== mapKey) {
+        const bins = new Array(rowCount)
+        for (let i = 0; i < rowCount; i += 1) {
+          const t = rowCount > 1 ? i / (rowCount - 1) : 0
+          const mel = melMin + t * melSpan
+          const hz = melToHz(mel)
+          const clamped = Math.max(0, Math.min(nyquist, hz))
+          const bin = Math.round((clamped / nyquist) * (binCount - 1))
+          bins[i] = Math.max(0, Math.min(binCount - 1, bin))
+        }
+        state.melMap = { key: mapKey, bins }
       }
 
-      app.ticker.add(() => {
-        const state = pixiRef.current
-        const { app: activeApp } = state
-        const rootEl = containerRef.current
-        if (!activeApp || !rootEl) return
+      const bins = state.melMap.bins
+      // Draw pixels for the column
+      // To optimize, we can create an ImageData 1xH or just fillRects 1x1
+      // standard fillRect 1x1 for H times is 140 calls, totally fine.
+      const x = w - 1
+      for (let y = 0; y < h; y += 1) {
+        // bin index from bottom up?
+        // map logic: t=0 is bottom (minHz)? 
+        // i=0 corresponds to t=0 => melMin.
+        // Usually spectrograms have low freq at bottom.
+        // So y=height-1-i
 
-        const w = Math.max(1, Math.floor(rootEl.clientWidth || activeApp.screen.width))
-        const h = Math.max(1, Math.floor(height))
-        if (state.lastSize.w !== w || state.lastSize.h !== h) {
-          state.lastSize = { w, h }
-          activeApp.renderer.resize(w, h)
-          state.bg.clear()
-          state.bg.setFillStyle({ color: 0x000000, alpha: 1 })
-          state.bg.beginPath()
-          state.bg.rect(0, 0, w, h)
-          state.bg.fill()
+        const i = y // 0 to h-1
+        const bin = bins[i]
+        const val = state.data[bin]
 
-          if (state.currentTexture) state.currentTexture.destroy(true)
-          if (state.nextTexture) state.nextTexture.destroy(true)
-          state.currentTexture = RenderTexture.create({
-            width: w,
-            height: h,
-            resolution: activeApp.renderer.resolution,
-          })
-          state.nextTexture = RenderTexture.create({
-            width: w,
-            height: h,
-            resolution: activeApp.renderer.resolution,
-          })
-          state.scrollSpeed = 1
-          if (state.outputSprite) {
-            state.outputSprite.texture = state.currentTexture
-            state.outputSprite.width = w
-            state.outputSprite.height = h
-          }
-          if (state.scrollSprite) {
-            state.scrollSprite.texture = state.currentTexture
-            state.scrollSprite.x = 0
-            state.scrollSprite.y = 0
-            state.scrollSprite.width = w
-            state.scrollSprite.height = h
-          }
-          activeApp.renderer.render({ container: state.bg, target: state.currentTexture, clear: true })
-          activeApp.renderer.render({ container: state.bg, target: state.nextTexture, clear: true })
-        }
+        ctx.fillStyle = COLOR_MAP[val]
+        ctx.fillRect(x, h - 1 - y, 1, 1)
+      }
 
-        const activeAnalyser = analyserRef.current
-        if (
-          !activeAnalyser ||
-          !state.currentTexture ||
-          !state.nextTexture ||
-          !state.frameContainer ||
-          !state.scrollSprite ||
-          !state.columnGfx ||
-          !state.outputSprite
-        )
-          return
-
-        const binCount = activeAnalyser.frequencyBinCount || 1
-        if (!state.data || state.data.length !== binCount) {
-          state.data = new Uint8Array(binCount)
-        }
-        activeAnalyser.getByteFrequencyData(state.data)
-
-        const nyquist = activeAnalyser.context.sampleRate / 2
-        const rowCount = Math.max(1, Math.floor(h))
-        const rowH = Math.max(1, h / rowCount)
-        const melMin = hzToMel(effectiveMinHz)
-        const melMax = hzToMel(effectiveMaxHz)
-        const melSpan = Math.max(1e-6, melMax - melMin)
-        const mapKey = `${rowCount}-${binCount}-${nyquist}-${effectiveMinHz}-${effectiveMaxHz}`
-        if (state.melMap?.key !== mapKey) {
-          const bins = new Array(rowCount)
-          for (let i = 0; i < rowCount; i += 1) {
-            const t = rowCount > 1 ? i / (rowCount - 1) : 0
-            const mel = melMin + t * melSpan
-            const hz = melToHz(mel)
-            const clamped = Math.max(0, Math.min(nyquist, hz))
-            const bin = Math.round((clamped / nyquist) * (binCount - 1))
-            bins[i] = Math.max(0, Math.min(binCount - 1, bin))
-          }
-          state.melMap = { key: mapKey, bins }
-        }
-
-        const column = state.columnGfx
-        const columnWidth = Math.max(1, state.scrollSpeed)
-        const columnX = w - columnWidth
-        column.clear()
-        const bins = state.melMap?.bins || []
-        for (let i = 0; i < bins.length; i += 1) {
-          const bin = bins[i]
-          const value = state.data[bin] || 0
-          const color = COLOR_MAP[value]
-          const y = h - (i + 1) * rowH
-          column.rect(columnX, y, columnWidth + 0.5, rowH + 0.5).fill({ color })
-        }
-
-        const f0 = f0Ref.current
-        if (
-          Number.isFinite(f0) &&
-          f0 > 0 &&
-          f0 >= effectiveMinHz &&
-          f0 <= effectiveMaxHz
-        ) {
-          const mel = hzToMel(f0)
-          const norm = (mel - melMin) / melSpan
-          const y = h - (Math.max(0, Math.min(1, norm)) * (h - rowH) + rowH)
-          column.rect(columnX, y - 1, columnWidth + 0.5, 3).fill({ color: F0_COLOR })
-        }
-
-        state.scrollSprite.texture = state.currentTexture
-        state.scrollSprite.x = -state.scrollSpeed
-        state.scrollSprite.y = 0
-        activeApp.renderer.render({
-          container: state.frameContainer,
-          target: state.nextTexture,
-          clear: true,
-        })
-        const prev = state.currentTexture
-        state.currentTexture = state.nextTexture
-        state.nextTexture = prev
-        state.outputSprite.texture = state.currentTexture
-        state.scrollSprite.texture = state.currentTexture
-      })
+      // Draw F0
+      const f0 = f0Ref.current
+      if (Number.isFinite(f0) && f0 > 0 && f0 >= effectiveMinHz && f0 <= effectiveMaxHz) {
+        const mel = hzToMel(f0)
+        const norm = (mel - melMin) / melSpan
+        // norm 0..1
+        // y = h - 1 - norm * (h-1)
+        const y = h - 1 - (norm * (h - 1))
+        ctx.fillStyle = F0_COLOR
+        ctx.fillRect(x, y - 1, 1, 3)
+      }
     }
 
-    init()
+    reqRef.current = requestAnimationFrame(draw)
     return () => {
       active = false
-      const app = pixiRef.current.app
-      const currentTexture = pixiRef.current.currentTexture
-      const nextTexture = pixiRef.current.nextTexture
-      if (currentTexture) currentTexture.destroy(true)
-      if (nextTexture) nextTexture.destroy(true)
-      if (app) app.destroy(true)
-      if (containerRef.current) containerRef.current.innerHTML = ''
-      pixiRef.current = {
-        app: null,
-        bg: null,
-        frameContainer: null,
-        scrollSprite: null,
-        columnGfx: null,
-        outputSprite: null,
-        currentTexture: null,
-        nextTexture: null,
-        scrollSpeed: 1,
-        lastSize: { w: 0, h: 0 },
-        data: null,
-        melMap: null,
-      }
+      cancelAnimationFrame(reqRef.current)
     }
-  }, [height, effectiveMinHz, effectiveMaxHz])
+  }, []) // Empty deps, use refs
 
   const mergedStyle = {
     width: '100%',
     height,
     position: 'relative',
+    background: '#000',
     ...style,
   }
 
-  return <div ref={containerRef} className={className} style={mergedStyle} />
+  return (
+    <div ref={containerRef} className={className} style={mergedStyle}>
+      <canvas ref={canvasRef} style={{ display: 'block', width: '100%', height: '100%' }} />
+    </div>
+  )
 }
 
 export default Spectrogram

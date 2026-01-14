@@ -24,6 +24,7 @@ class PitchEngine {
     this._debugHpf = null
     this._debugGain = null
     this._debugConnected = false
+    this._debugWantsConnect = false
 
     this._starting = null
     this._stopRequested = false
@@ -48,8 +49,18 @@ class PitchEngine {
     this._postWorkletConfig()
   }
 
+  _connectDebugChain() {
+    if (!this._source) return
+    if (this._debugConnected) return
+    if (!this._debugAnalyser || !this._debugHpf || !this._debugGain) return
+    this._source.connect(this._debugHpf)
+    this._debugHpf.connect(this._debugAnalyser)
+    this._debugAnalyser.connect(this._debugGain)
+    this._debugConnected = true
+    console.log('[PitchEngine] Debug chain connected')
+  }
+
   ensureDebugAnalyser(options = {}) {
-    if (!this._source) return null
     const audioContext = this._ensureAudioContext()
 
     if (!this._debugAnalyser) {
@@ -64,12 +75,8 @@ class PitchEngine {
       this._debugGain.gain.value = 0
       this._debugGain.connect(audioContext.destination)
     }
-    if (!this._debugConnected) {
-      this._source.connect(this._debugHpf)
-      this._debugHpf.connect(this._debugAnalyser)
-      this._debugAnalyser.connect(this._debugGain)
-      this._debugConnected = true
-    }
+    this._debugWantsConnect = true
+    this._connectDebugChain()
 
     const fftSize = Number(options.fftSize)
     if (Number.isFinite(fftSize) && fftSize >= 32) {
@@ -86,17 +93,29 @@ class PitchEngine {
     const hpfEnabled = options.enableHpf !== false
     this._debugHpf.frequency.value = hpfEnabled ? Math.max(0, hpfCutoff) : 0
 
+    // Debug logging for analyser state
+    if (this._debugAnalyser) {
+      console.log('[PitchEngine] ensureDebugAnalyser returning analyser', {
+        frequencyBinCount: this._debugAnalyser.frequencyBinCount,
+        fftSize: this._debugAnalyser.fftSize,
+        numberOfInputs: this._debugAnalyser.numberOfInputs,
+        numberOfOutputs: this._debugAnalyser.numberOfOutputs
+      })
+    } else {
+      console.warn('[PitchEngine] ensureDebugAnalyser failed to create analyser')
+    }
+
     return this._debugAnalyser
   }
 
   onPitch(cb) {
-    if (typeof cb !== 'function') return () => {}
+    if (typeof cb !== 'function') return () => { }
     this._listeners.add(cb)
     return () => this._listeners.delete(cb)
   }
 
   onDebug(cb) {
-    if (typeof cb !== 'function') return () => {}
+    if (typeof cb !== 'function') return () => { }
     this._debugListeners.add(cb)
     return () => this._debugListeners.delete(cb)
   }
@@ -160,6 +179,11 @@ class PitchEngine {
 
       this.configureDetector(this._config)
       this.setDetector(this._algoId)
+      this.setDetector(this._algoId)
+      if (this._debugWantsConnect) {
+        console.log('[PitchEngine] startMic connecting debug chain')
+        this._connectDebugChain()
+      }
 
       if (this._stopRequested) {
         this._stopMicInternal()
@@ -240,7 +264,8 @@ class PitchEngine {
     this._workletNode?.disconnect()
     this._source?.disconnect()
     this._monitorGain?.disconnect()
-    if (this._debugHpf) {
+
+    if (this._debugHpf && this._debugConnected) {
       try {
         this._source?.disconnect(this._debugHpf)
       } catch (err) {
@@ -254,6 +279,7 @@ class PitchEngine {
     this._debugHpf = null
     this._debugGain = null
     this._debugConnected = false
+    this._debugWantsConnect = false
 
     this._workletNode = null
     this._source = null
