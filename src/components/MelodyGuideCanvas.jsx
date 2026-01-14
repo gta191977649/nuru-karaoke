@@ -126,6 +126,12 @@ function MelodyGuideCanvas({
   maxMidi = 96,
   smoothAlpha = 0.1,
   particleConfig = DEFAULT_PARTICLE_CONFIG,
+  glissandoUpCount = 0,
+  kobushiCount = 0,
+  glissandoDownCount = 0,
+  vibratoCount = 0,
+  currentSection = 1,
+  totalSections = 6,
   className,
   style,
 }) {
@@ -318,7 +324,7 @@ function MelodyGuideCanvas({
           state.bg.clear()
           state.bg.setFillStyle({ color: COLORS.background, alpha: ALPHAS.background })
           state.bg.beginPath()
-          state.bg.roundRect(0, 0, w, h, 12)
+          state.bg.rect(0, 0, w, h)
           state.bg.fill()
           if (state.userGlowContainer) {
             state.userGlowContainer.filterArea = activeApp.screen
@@ -686,11 +692,12 @@ function MelodyGuideCanvas({
     <div className={className} style={{ ...style, position: 'relative' }}>
       <div ref={containerRef} style={{ width: '100%', height: '100%' }} />
       <KaraokeOverlay
-        shakuriCount={15}
-        kobushiCount={7}
-        vibratoCount={33}
-        currentSection={1}
-        totalSections={6}
+        glissandoUpCount={glissandoUpCount}
+        kobushiCount={kobushiCount}
+        glissandoDownCount={glissandoDownCount}
+        vibratoCount={vibratoCount}
+        currentSection={currentSection}
+        totalSections={totalSections}
       />
     </div>
   )
@@ -774,8 +781,9 @@ const OVERLAY_STYLE = {
 }
 
 function KaraokeOverlay({
-  shakuriCount = 0,
+  glissandoUpCount = 0,
   kobushiCount = 0,
+  glissandoDownCount = 0,
   vibratoCount = 0,
   currentSection = 0,
   totalSections = 6,
@@ -802,7 +810,7 @@ function KaraokeOverlay({
       <div style={OVERLAY_STYLE.countBox.container}>
         <CountBox
           label="しゃくり"
-          count={shakuriCount}
+          count={glissandoUpCount}
           color="#d35400"
           borderColor="#e67e22"
           icon={
@@ -826,7 +834,7 @@ function KaraokeOverlay({
         />
         <CountBox
           label="フォール"
-          count={8}
+          count={glissandoDownCount}
           color="#6a1b9a"
           borderColor="#ab47bc"
           icon={

@@ -169,7 +169,7 @@ function Karaoke() {
                 transpositionRef={transpositionRef}
                 rmsGate={micRmsGate}
                 gateUserByTarget
-                width={1500}
+                width={800}
                 height={200}
               />
             </div>
