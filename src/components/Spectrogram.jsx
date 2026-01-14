@@ -53,6 +53,7 @@ const clampHz = (value, fallback) => {
 function Spectrogram({
   analyser,
   f0Hz,
+  f0Color = '#ffffff',
   height = 140,
   minHz = DEFAULT_MIN_HZ,
   maxHz = DEFAULT_MAX_HZ,
@@ -65,6 +66,7 @@ function Spectrogram({
 
   const analyserRef = useRef(analyser)
   const f0Ref = useRef(f0Hz)
+  const f0ColorRef = useRef(f0Color)
   const reqRef = useRef(0)
 
   // State for rendering
@@ -90,6 +92,10 @@ function Spectrogram({
   }, [f0Hz])
 
   useEffect(() => {
+    f0ColorRef.current = f0Color
+  }, [f0Color])
+
+  useEffect(() => {
     const canvas = canvasRef.current
     const ctx = canvas?.getContext('2d', { willReadFrequently: false, alpha: false })
     if (!canvas || !ctx) return
@@ -112,6 +118,7 @@ function Spectrogram({
         // When resizing, we usually lose history or have to stretch it.
         // For simplicity, we just clear/reset on resize for now to avoid complexity of scaling history.
         // A better approach is to draw existing canvas to temp, resize, draw back.
+        // 
 
         const temp = document.createElement('canvas')
         temp.width = canvas.width
@@ -204,9 +211,9 @@ function Spectrogram({
         const mel = hzToMel(f0)
         const norm = (mel - melMin) / melSpan
         // norm 0..1
-        // y = h - 1 - norm * (h-1)
+        // y = h - 1 - norm * (h - 1)
         const y = h - 1 - (norm * (h - 1))
-        ctx.fillStyle = F0_COLOR
+        ctx.fillStyle = f0ColorRef.current
         ctx.fillRect(x, y - 1, 1, 3)
       }
     }

@@ -12,6 +12,7 @@ import SoundCanvasLcd from '../components/SoundCanvasLcd.jsx'
 import Spectrogram from '../components/Spectrogram.jsx'
 import WaveformPixi from '../components/WaveformPixi.jsx'
 import { DEFAULT_PARTICLE_CONFIG, cloneParticleConfig } from '../components/particles/particleSystem.js'
+import { useSingingTechnique } from '../karaoke/hooks/useSingingTechnique.js'
 
 const DEMO_MIDI_URL = new URL('../library/demo/sc55.mid', import.meta.url).toString()
 
@@ -580,6 +581,8 @@ function Synth({ onNavigateHome }) {
     })
   }, [state.channelActivityTime, state.channelActivityVelocity, state.currentTime])
 
+  const { activeTechniques, techniqueHistory } = useSingingTechnique(sharedPitchEngine)
+
   return (
     <Container className="py-3 synthDebug" style={{ maxWidth: 860 }}>
       <div className="d-flex justify-content-between align-items-center mb-3">
@@ -709,7 +712,7 @@ function Synth({ onNavigateHome }) {
 
         <Col xs={12}>
           <div className="p-3 border rounded-3">
-            <div className="fw-semibold mb-2">XG -> GS Drum Mapping</div>
+            <div className="fw-semibold mb-2">XG -&gt; GS Drum Mapping</div>
             <Row className="g-2 align-items-center">
               <Col xs={12} md={6}>
                 <Form.Check
@@ -1168,17 +1171,87 @@ function Synth({ onNavigateHome }) {
                     <div className="small text-muted mt-3 mb-2">Post f0 Vaildate</div>
                     <WaveformPixi data={f0History.post} height={60} color="#8bd17c" />
                     <div className="small text-muted mt-3 mb-2">Spectrogram + F0</div>
-                    {debugAnalyser && debugAnalyser.frequencyBinCount > 0 ? (
-                      <Spectrogram
-                        analyser={debugAnalyser}
-                        f0Hz={pipelineMetrics.result?.f0Hz}
-                        height={140}
-                        minHz={DEFAULT_CONFIG.f0MinHz}
-                        maxHz={DEFAULT_CONFIG.f0MaxHz}
-                      />
-                    ) : (
-                      <div style={{ width: '100%', height: 140, background: '#000' }} />
-                    )}
+                    {/* Determine current technique color for F0 trace */}
+                    {(() => {
+                      let activeColor = '#ffffff'
+                      // Colors: Vibrato (Green), Kobushi (Light Blue), Glissando (Purple)
+                      if (activeTechniques.vibrato) activeColor = '#2ecc71'
+                      if (activeTechniques.kobushi) activeColor = '#4fc3f7'
+                      if (activeTechniques.glissup || activeTechniques.glissdown) activeColor = '#9c27b0'
+
+                      return (
+                        debugAnalyser && debugAnalyser.frequencyBinCount > 0 ? (
+                          <Spectrogram
+                            analyser={debugAnalyser}
+                            f0Hz={pipelineMetrics.result?.f0Hz}
+                            f0Color={activeColor}
+                            height={140}
+                            minHz={DEFAULT_CONFIG.f0MinHz}
+                            maxHz={DEFAULT_CONFIG.f0MaxHz}
+                          />
+                        ) : (
+                          <div style={{ width: '100%', height: 140, background: '#000' }} />
+                        )
+                      )
+                    })()}
+
+                    <div className="small text-muted mt-3 mb-2">Sing Technique</div>
+                    <Row>
+                      <Col xs={4}>
+                        <div className="small text-muted mb-1">Vibrato</div>
+                        <WaveformPixi data={techniqueHistory.vibrato} height={40} color="#2ecc71" />
+                      </Col>
+                      <Col xs={4}>
+                        <div className="small text-muted mb-1">Kobushi</div>
+                        <WaveformPixi data={techniqueHistory.kobushi} height={40} color="#4fc3f7" />
+                      </Col>
+                      <Col xs={4}>
+                        <div className="small text-muted mb-1">Glissando</div>
+                        <WaveformPixi data={techniqueHistory.glissando} height={40} color="#9c27b0" />
+                      </Col>
+                    </Row>
+                    <div className="d-flex gap-2 mt-3">
+                      {['vibrato', 'kobushi', 'glissando'].map(tech => {
+                        let active = false
+                        if (tech === 'glissando') {
+                          active = activeTechniques.glissup || activeTechniques.glissdown
+                        } else {
+                          active = activeTechniques[tech]
+                        }
+
+                        let label = tech.charAt(0).toUpperCase() + tech.slice(1)
+                        if (tech === 'glissando') {
+                          if (activeTechniques.glissup) label = 'Gliss Up'
+                          if (activeTechniques.glissdown) label = 'Gliss Down'
+                        }
+
+                        // Define base colors
+                        let baseColor = '#666'
+                        if (tech === 'vibrato') baseColor = '#2ecc71'
+                        if (tech === 'kobushi') baseColor = '#4fc3f7'
+                        if (tech === 'glissando') baseColor = '#9c27b0'
+
+                        return (
+                          <div
+                            key={tech}
+                            className="px-3 py-2 rounded fw-bold d-flex align-items-center justify-content-center"
+                            style={{
+                              background: active ? baseColor : 'transparent',
+                              color: active ? '#fff' : baseColor,
+                              border: `2px solid ${baseColor}`,
+                              boxShadow: active ? `0 0 10px ${baseColor}` : 'none',
+                              transition: 'all 0.1s',
+                              minWidth: 100,
+                              fontSize: 14
+                            }}
+                          >
+                            {label}
+                          </div>
+                        )
+                      })}
+                    </div>
+
+
                     <div className="small mt-3">
                       <div>rms: {formatNumber(pipelineMetrics.rms, 4)}</div>
                       <div>gateOpen: {pipelineMetrics.gateOpen ? 'yes' : 'no'}</div>

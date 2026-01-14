@@ -9,6 +9,7 @@ import useKeyChangeAlertStore from '../state/keyChangeAlertStore.js'
 import { useKaraokeReference } from './hooks/useKaraokeReference.js'
 import { useKaraokePitchHistory } from './hooks/useKaraokePitchHistory.js'
 import { useKaraokeSongIntro } from './hooks/useKaraokeSongIntro.js'
+import { useSingingTechnique } from './hooks/useSingingTechnique.js'
 
 function splitRubySegments(text) {
   const raw = String(text ?? '')
@@ -92,7 +93,11 @@ function Karaoke() {
     resetKey: `${state.midiName || ''}-${state.queueIndex ?? -1}`,
   })
 
+  // Technique Detection
+  const { counts: techniqueCounts } = useSingingTechnique(pitchEngine)
+
   const lines = useMemo(() => {
+
     const entries = state.lrcEntries || []
     const i = state.activeLyricIndex ?? -1
     const pairStart = i >= 0 ? i - (i % 2) : -1
@@ -171,6 +176,10 @@ function Karaoke() {
                 gateUserByTarget
                 width={800}
                 height={220}
+                shakuriCount={techniqueCounts.glissup}
+                kobushiCount={techniqueCounts.kobushi}
+                glissandoDownCount={techniqueCounts.glissdown}
+                vibratoCount={techniqueCounts.vibrato}
               />
             </div>
           </div>
