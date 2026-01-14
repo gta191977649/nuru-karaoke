@@ -176,7 +176,7 @@ function Karaoke() {
                 gateUserByTarget
                 width={800}
                 height={220}
-                shakuriCount={techniqueCounts.glissup}
+                glissandoUpCount={techniqueCounts.glissup}
                 kobushiCount={techniqueCounts.kobushi}
                 glissandoDownCount={techniqueCounts.glissdown}
                 vibratoCount={techniqueCounts.vibrato}

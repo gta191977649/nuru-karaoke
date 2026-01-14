@@ -80,7 +80,7 @@ const ALPHAS = {
   userMiss: 0.5,
   userMissStroke: 0.1,
   userGlowFill: 0.95,
-  userGlowStroke: 0.9,
+  userGlowStroke: 1,
   playheadOuter: 0.15,
   playheadMid: 0.35,
   playheadInner: 0.9,
@@ -92,6 +92,7 @@ const STROKE_WIDTH = {
   miss: 1,
   user: 1,
   userGlow: 1,
+  f0: 1, // Added f0 train width
   playheadOuter: 8,
   playheadMid: 4,
   playheadInner: 2,
@@ -103,7 +104,7 @@ const NOTE_MERGE_CONFIG = {
   // Semitone tolerance for considering the user's pitch "in range" of the target.
   pitchToleranceSemis: 2,
   // Minimum fraction of target note duration the user must cover to treat it as full-length.
-  coverageRatio: 0.75,
+  coverageRatio: 0.6,
   // Silence gap (seconds) to consider a note ended when RMS drops below the gate.
   gapThresholdSec: 0.5,
 }
@@ -339,8 +340,8 @@ function MelodyGuideCanvas({
       userGlowContainer.addChild(particleSystem.container, comboSystem.container, userGlow, trail)
       userGlowContainer.filters = [
         new BloomFilter({
-          strength: 8,
-          quality: 4,
+          strength: 4,
+          quality: 2,
           threshold: 0.2,
         }),
       ]
@@ -660,17 +661,19 @@ function MelodyGuideCanvas({
           if (!Number.isFinite(targetMidiPoint)) return null
           const mappedMidi = mapUserMidiToTargetOctave(userMidi, targetMidiPoint)
           if (!Number.isFinite(mappedMidi)) return null
-          const { y, inRange } = midiToY(mappedMidi)
+          const { y: userY, inRange } = midiToY(mappedMidi)
           const inTolerance = Math.abs(mappedMidi - targetMidiPoint) <= NOTE_MERGE_CONFIG.pitchToleranceSemis
           const forcedTime = isForcedTime(point.t)
           if (inRange && inTolerance) {
             if (forcedTime) return null
-            return { type: 'correct', key: `correct-${Math.round(targetMidiPoint)}`, y }
+            // SNAP TO GRID: Use target pitch Y
+            const { y: targetY } = midiToY(targetMidiPoint)
+            return { type: 'correct', key: `correct-${Math.round(targetMidiPoint)}`, y: targetY }
           }
           return {
             type: 'incorrect',
             key: `incorrect-${Math.round(userMidi)}-${Math.round(targetMidiPoint)}`,
-            y,
+            y: userY,
           }
         })
 
@@ -695,9 +698,9 @@ function MelodyGuideCanvas({
         if (state.userGlow) state.userGlow.clear()
         state.user.setFillStyle({ color: COLORS.userMiss, alpha: ALPHAS.userMiss })
         state.user.setStrokeStyle({
-          width: STROKE_WIDTH.user,
-          color: COLORS.userMissStroke,
-          alpha: ALPHAS.userMissStroke,
+          width: STROKE_WIDTH.f0,
+          color: COLORS.userGlowStroke,
+          alpha: ALPHAS.userGlowStroke,
         })
         state.user.beginPath()
         incorrectSegments.forEach((seg) => {
@@ -712,7 +715,7 @@ function MelodyGuideCanvas({
         if (state.userGlow) {
           state.userGlow.setFillStyle({ color: COLORS.userGlowFill, alpha: ALPHAS.userGlowFill })
           state.userGlow.setStrokeStyle({
-            width: STROKE_WIDTH.userGlow,
+            width: STROKE_WIDTH.f0,
             color: COLORS.userGlowStroke,
             alpha: ALPHAS.userGlowStroke,
           })
@@ -1115,15 +1118,15 @@ function KaraokeOverlay({
   vibratoRef,
 }) {
   const counts = {
-    shakuri: glissandoUpCount,
+    glissup: glissandoUpCount,
     kobushi: kobushiCount,
-    fall: glissandoDownCount,
+    glissdown: glissandoDownCount,
     vibrato: vibratoCount
   }
   const refs = {
-    shakuri: shakuriRef,
+    glissup: shakuriRef,
     kobushi: kobushiRef,
-    fall: fallRef,
+    glissdown: fallRef,
     vibrato: vibratoRef
   }
 
