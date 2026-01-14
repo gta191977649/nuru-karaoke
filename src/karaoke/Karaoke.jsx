@@ -181,6 +181,10 @@ function Karaoke() {
                 glissandoDownCount={techniqueCounts.glissdown}
                 vibratoCount={techniqueCounts.vibrato}
                 techniqueEventsRef={techniqueEventsRef}
+                totalSections={6}
+                currentSection={state.duration > 0
+                  ? Math.min(6, Math.floor((state.currentTime / state.duration) * 6) + 1)
+                  : 1}
               />
             </div>
           </div>

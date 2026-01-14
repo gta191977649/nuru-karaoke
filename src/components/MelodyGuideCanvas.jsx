@@ -1045,7 +1045,7 @@ const OVERLAY_STYLE = {
     container: { alignSelf: 'flex-end', display: 'flex', alignItems: 'center', gap: 8 },
     label: {
       color: '#fff',
-      fontSize: 14,
+      fontSize: 18,
       fontWeight: 'bold',
       textShadow: '0 1px 2px rgba(0,0,0,0.8)',
       marginRight: 6,
