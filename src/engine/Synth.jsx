@@ -8,6 +8,7 @@ import { synthEngine } from './SynthEngine.js'
 import { useKaraokeStore } from '../state/karaokeStore.js'
 import MelodyGuideCanvas from '../components/MelodyGuideCanvas.jsx'
 import ParticlePreview from '../components/particles/ParticlePreview.jsx'
+import SoundCanvasLcd from '../components/SoundCanvasLcd.jsx'
 import Spectrogram from '../components/Spectrogram.jsx'
 import WaveformPixi from '../components/WaveformPixi.jsx'
 import { DEFAULT_PARTICLE_CONFIG, cloneParticleConfig } from '../components/particles/particleSystem.js'
@@ -803,29 +804,13 @@ function Synth({ onNavigateHome }) {
               <div className="sc-lcd__meta">
                 <div className="sc-lcd__metaLabel">POLY:{state.polyphonyCount ?? 0}</div>
               </div>
-              <div className="sc-lcd__grid">
-                {lcdLevels.map((level, idx) => {
-                  const activeCount = Math.max(0, Math.min(LCD_SEGMENTS, Math.ceil(level * LCD_SEGMENTS)))
-                  const muted = state.enabledChannels?.[idx] === false
-                  return (
-                    <div
-                      key={`sc-lcd-${idx}`}
-                      className={`sc-lcd__channel${muted ? ' sc-lcd__channel--muted' : ''}`}
-                    >
-                      <div className="sc-lcd__bars">
-                        {LCD_SEGMENT_INDEXES.map((seg) => (
-                          <span
-                            key={`sc-lcd-${idx}-${seg}`}
-                            className={`sc-lcd__segment${seg < activeCount ? ' sc-lcd__segment--active' : ''}`}
-                          />
-                        ))}
-                      </div>
-                      <div className="sc-lcd__label">{idx + 1}</div>
-                    </div>
-                  )
-                })}
-              </div>
+              <SoundCanvasLcd
+                levels={lcdLevels}
+                enabledChannels={state.enabledChannels}
+                height={64}
+              />
             </div>
+
           </div>
         </Col>
 
@@ -1567,7 +1552,7 @@ function Synth({ onNavigateHome }) {
           </div>
         </Col>
       </Row>
-    </Container>
+    </Container >
   )
 }
 
