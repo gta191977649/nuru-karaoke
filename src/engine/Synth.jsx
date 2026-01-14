@@ -1510,7 +1510,7 @@ function Synth({ onNavigateHome }) {
                 <div className="small text-muted mt-3">
                   Hit the correct note to emit particles on the melody guide (mic required).
                 </div>
-                <div className="mt-2">
+                <div className="mt-2" style={{ backgroundColor: 'grey' }}>
                   <MelodyGuideCanvas
                     className="melodyGuideCanvas"
                     reference={reference}
