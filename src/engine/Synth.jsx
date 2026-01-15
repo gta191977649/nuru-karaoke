@@ -581,7 +581,7 @@ function Synth({ onNavigateHome }) {
     })
   }, [state.channelActivityTime, state.channelActivityVelocity, state.currentTime])
 
-  const { activeTechniques, techniqueHistory } = useSingingTechnique(sharedPitchEngine)
+  const { activeTechniques, techniqueHistory } = useSingingTechnique(sharedPitchEngine, currentTimeRef)
 
   return (
     <Container className="py-3 synthDebug" style={{ maxWidth: 860 }}>

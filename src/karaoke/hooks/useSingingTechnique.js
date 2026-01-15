@@ -1,30 +1,6 @@
 import { useRef, useEffect, useState } from 'react'
-import { getTargetMidiAtTime } from '../../engine/audio/midi/referenceMelody.js'
 
-// --- Helper Functions (Matched to MelodyGuideCanvas.jsx) ---
-function mod12(value) {
-    const m = value % 12
-    return m < 0 ? m + 12 : m
-}
-
-function mapUserMidiToTargetOctave(userMidi, targetMidi) {
-    const u = Number(userMidi)
-    const t = Number(targetMidi)
-    if (!Number.isFinite(u) || !Number.isFinite(t)) return null
-    const userKey = Math.round(u)
-    const targetKey = Math.round(t)
-    const userPc = mod12(userKey)
-    const targetPc = mod12(targetKey)
-    if (userPc === targetPc) return t
-    const detune = u - userKey
-    const base = t - targetPc
-    return base + userPc + detune
-}
-
-const freqToMidi = (f) => 69 + 12 * Math.log2(f / 440)
-// -----------------------------------------------------------
-
-export function useSingingTechnique(pitchEngine, currentTimeRef, reference, transpositionRef) {
+export function useSingingTechnique(pitchEngine, currentTimeRef) {
     const workerRef = useRef(null)
 
     // Accumulated counts for the session
@@ -46,12 +22,6 @@ export function useSingingTechnique(pitchEngine, currentTimeRef, reference, tran
         kobushi: new Array(historySize).fill(0),
         glissando: new Array(historySize).fill(0)
     })
-
-    // Keep track of latest reference without triggering effect re-run
-    const activeReferenceRef = useRef(reference)
-    useEffect(() => {
-        activeReferenceRef.current = reference
-    }, [reference])
 
     useEffect(() => {
         if (!pitchEngine) return
@@ -130,30 +100,10 @@ export function useSingingTechnique(pitchEngine, currentTimeRef, reference, tran
             const time = result.time || (performance.now() / 1000)
             const f0 = result.f0Hz
 
-            // STRICT FILTER matching MelodyGuideCanvas.jsx rules
-            const songTime = currentTimeRef?.current ?? 0
-            const currentReference = activeReferenceRef.current
-            const baseMidi = getTargetMidiAtTime(currentReference, songTime)
-
-            if (baseMidi !== null) {
-                const transposition = transpositionRef?.current ?? 0
-                const targetMidi = baseMidi + transposition
-                const userMidi = freqToMidi(f0)
-
-                const mappedMidi = mapUserMidiToTargetOctave(userMidi, targetMidi)
-
-                // NOTE_MERGE_CONFIG.pitchToleranceSemis is 2 in MelodyGuideCanvas
-                // We use <= 2.0 to be lenient and match visual
-                if (Math.abs(mappedMidi - targetMidi) <= 2.0) {
-                    // Passed!
-                    worker.postMessage({
-                        type: 'push',
-                        payload: { time, f0 }
-                    })
-                    // Optional: Debug log
-                    // if (Math.random() < 0.01) console.log('[Technique] Active')
-                }
-            }
+            worker.postMessage({
+                type: 'push',
+                payload: { time, f0 }
+            })
         })
 
         return () => {

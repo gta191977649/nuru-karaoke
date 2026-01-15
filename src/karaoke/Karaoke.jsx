@@ -94,7 +94,7 @@ function Karaoke() {
   })
 
   // Technique Detection
-  const { counts: techniqueCounts, techniqueEventsRef } = useSingingTechnique(pitchEngine, currentTimeRef, reference, transpositionRef)
+  const { techniqueEventsRef } = useSingingTechnique(pitchEngine, currentTimeRef)
 
   const lines = useMemo(() => {
 
@@ -176,10 +176,6 @@ function Karaoke() {
                 gateUserByTarget
                 width={800}
                 height={220}
-                glissandoUpCount={techniqueCounts.glissup}
-                kobushiCount={techniqueCounts.kobushi}
-                glissandoDownCount={techniqueCounts.glissdown}
-                vibratoCount={techniqueCounts.vibrato}
                 techniqueEventsRef={techniqueEventsRef}
                 totalSections={6}
                 currentSection={state.duration > 0

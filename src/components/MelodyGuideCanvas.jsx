@@ -1,4 +1,4 @@
-import { useEffect, useRef, forwardRef } from 'react'
+import { useEffect, useRef, forwardRef, useState } from 'react'
 import { Application, Container, Graphics, Sprite, Texture, Assets } from 'pixi.js'
 import { BloomFilter } from 'pixi-filters'
 import { getTargetMidiAtTime } from '../engine/audio/midi/referenceMelody.js'
@@ -197,6 +197,22 @@ function MelodyGuideCanvas({
   const fallRef = useRef(null)
   const vibratoRef = useRef(null)
 
+  /* Internal state for validated counts */
+  const [validCounts, setValidCounts] = (function () {
+    // Using a lazy initializer or just standard useState
+    // We can't use useState inside the ticker, so we define it here at component level
+    // But wait, the replace_file_content context is restricted to these lines.
+    // I will just use standard useState import which is available in file scope.
+    return useState({
+      glissup: 0,
+      kobushi: 0,
+      glissdown: 0,
+      vibrato: 0
+    })
+  })()
+  // Just standard usage:
+  // const [validCounts, setValidCounts] = useState({...})
+
   const pixiRef = useRef({
     app: null,
     bg: null,
@@ -373,6 +389,8 @@ function MelodyGuideCanvas({
           fall: glissandoDownCount,
           vibrato: vibratoCount
         },
+        techniqueEventsRef,
+        lastTechniqueEventIndex: 0,
         techniqueSprites: []
       }
 
@@ -392,46 +410,91 @@ function MelodyGuideCanvas({
           state.comboSystem.update(deltaSec)
 
           // Check for new techniques
-          const curShakuri = snap.glissandoUpCount || 0
-          const curKobushi = snap.kobushiCount || 0
-          const curFall = snap.glissandoDownCount || 0
-          const curVibrato = snap.vibratoCount || 0
+          const events = state.techniqueEventsRef?.current || []
+          const lastIndex = state.lastTechniqueEventIndex || 0
 
-          const last = state.lastCounts
-
-          // Detect changes (trigger on increase)
           // Start Position: Playhead
           const startX = activeApp.screen.width * 0.7
           const startY = Number.isFinite(state.playheadDotY) ? state.playheadDotY : h / 2
-
-          // Targets (Relative to canvas size)
-          // Approx based on layout:
-          // Shakuri: ~60px
-          // Kobushi: ~170px
-          // Fall: ~280px
-          // Vibrato: ~390px
           const targetY = h - 30
 
-          if (curShakuri > last.shakuri) {
-            state.comboSystem.spawnCombo(startX, startY, 60, targetY, TECHNIQUE_CONFIG.glissup.color)
-            setTimeout(() => triggerComboHit(shakuriRef, toCssColor(TECHNIQUE_CONFIG.glissup.color)), 600)
-            last.shakuri = curShakuri
+          // Iterate through new events
+          for (let i = lastIndex; i < events.length; i++) {
+            const event = events[i]
+            // Validate pitch correctness at the time of the event
+            const songTime = event.t
+            let isValid = false
+
+            if (snap.reference) {
+              const targetMidi = getTargetMidiAtTime(snap.reference, songTime)
+              if (targetMidi !== null) {
+                const transposition = snap.transpositionRef?.current ?? 0
+                const transposedTarget = targetMidi + transposition
+
+                // Find user pitch history near this time
+                // We can use the historyRef directly
+                const history = snap.historyRef?.current || []
+
+                // Simple search for nearest history point
+                // History is sorted by t
+                let bestPoint = null
+                let minDiff = Infinity
+
+                // Optimization: We could binary search but linear scan from end might be fast enough if events are recent
+                // Actually, let's just reverse scan since events are likely recent
+                for (let j = history.length - 1; j >= 0; j--) {
+                  const diff = Math.abs(history[j].t - songTime)
+                  if (diff < minDiff) {
+                    minDiff = diff
+                    bestPoint = history[j]
+                  }
+                  if (diff > 0.2) { // Determine a search window, e.g. 200ms
+                    // if we are too far, stop searching? 
+                    // careful: history might not be perfectly sorted if we insert out of order, 
+                    // but usually it is append-only.
+                    if (history[j].t < songTime - 0.2) break
+                  }
+                }
+
+                if (bestPoint && minDiff < 0.1) { // 100ms tolerance for finding a pitch sample
+                  const userMidi = Number(bestPoint.userMidi)
+                  if (Number.isFinite(userMidi)) {
+                    const mappedMidi = mapUserMidiToTargetOctave(userMidi, transposedTarget)
+                    if (Number.isFinite(mappedMidi)) {
+                      if (Math.abs(mappedMidi - transposedTarget) <= NOTE_MERGE_CONFIG.pitchToleranceSemis) {
+                        isValid = true
+                      }
+                    }
+                  }
+                }
+              }
+            }
+
+            if (isValid) {
+              // Trigger Combo
+              const type = event.type
+
+              setValidCounts(prev => ({
+                ...prev,
+                [type]: (prev[type] || 0) + 1
+              }))
+
+              if (type === 'glissup') {
+                state.comboSystem.spawnCombo(startX, startY, 60, targetY, TECHNIQUE_CONFIG.glissup.color)
+                setTimeout(() => triggerComboHit(shakuriRef, toCssColor(TECHNIQUE_CONFIG.glissup.color)), 600)
+              } else if (type === 'kobushi') {
+                state.comboSystem.spawnCombo(startX, startY, 170, targetY, TECHNIQUE_CONFIG.kobushi.color)
+                setTimeout(() => triggerComboHit(kobushiRef, toCssColor(TECHNIQUE_CONFIG.kobushi.color)), 600)
+              } else if (type === 'glissdown') { // glissdown
+                state.comboSystem.spawnCombo(startX, startY, 280, targetY, TECHNIQUE_CONFIG.glissdown.color)
+                setTimeout(() => triggerComboHit(fallRef, toCssColor(TECHNIQUE_CONFIG.glissdown.color)), 600)
+              } else if (type === 'vibrato') {
+                state.comboSystem.spawnCombo(startX, startY, 390, targetY, TECHNIQUE_CONFIG.vibrato.color)
+                setTimeout(() => triggerComboHit(vibratoRef, toCssColor(TECHNIQUE_CONFIG.vibrato.color)), 600)
+              }
+            }
           }
-          if (curKobushi > last.kobushi) {
-            state.comboSystem.spawnCombo(startX, startY, 170, targetY, TECHNIQUE_CONFIG.kobushi.color)
-            setTimeout(() => triggerComboHit(kobushiRef, toCssColor(TECHNIQUE_CONFIG.kobushi.color)), 600)
-            last.kobushi = curKobushi
-          }
-          if (curFall > last.fall) {
-            state.comboSystem.spawnCombo(startX, startY, 280, targetY, TECHNIQUE_CONFIG.glissdown.color)
-            setTimeout(() => triggerComboHit(fallRef, toCssColor(TECHNIQUE_CONFIG.glissdown.color)), 600)
-            last.fall = curFall
-          }
-          if (curVibrato > last.vibrato) {
-            state.comboSystem.spawnCombo(startX, startY, 390, targetY, TECHNIQUE_CONFIG.vibrato.color)
-            setTimeout(() => triggerComboHit(vibratoRef, toCssColor(TECHNIQUE_CONFIG.vibrato.color)), 600)
-            last.vibrato = curVibrato
-          }
+          state.lastTechniqueEventIndex = events.length
         }
 
         const songTimeSec = snap.currentTimeRef?.current ?? 0
@@ -1010,10 +1073,10 @@ function MelodyGuideCanvas({
     <div className={className} style={{ ...style, position: 'relative' }}>
       <div ref={containerRef} style={{ width: '100%', height: '100%' }} />
       <KaraokeOverlay
-        glissandoUpCount={glissandoUpCount}
-        kobushiCount={kobushiCount}
-        glissandoDownCount={glissandoDownCount}
-        vibratoCount={vibratoCount}
+        glissandoUpCount={validCounts.glissup}
+        kobushiCount={validCounts.kobushi}
+        glissandoDownCount={validCounts.glissdown}
+        vibratoCount={validCounts.vibrato}
         currentSection={currentSection}
         totalSections={totalSections}
         shakuriRef={shakuriRef}
