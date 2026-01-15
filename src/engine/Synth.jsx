@@ -10,6 +10,7 @@ import MelodyGuideCanvas from '../components/MelodyGuideCanvas.jsx'
 import ParticlePreview from '../components/particles/ParticlePreview.jsx'
 import SoundCanvasLcd from '../components/SoundCanvasLcd.jsx'
 import Spectrogram from '../components/Spectrogram.jsx'
+import SpectrumView from '../components/SpectrumView.jsx'
 import WaveformPixi from '../components/WaveformPixi.jsx'
 import { DEFAULT_PARTICLE_CONFIG, cloneParticleConfig } from '../components/particles/particleSystem.js'
 import { useSingingTechnique } from '../karaoke/hooks/useSingingTechnique.js'
@@ -1161,11 +1162,11 @@ function Synth({ onNavigateHome }) {
                     <div className="small text-muted mb-2">Mic Input</div>
                     <WaveformPixi data={pipelineStages.input} height={70} />
                     <div className="small text-muted mt-3 mb-2">Post DC Removal filter</div>
-                    <WaveformPixi data={pipelineStages.dcRemoved} height={70} />
+                    <SpectrumView data={pipelineStages.dcRemoved} height={70} color="#3498db" />
                     <div className="small text-muted mt-3 mb-2">Post High Pass Filter (80HzCut)</div>
-                    <WaveformPixi data={pipelineStages.hpf} height={70} />
+                    <SpectrumView data={pipelineStages.hpf} height={70} color="#9b59b6" />
                     <div className="small text-muted mt-3 mb-2">Post RMS Gate</div>
-                    <WaveformPixi data={pipelineStages.gated} height={70} />
+                    <SpectrumView data={pipelineStages.gated} height={70} color="#e67e22" />
                     <div className="small text-muted mt-3 mb-2">Raw f0 Trace</div>
                     <WaveformPixi data={f0History.raw} height={60} color="#f1c40f" />
                     <div className="small text-muted mt-3 mb-2">Post f0 Vaildate</div>
