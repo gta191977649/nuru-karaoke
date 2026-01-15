@@ -118,7 +118,7 @@ function Synth({ onNavigateHome }) {
   const [rmsGate, setRmsGate] = useState(DEFAULT_CONFIG.rmsGate)
   const [latencyCompMs, setLatencyCompMs] = useState(0)
   const [userPitchOffsetMs, setUserPitchOffsetMs] = useState(300)
-  const [smoothing, setSmoothing] = useState(DEFAULT_CONFIG.smoothing)
+  const [enableDoubleExponentialSmoothing, setEnableDoubleExponentialSmoothing] = useState(DEFAULT_CONFIG.enableDoubleExponentialSmoothing)
   const [algoId, setAlgoId] = useState(DEFAULT_CONFIG.pitchAlgoId || 'essentia-yin')
   const [enableDcRemoval, setEnableDcRemoval] = useState(DEFAULT_CONFIG.enableDcRemoval !== false)
   const [enableHpf, setEnableHpf] = useState(DEFAULT_CONFIG.enableHpf !== false)
@@ -211,8 +211,9 @@ function Synth({ onNavigateHome }) {
     pitchEngine.configureDetector({
       windowSize,
       hopSize,
+      hopSize,
       rmsGate,
-      smoothing,
+      enableDoubleExponentialSmoothing,
       enableDcRemoval,
       enableHpf,
       enableRmsGate,
@@ -226,7 +227,7 @@ function Synth({ onNavigateHome }) {
     windowSize,
     hopSize,
     rmsGate,
-    smoothing,
+    enableDoubleExponentialSmoothing,
     enableDcRemoval,
     enableHpf,
     enableRmsGate,
@@ -1020,9 +1021,9 @@ function Synth({ onNavigateHome }) {
                       type="switch"
                       id="pitch-smoothing"
                       className="mt-2"
-                      label="Smoothing"
-                      checked={smoothing}
-                      onChange={(e) => setSmoothing(e.currentTarget.checked)}
+                      label="Double Exp Smooth"
+                      checked={enableDoubleExponentialSmoothing}
+                      onChange={(e) => setEnableDoubleExponentialSmoothing(e.currentTarget.checked)}
                     />
                   </Col>
                 </Row>
@@ -1155,6 +1156,13 @@ function Synth({ onNavigateHome }) {
                         label="Temporal Smooth"
                         checked={enableTemporalSmooth}
                         onChange={(e) => setEnableTemporalSmooth(e.currentTarget.checked)}
+                      />
+                      <Form.Check
+                        type="switch"
+                        id="pipeline-double-smooth"
+                        label="Double Exp Smooth"
+                        checked={enableDoubleExponentialSmoothing}
+                        onChange={(e) => setEnableDoubleExponentialSmoothing(e.currentTarget.checked)}
                       />
                     </div>
                   </Col>

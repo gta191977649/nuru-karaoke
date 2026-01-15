@@ -3,7 +3,9 @@ const DEFAULT_CONFIG = {
   hopSize: 256,
   rmsGate: 0.01,
   clarityGate: 0.8,
-  smoothing: false, //Do Moving Average on f0
+  enableDoubleExponentialSmoothing: true, // Double Exponential Smoothing
+  smoothAlpha: 0.5, // Level smoothing factor
+  smoothBeta: 0.1, // Trend smoothing factor
   f0MinHz: 80, //  Detection Range for vocal low bound (Hz)
   f0MaxHz: 1000, // Detection Range for vocal high bound (Hz)
   medianWindowSize: 5, //中值滤波窗口大小（抗尖刺）
@@ -14,7 +16,7 @@ const DEFAULT_CONFIG = {
   enableHpf: true,
   enableRmsGate: true,
   enableF0Validate: true,
-  enableTemporalSmooth: false,
+  enableTemporalSmooth: false, // Disabled to recover low-freq sensitivity & avoid dropouts
   debugPipeline: false,
   debugPipelineStride: 4,
   sampleRate: 48000,

@@ -108,5 +108,48 @@ function applyHpfInPlace(frame, state) {
   return { ...state, x1, y1 }
 }
 
-export { rms, hzToMidi, centsError, smoothValue, smoothMovingAverage, pushWindow, medianOfWindow }
+
+function smoothDoubleExponential(state, value, alpha = 0.5, beta = 0.1) {
+  const x = Number(value)
+  // If input is invalid (null/NaN), return null but keep state if we want to bridge gaps? 
+  // Usually for pitch we break continuity on silence.
+  if (!Number.isFinite(x)) {
+    return {
+      level: null,
+      trend: null,
+      value: null
+    }
+  }
+
+  // Initialize
+  if (state?.level == null) {
+    return {
+      level: x,
+      trend: 0,
+      value: x
+    }
+  }
+
+  // Holt's Linear Trend Method
+  // Level(t) = alpha * value(t) + (1 - alpha) * (Level(t-1) + Trend(t-1))
+  // Trend(t) = beta * (Level(t) - Level(t-1)) + (1 - beta) * Trend(t-1)
+
+  const lastLevel = state.level
+  const lastTrend = state.trend
+
+  const currentLevel = alpha * x + (1 - alpha) * (lastLevel + lastTrend)
+  const currentTrend = beta * (currentLevel - lastLevel) + (1 - beta) * lastTrend
+
+  return {
+    level: currentLevel,
+    trend: currentTrend,
+    value: currentLevel + currentTrend // Forecast or just Level? Usually Level is the smoothed value. 
+    // Actually, Level is the smoothed value at time t. 
+    // value returned should be currentLevel.
+    // Some variants return level+trend as 1-step forecast using it as current estimate.
+    // Let's return currentLevel as the smoothed "now" value.
+  }
+}
+
+export { rms, hzToMidi, centsError, smoothValue, smoothMovingAverage, pushWindow, medianOfWindow, smoothDoubleExponential }
 export { removeDcOffsetInPlace, createHpfState, updateHpfState, applyHpfInPlace }

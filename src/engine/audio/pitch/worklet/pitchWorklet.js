@@ -12,6 +12,7 @@ import {
   removeDcOffsetInPlace,
   rms,
   smoothMovingAverage,
+  smoothDoubleExponential,
   updateHpfState,
 } from '../utils/dspUtils.js'
 
@@ -166,7 +167,7 @@ class PitchFrameProcessor extends AudioWorkletProcessor {
     this._detector = this._detectors.get(this._algoId) || null
     this._config = {
       rmsGate: DEFAULT_CONFIG.rmsGate,
-      smoothing: DEFAULT_CONFIG.smoothing,
+      enableDoubleExponentialSmoothing: DEFAULT_CONFIG.enableDoubleExponentialSmoothing,
       clarityGate: DEFAULT_CONFIG.clarityGate,
       yinConfidenceGate: DEFAULT_CONFIG.yinConfidenceGate,
       f0MinHz: DEFAULT_CONFIG.f0MinHz,
@@ -233,7 +234,13 @@ class PitchFrameProcessor extends AudioWorkletProcessor {
       this._essentiaConfig.lowRMSThreshold = rmsGate
     }
 
-    if (typeof msg.smoothing === 'boolean') this._config.smoothing = msg.smoothing
+    if (typeof msg.enableDoubleExponentialSmoothing === 'boolean') {
+      this._config.enableDoubleExponentialSmoothing = msg.enableDoubleExponentialSmoothing
+    }
+    // Double Exponential Smoothing parameters
+    if (Number.isFinite(msg.smoothAlpha)) this._config.smoothAlpha = Number(msg.smoothAlpha)
+    if (Number.isFinite(msg.smoothBeta)) this._config.smoothBeta = Number(msg.smoothBeta)
+
     const clarityGate = Number(msg.clarityGate)
     if (Number.isFinite(clarityGate)) this._config.clarityGate = clarityGate
     const yinConfidenceGate = Number(msg.yinConfidenceGate)
@@ -404,7 +411,7 @@ class PitchFrameProcessor extends AudioWorkletProcessor {
   }
 
   _resetTracking() {
-    this._smoothState = { value: null, window: [] }
+    this._smoothState = { value: null, level: null, trend: null, window: [] }
     this._stabilityState = { window: [], lastStableF0: null, lastStableMidi: null, holdLeft: 0 }
   }
 
@@ -519,8 +526,13 @@ class PitchFrameProcessor extends AudioWorkletProcessor {
         }
       }
 
-      if (this._config.smoothing) {
-        this._smoothState = smoothMovingAverage(this._smoothState, f0Hz, SMOOTH_WINDOW_SIZE)
+      if (this._config.enableDoubleExponentialSmoothing) {
+        // Use Double Exponential Smoothing (Holt's Linear Trend)
+        // Default params if not set: alpha=0.5, beta=0.1
+        const alpha = Number.isFinite(this._config.smoothAlpha) ? this._config.smoothAlpha : 0.5
+        const beta = Number.isFinite(this._config.smoothBeta) ? this._config.smoothBeta : 0.1
+
+        this._smoothState = smoothDoubleExponential(this._smoothState, f0Hz, alpha, beta)
         f0Hz = this._smoothState.value
       }
     }
