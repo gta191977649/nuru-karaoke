@@ -1,7 +1,7 @@
 import { useEffect, useRef, forwardRef, useState } from 'react'
 import { Application, Container, Graphics, Sprite, Texture, Assets } from 'pixi.js'
 import { BloomFilter } from 'pixi-filters'
-import { getTargetMidiAtTime } from '../engine/audio/midi/referenceMelody.js'
+import { getTargetMidiAtTime, getTargetNoteAtTime } from '../engine/audio/midi/referenceMelody.js'
 import { DEFAULT_PARTICLE_CONFIG, createParticleSystem, createComboSystem } from './particles/particleSystem.js'
 
 const TECHNIQUE_CONFIG = {
@@ -399,7 +399,8 @@ function MelodyGuideCanvas({
         },
         techniqueEventsRef,
         lastTechniqueEventIndex: 0,
-        techniqueSprites: []
+        techniqueSprites: [],
+        processedNotesRef: new Set()
       }
 
       app.ticker.add(() => {
@@ -433,44 +434,50 @@ function MelodyGuideCanvas({
             const songTime = event.t
             let isValid = false
 
+
             if (snap.reference) {
-              const targetMidi = getTargetMidiAtTime(snap.reference, songTime)
-              if (targetMidi !== null) {
+              // Technique validation rule 1: Strict note duration
+              const targetNote = getTargetNoteAtTime(snap.reference, songTime, { maxGap: 0 })
+
+              if (targetNote) {
+                const targetMidi = targetNote.midi
+                // Technique validation rule 3: One technique per note
+                // We use t0 as a unique ID for the note instance
+                const noteId = targetNote.t0Sec
+                if (state.processedNotesRef && state.processedNotesRef.has(noteId)) {
+                  // Already have a technique for this note
+                  continue
+                }
+
                 const transposition = snap.transpositionRef?.current ?? 0
                 const transposedTarget = targetMidi + transposition
 
                 // Find user pitch history near this time
-                // We can use the historyRef directly
                 const history = snap.historyRef?.current || []
-
-                // Simple search for nearest history point
-                // History is sorted by t
                 let bestPoint = null
                 let minDiff = Infinity
 
-                // Optimization: We could binary search but linear scan from end might be fast enough if events are recent
-                // Actually, let's just reverse scan since events are likely recent
                 for (let j = history.length - 1; j >= 0; j--) {
                   const diff = Math.abs(history[j].t - songTime)
                   if (diff < minDiff) {
                     minDiff = diff
                     bestPoint = history[j]
                   }
-                  if (diff > 0.2) { // Determine a search window, e.g. 200ms
-                    // if we are too far, stop searching? 
-                    // careful: history might not be perfectly sorted if we insert out of order, 
-                    // but usually it is append-only.
-                    if (history[j].t < songTime - 0.2) break
-                  }
+                  if (diff > 0.2) break
                 }
 
-                if (bestPoint && minDiff < 0.1) { // 100ms tolerance for finding a pitch sample
+                if (bestPoint && minDiff < 0.1) {
                   const userMidi = Number(bestPoint.userMidi)
                   if (Number.isFinite(userMidi)) {
                     const mappedMidi = mapUserMidiToTargetOctave(userMidi, transposedTarget)
                     if (Number.isFinite(mappedMidi)) {
+                      // Technique validation rule 2: Tune check
                       if (Math.abs(mappedMidi - transposedTarget) <= NOTE_MERGE_CONFIG.pitchToleranceSemis) {
                         isValid = true
+                        // Mark this note as processed
+                        if (state.processedNotesRef) {
+                          state.processedNotesRef.add(noteId)
+                        }
                       }
                     }
                   }
@@ -653,8 +660,8 @@ function MelodyGuideCanvas({
                 const t = Number(point.t)
                 const offset = Math.max(0, Number(snap.userOffsetSec) || 0)
                 const targetMidiGate =
-                  getTargetMidiAtTime(snap.reference, t - offset) ??
-                  getTargetMidiAtTime(snap.reference, t + offset)
+                  getTargetMidiAtTime(snap.reference, t - offset, { maxGap: 0.4 }) ??
+                  getTargetMidiAtTime(snap.reference, t + offset, { maxGap: 0.4 })
                 if (targetMidiGate == null) continue
               }
               const mappedMidi = mapUserMidiToTargetOctave(userMidi, targetMidi)
@@ -725,8 +732,8 @@ function MelodyGuideCanvas({
             const t = Number(point.t)
             const offset = Math.max(0, Number(snap.userOffsetSec) || 0)
             const targetMidiGate =
-              getTargetMidiAtTime(snap.reference, t - offset) ??
-              getTargetMidiAtTime(snap.reference, t + offset)
+              getTargetMidiAtTime(snap.reference, t - offset, { maxGap: 0.4 }) ??
+              getTargetMidiAtTime(snap.reference, t + offset, { maxGap: 0.4 })
             if (targetMidiGate == null) return null
           }
           if (!Number.isFinite(targetMidiPoint)) return null

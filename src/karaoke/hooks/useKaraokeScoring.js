@@ -56,7 +56,7 @@ export function useKaraokeScoring({
             lastProcessedTimeRef.current = songTime
 
             // Get Target
-            const rawTarget = reference ? getTargetMidiAtTime(reference, songTime) : null
+            const rawTarget = reference ? getTargetMidiAtTime(reference, songTime, { maxGap: 0.4 }) : null
             if (rawTarget === null) return // No singing required here
 
             const transposition = transpositionRef.current || 0
@@ -98,7 +98,7 @@ export function useKaraokeScoring({
             if (songTime <= lastProcessedTimeRef.current + 0.001) return
             lastProcessedTimeRef.current = songTime
 
-            const rawTarget = getTargetMidiAtTime(reference, songTime)
+            const rawTarget = getTargetMidiAtTime(reference, songTime, { maxGap: 0.4 })
             if (rawTarget === null) return // Silence/No note
 
             // If there is a target note, we increment total samples

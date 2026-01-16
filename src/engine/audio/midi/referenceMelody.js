@@ -42,7 +42,7 @@ export function extractReferenceMelodyFromMidiData(midi, opts = {}) {
   }
 }
 
-export function getTargetMidiAtTime(ref, songTimeSec, opts = {}) {
+export function getTargetNoteAtTime(ref, songTimeSec, opts = {}) {
   if (!ref?.notes?.length) return null
   const time = Number(songTimeSec)
   if (!Number.isFinite(time)) return null
@@ -60,7 +60,7 @@ export function getTargetMidiAtTime(ref, songTimeSec, opts = {}) {
     } else if (time >= note.t1Sec) {
       lo = mid + 1
     } else {
-      return note.midi
+      return note
     }
   }
 
@@ -77,11 +77,16 @@ export function getTargetMidiAtTime(ref, songTimeSec, opts = {}) {
         // We are in a valid gap.
         // Extend the previous note?
         if (time >= prev.t1Sec && time < next.t0Sec) {
-          return prev.midi
+          return prev
         }
       }
     }
   }
 
   return null
+}
+
+export function getTargetMidiAtTime(ref, songTimeSec, opts = {}) {
+  const note = getTargetNoteAtTime(ref, songTimeSec, opts)
+  return note ? note.midi : null
 }
