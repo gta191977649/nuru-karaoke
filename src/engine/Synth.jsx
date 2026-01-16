@@ -796,6 +796,8 @@ function Synth({ onNavigateHome }) {
             <div className="small text-muted">
               {state.currentTime.toFixed(2)} / {state.duration.toFixed(2)} s
             </div>
+
+
           </div>
         </Col>
 
@@ -822,20 +824,22 @@ function Synth({ onNavigateHome }) {
         <Col xs={12} md={6}>
           <div className="p-3 border rounded-3">
             <div className="fw-semibold mb-2">Effects</div>
+
             <Form.Label className="small">Reverb ({state.reverbGain.toFixed(2)})</Form.Label>
             <Form.Range
               min={0}
-              max={2}
-              step={0.01}
+              max={5.0}
+              step={0.05}
               value={state.reverbGain}
               disabled={!state.ready}
               onChange={(e) => synthEngine.setReverbGain(Number(e.currentTarget.value))}
             />
+
             <Form.Label className="small">Chorus ({state.chorusGain.toFixed(2)})</Form.Label>
             <Form.Range
               min={0}
-              max={2}
-              step={0.01}
+              max={5.0}
+              step={0.05}
               value={state.chorusGain}
               disabled={!state.ready}
               onChange={(e) => synthEngine.setChorusGain(Number(e.currentTarget.value))}

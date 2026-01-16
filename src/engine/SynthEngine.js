@@ -11,6 +11,8 @@ import { getKaraokeStoreState, setKaraokeStoreState } from '../state/karaokeStor
 const DEFAULT_CONFIG = {
   xgDrumMapEnabled: false,
   xgPreferGsPlayback: false,
+  reverb: 1.5,
+  chorus: 1.3,
 }
 
 const MIDI_STATUS = {
@@ -298,6 +300,8 @@ class SynthEngine {
       xgDrumMapEnabled: DEFAULT_CONFIG.xgDrumMapEnabled,
       xgPreferGsPlayback: DEFAULT_CONFIG.xgPreferGsPlayback,
       xgDrumMapState: this._xgMapper.getState(),
+      reverbGain: DEFAULT_CONFIG.reverb,
+      chorusGain: DEFAULT_CONFIG.chorus,
     })
   }
 
@@ -331,15 +335,7 @@ class SynthEngine {
       this._seq = seq
       this._setupMidiMapper()
 
-      try {
-        this._setState({
-          reverbGain: Number(synth.getMasterParameter('reverbGain')) || 0,
-          chorusGain: Number(synth.getMasterParameter('chorusGain')) || 0,
-          transposition: Number(synth.getMasterParameter('transposition')) || 0,
-        })
-      } catch {
-        // ignore
-      }
+      this._applyDefaultEffects()
 
       const { enabledChannels } = getKaraokeStoreState()
       enabledChannels.forEach((enabled, i) => synth.muteChannel(i, !enabled))
@@ -353,6 +349,26 @@ class SynthEngine {
       await this._initializing
     } finally {
       this._initializing = null
+    }
+  }
+
+  _applyDefaultEffects() {
+    if (!this._synth) return
+    try {
+      if (Number.isFinite(DEFAULT_CONFIG.reverb)) {
+        this._synth.setMasterParameter('reverbGain', DEFAULT_CONFIG.reverb)
+      }
+      if (Number.isFinite(DEFAULT_CONFIG.chorus)) {
+        this._synth.setMasterParameter('chorusGain', DEFAULT_CONFIG.chorus)
+      }
+
+      this._setState({
+        reverbGain: Number(this._synth.getMasterParameter('reverbGain')) || 0,
+        chorusGain: Number(this._synth.getMasterParameter('chorusGain')) || 0,
+        transposition: Number(this._synth.getMasterParameter('transposition')) || 0,
+      })
+    } catch (e) {
+      console.warn('Failed to apply default effects', e)
     }
   }
 
@@ -416,8 +432,10 @@ class SynthEngine {
     if (!this._synth) return
     const event = parseMidiMessage(message, this._midiEvent)
     const events = this._xgMapper ? this._xgMapper(event) : [event]
+
     for (const nextEvent of events) {
       if (!nextEvent) continue
+
       const bytes = encodeMidiEvent(nextEvent, this._midiMessage3, this._midiMessage2)
       if (!bytes) continue
       this._synth.sendMessage(bytes)
@@ -523,6 +541,7 @@ class SynthEngine {
     this._updateChannelInstrumentNames().catch(() => {
       // ignore
     })
+    this._applyDefaultEffects()
 
     const autoPlay = options.autoPlay !== false
     if (autoPlay) this.play()
@@ -546,6 +565,7 @@ class SynthEngine {
     this._updateChannelInstrumentNames().catch(() => {
       // ignore
     })
+    this._applyDefaultEffects()
 
     const autoPlay = options.autoPlay !== false
     if (autoPlay) this.play()
@@ -633,10 +653,10 @@ class SynthEngine {
         const res = await fetch(song.lrc)
         if (res.ok) {
           const text = await res.text()
-            setKaraokeStoreState({
-              lrcName: song.lrcName || song.lrc.split('/').pop() || 'lyrics.lrc',
-              lrcEntries: parseLrc(text),
-            })
+          setKaraokeStoreState({
+            lrcName: song.lrcName || song.lrc.split('/').pop() || 'lyrics.lrc',
+            lrcEntries: parseLrc(text),
+          })
         }
       } catch {
         // ignore
@@ -644,7 +664,7 @@ class SynthEngine {
     }
     if (Number.isFinite(song.lrc_offset)) this.setLyricOffsetMs(song.lrc_offset)
     this.play()
-    
+
   }
 
   async playQueueIfIdle() {

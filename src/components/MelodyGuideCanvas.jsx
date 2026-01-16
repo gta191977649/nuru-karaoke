@@ -188,6 +188,7 @@ function MelodyGuideCanvas({
   totalSections = 6,
   className,
   style,
+  onTechniqueCountsChange,
 }) {
   const containerRef = useRef(null)
 
@@ -310,8 +311,15 @@ function MelodyGuideCanvas({
     kobushiCount,
     glissandoDownCount,
     vibratoCount,
-    techniqueEventsRef
+    techniqueEventsRef,
+    onTechniqueCountsChange
   ])
+
+  useEffect(() => {
+    if (onTechniqueCountsChange) {
+      onTechniqueCountsChange(validCounts)
+    }
+  }, [validCounts, onTechniqueCountsChange])
 
   useEffect(() => {
     let active = true

@@ -9,19 +9,25 @@ function useKaraokeSongIntro({ midiUrl, midiName, queue, queueIndex, transpositi
 
   useEffect(() => {
     if (!midiUrl) return
-    if (midiUrl === lastIntroMidiUrl) return
 
     const currentSong = queueIndex >= 0 ? queue?.[queueIndex] : null
     const title = currentSong?.title || midiName || ''
+
+    // Always update song info so it's available for ResultsPage
+    if (title) {
+      setSongInfo({ title, artist: currentSong?.artist || '' })
+    }
+
+    // Only trigger the intro animation if it's a new song load
+    if (midiUrl === lastIntroMidiUrl) return
     if (!title) return
 
     setLastIntroMidiUrl(midiUrl)
-    setSongInfo({ title, artist: currentSong?.artist || '' })
     if (showKeyChangeAlert) showKeyChangeAlert(transposition ?? 0, 5000)
     setShowSongInfo(true)
 
     const timer = setTimeout(() => setShowSongInfo(false), 5000)
-    // return () => clearTimeout(timer)
+    return () => clearTimeout(timer)
   }, [
     midiUrl,
     midiName,
@@ -29,8 +35,6 @@ function useKaraokeSongIntro({ midiUrl, midiName, queue, queueIndex, transpositi
     queueIndex,
     transposition,
     showKeyChangeAlert,
-    lastIntroMidiUrl,
-    setLastIntroMidiUrl,
   ])
 
   return { showSongInfo, songInfo }

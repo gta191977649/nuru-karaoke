@@ -122,6 +122,14 @@ const SONG_LIBRARY = [
     lrc: assetUrl(lrcAssetMap, 'earth_song.lrc'),
     lrc_offset: 0,
   },
+  {
+    id: 'presentendr',
+    title: 'Pretender',
+    artist: '髭男dism',
+    url: assetUrl(midiAssetMap, 'pretender.MID'),
+    lrc: assetUrl(lrcAssetMap, 'pretender.lrc'),
+    lrc_offset: 1100,
+  },
 ]
 
 export { SONG_LIBRARY }
