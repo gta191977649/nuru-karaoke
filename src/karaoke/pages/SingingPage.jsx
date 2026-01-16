@@ -113,6 +113,16 @@ function SingingPage({ onFinish }) {
         techniqueCountsRef.current = counts
     }
 
+    const isScoring = useMemo(() => {
+        if (!reference?.notes || state.currentTime == null) return false
+        const t = state.currentTime
+        // Find if current time is within any note's duration
+        // Optimized search: find first note that ends after current time, check if it started before current time
+        const note = reference.notes.find((n) => n.t1Sec >= t)
+        if (!note) return false
+        return note.t0Sec <= t
+    }, [reference, state.currentTime])
+
     const lines = useMemo(() => {
         const entries = state.lrcEntries || []
         const i = state.activeLyricIndex ?? -1
@@ -205,6 +215,14 @@ function SingingPage({ onFinish }) {
             <div className="karaoke-stage">
                 <div className="karaoke-screen">
                     <div className="top-section">
+                        <div className="info-container">
+                            {isScoring && (
+                                <div className="scoring-badge">
+                                    <span className="scoring-icon">🎤</span>
+                                    <span className="scoring-text">採点中</span>
+                                </div>
+                            )}
+                        </div>
                         <div className="melody-guide">
                             <MelodyGuideCanvas
                                 className="melodyGuideCanvas"
