@@ -3,6 +3,7 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import { useKaraokeStore } from '../../state/karaokeStore.js'
 import { synthEngine } from '../../engine/SynthEngine.js'
 import { sharedPitchEngine, startSharedMic, stopSharedMic } from '../../engine/audio/pitch/sharedPitchEngine.js'
+import { groupNotesToSegments } from '../../engine/audio/midi/noteUtils.js'
 import MelodyGuideCanvas from '../../components/MelodyGuideCanvas.jsx'
 import KeyChangeAlert from '../../components/KeyChangeAlert.jsx'
 import useKeyChangeAlertStore from '../../state/keyChangeAlertStore.js'
@@ -113,15 +114,21 @@ function SingingPage({ onFinish }) {
         techniqueCountsRef.current = counts
     }
 
+
+    // Memoize segments to avoid recomputing every frame
+    const scoringSegments = useMemo(() => {
+        return groupNotesToSegments(reference?.notes, 0.4)
+    }, [reference?.notes])
+
     const isScoring = useMemo(() => {
-        if (!reference?.notes || state.currentTime == null) return false
+        if (!scoringSegments || state.currentTime == null) return false
         const t = state.currentTime
-        // Find if current time is within any note's duration
-        // Optimized search: find first note that ends after current time, check if it started before current time
-        const note = reference.notes.find((n) => n.t1Sec >= t)
-        if (!note) return false
-        return note.t0Sec <= t
-    }, [reference, state.currentTime])
+        // Check if current time is within any segment
+        // Optimized: find first segment ending after t
+        const seg = scoringSegments.find((s) => s.t1Sec >= t)
+        if (!seg) return false
+        return seg.t0Sec <= t
+    }, [scoringSegments, state.currentTime])
 
     const lines = useMemo(() => {
         const entries = state.lrcEntries || []

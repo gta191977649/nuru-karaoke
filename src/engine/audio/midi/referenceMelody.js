@@ -42,10 +42,11 @@ export function extractReferenceMelodyFromMidiData(midi, opts = {}) {
   }
 }
 
-export function getTargetMidiAtTime(ref, songTimeSec) {
+export function getTargetMidiAtTime(ref, songTimeSec, opts = {}) {
   if (!ref?.notes?.length) return null
   const time = Number(songTimeSec)
   if (!Number.isFinite(time)) return null
+  const maxGap = Number.isFinite(opts.maxGap) ? opts.maxGap : 0
 
   const notes = ref.notes
   let lo = 0
@@ -60,6 +61,25 @@ export function getTargetMidiAtTime(ref, songTimeSec) {
       lo = mid + 1
     } else {
       return note.midi
+    }
+  }
+
+  // Not strictly in a note. Check gap if maxGap > 0
+  if (maxGap > 0) {
+    // 'lo' is the index of the first note that starts *after* time (or notes.length)
+    // 'lo-1' is the note that ended *before* time
+    const prev = notes[lo - 1]
+    const next = notes[lo]
+
+    // We only care if we are in a gap between two notes
+    if (prev && next) {
+      if (next.t0Sec - prev.t1Sec <= maxGap) {
+        // We are in a valid gap.
+        // Extend the previous note?
+        if (time >= prev.t1Sec && time < next.t0Sec) {
+          return prev.midi
+        }
+      }
     }
   }
 
