@@ -225,8 +225,7 @@ function SingingPage({ onFinish }) {
                         <div className="info-container">
                             {isScoring && (
                                 <div className="scoring-badge">
-                                    <span className="scoring-icon">🎤</span>
-                                    <span className="scoring-text">採点中</span>
+                                    <span className="scoring-text">🎤 採点中</span>
                                 </div>
                             )}
                         </div>
