@@ -211,7 +211,6 @@ function Synth({ onNavigateHome }) {
     pitchEngine.configureDetector({
       windowSize,
       hopSize,
-      hopSize,
       rmsGate,
       enableDoubleExponentialSmoothing,
       enableDcRemoval,
