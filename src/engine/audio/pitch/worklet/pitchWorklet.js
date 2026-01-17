@@ -496,6 +496,7 @@ class PitchFrameProcessor extends AudioWorkletProcessor {
       f0Hz = isValidRange ? f0Hz : null
     }
 
+    // 1. Median Smoothing (De-spiking)
     if (this._config.enableTemporalSmooth) {
       if (Number.isFinite(f0Hz)) {
         this._stabilityState.window = pushWindow(this._stabilityState.window, f0Hz, medianWindowSize)
@@ -525,16 +526,19 @@ class PitchFrameProcessor extends AudioWorkletProcessor {
           this._stabilityState.holdLeft = 0
         }
       }
+    }
 
-      if (this._config.enableDoubleExponentialSmoothing) {
-        // Use Double Exponential Smoothing (Holt's Linear Trend)
-        // Default params if not set: alpha=0.5, beta=0.1
-        const alpha = Number.isFinite(this._config.smoothAlpha) ? this._config.smoothAlpha : 0.5
-        const beta = Number.isFinite(this._config.smoothBeta) ? this._config.smoothBeta : 0.1
+    // 2. Double Exponential Smoothing (Trend Smoothing)
+    // NOTE: We apply this INDEPENDENTLY of the legacy 'enableTemporalSmooth' flag.
+    // We also perform this in the MIDI (Log) domain for perceptual consistency.
+    if (this._config.enableDoubleExponentialSmoothing) {
+      // Use Double Exponential Smoothing (Holt's Linear Trend)
+      // Default params if not set: alpha=0.5, beta=0.1
+      const alpha = Number.isFinite(this._config.smoothAlpha) ? this._config.smoothAlpha : 0.5
+      const beta = Number.isFinite(this._config.smoothBeta) ? this._config.smoothBeta : 0.1
 
-        this._smoothState = smoothDoubleExponential(this._smoothState, f0Hz, alpha, beta)
-        f0Hz = this._smoothState.value
-      }
+      this._smoothState = smoothDoubleExponential(this._smoothState, f0Hz, alpha, beta)
+      f0Hz = this._smoothState.value
     }
 
     const midi = Number.isFinite(f0Hz) ? hzToMidi(f0Hz) : null

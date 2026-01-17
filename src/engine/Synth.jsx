@@ -1091,7 +1091,7 @@ function Synth({ onNavigateHome }) {
                   <div>micSampleRate: {formatNumber(debugInfo.micSampleRate, 0)}</div>
                 </div>
               </Tab>
-              <Tab eventKey="pipeline-debug" title="Pipeline Debug">
+              <Tab eventKey="pipeline-debug" title="DSP Pipeline Debug">
                 <div className="fw-semibold mb-2">Signal Pipeline</div>
                 <Row className="g-3">
                   <Col xs={12} md={5}>

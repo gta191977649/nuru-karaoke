@@ -235,7 +235,6 @@ function MelodyGuideCanvas({
       shakuri: 0,
       kobushi: 0,
       fall: 0,
-      fall: 0,
       vibrato: 0
     },
     techniqueSprites: [] // For tracking active sprites
@@ -488,6 +487,7 @@ function MelodyGuideCanvas({
             if (isValid) {
               // Trigger Combo
               const type = event.type
+              event.isValid = true // Mark for renderer
 
               setValidCounts(prev => ({
                 ...prev,
@@ -940,6 +940,8 @@ function MelodyGuideCanvas({
         const processedNotes = new Set()
 
         visibleEvents.forEach(evt => {
+          if (!evt.isValid) return // Only render validated techniques
+
           const config = TECHNIQUE_CONFIG[evt.type]
           if (!config) return
 
