@@ -713,41 +713,35 @@ function Synth({ onNavigateHome }) {
 
         <Col xs={12}>
           <div className="p-3 border rounded-3">
-            <div className="fw-semibold mb-2">XG -&gt; GS Drum Mapping</div>
+            <div className="fw-semibold mb-2">MIDI Standard Mapping</div>
             <Row className="g-2 align-items-center">
-              <Col xs={12} md={6}>
+              <Col xs={12} md={12}>
                 <Form.Check
                   type="switch"
-                  id="xg-drum-map-enabled"
-                  label="Enable mapping"
-                  checked={Boolean(state.xgDrumMapEnabled)}
-                  onChange={(e) => synthEngine.setXgDrumMapEnabled(e.currentTarget.checked)}
-                />
-              </Col>
-              <Col xs={12} md={6}>
-                <Form.Check
-                  type="switch"
-                  id="xg-drum-map-prefer-gs"
-                  label="Prefer GS playback"
-                  checked={Boolean(state.xgPreferGsPlayback)}
-                  onChange={(e) => synthEngine.setXgPreferGsPlayback(e.currentTarget.checked)}
+                  id="midi-map-enabled"
+                  label="Enable auto-mapping"
+                  checked={Boolean(state.enableMIDIStandardMapping)}
+                  onChange={(e) => synthEngine.setEnableMIDIStandardMapping(e.currentTarget.checked)}
                 />
               </Col>
             </Row>
             <div className="small text-muted mt-2">
-              Mode: {state.xgDrumMapState?.globalMode || 'unknown'}
+              Detected Standard: {state.midiMapState?.detectedStandard || 'unknown'}
             </div>
             <div className="small text-muted">
-              Detected by: {state.xgDrumMapState?.detectedBy || '—'}
+              Active Config: {state.midiMapState?.configName || 'None'}
             </div>
             <div className="small text-muted">
-              XG bank pairs: {state.xgDrumMapState?.xgBankSelectPairs ?? 0}
+              Current Mode: {state.midiMapState?.globalMode || 'unknown'}
             </div>
             <div className="small text-muted">
-              Drum channels: {formatChannelList(state.xgDrumMapState?.drumChannels)}
+              Detected by: {state.midiMapState?.detectedBy || '—'}
             </div>
             <div className="small text-muted">
-              Brush channels: {formatChannelList(state.xgDrumMapState?.brushChannels)}
+              Drum channels: {formatChannelList(state.midiMapState?.drumChannels)}
+            </div>
+            <div className="small text-muted">
+              Brush channels: {formatChannelList(state.midiMapState?.brushChannels)}
             </div>
           </div>
         </Col>

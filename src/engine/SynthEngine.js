@@ -1,16 +1,15 @@
 import { Sequencer, WorkletSynthesizer } from 'spessasynth_lib'
 import processorUrl from 'spessasynth_lib/dist/spessasynth_processor.min.js?url'
-//import defaultSoundFontUrl from '../soundfont/sc55.sf2'
-import defaultSoundFontUrl from '../soundfont/gmex.sf2'
-import { createXgDrumToGsMapper } from './xgDrumMapper.js'
+import defaultSoundFontUrl from '../soundfont/sc55.sf2'
+//import defaultSoundFontUrl from '../soundfont/gmex.sf2'
+import { createMidiMapper } from './MidiMapper.js'
 import { findActiveLyricIndex, parseLrc } from './lrc.js'
 import { getKaraokeAudioEngine } from './audioEngine.js'
 import { PLAYER_CONFIG } from '../config.js'
 import { getKaraokeStoreState, setKaraokeStoreState } from '../state/karaokeStore.js'
 
 const DEFAULT_CONFIG = {
-  xgDrumMapEnabled: false,
-  xgPreferGsPlayback: false,
+  enableMIDIStandardMapping: true,
   reverb: 1.5,
   chorus: 1.3,
 }
@@ -252,18 +251,22 @@ function extractChannelPatchesFromMIDI(midi) {
 }
 
 function resolvePatchName(presetList, patch, channelIndex) {
-  if (!patch) return channelIndex === 9 ? 'Drums' : '—'
-  if (patch.isGMGSDrum || channelIndex === 9) return 'Drums'
+  if (!patch) return channelIndex === 9 ? 'Drums (0)' : '—'
+  // 1-based program for display
+  const progDisp = (patch.program || 0) + 1
+
+  if (patch.isGMGSDrum || channelIndex === 9) return `Drums (${progDisp})`
+
   const exact = presetList?.find(
     (p) => p.program === patch.program && p.bankMSB === patch.bankMSB && p.bankLSB === patch.bankLSB,
   )
-  if (exact?.name) return exact.name
+  if (exact?.name) return `${exact.name} (${progDisp})`
 
   const byProgramBank = presetList?.find((p) => p.program === patch.program && p.bankMSB === patch.bankMSB)
-  if (byProgramBank?.name) return byProgramBank.name
+  if (byProgramBank?.name) return `${byProgramBank.name} (${progDisp})`
 
   const fallback = presetList?.find((p) => p.program === patch.program)
-  return fallback?.name || `Program ${patch.program + 1}`
+  return fallback?.name ? `${fallback.name} (${progDisp})` : `Program ${progDisp}`
 }
 
 class SynthEngine {
@@ -275,7 +278,7 @@ class SynthEngine {
     this._synth = null
     this._seq = null
 
-    this._xgMapper = createXgDrumToGsMapper()
+    this._midiMapper = createMidiMapper(null)
     this._midiEvent = createMidiEvent()
     this._midiMessage3 = new Uint8Array(3)
     this._midiMessage2 = new Uint8Array(2)
@@ -286,20 +289,24 @@ class SynthEngine {
     this._activityDirty = false
     this._polyphonyDirty = false
 
+    // Real-time instrument tracking
+    this._channelInstrumentNames = Array.from({ length: 16 }, () => '—')
+    this._channelPrograms = Array.from({ length: 16 }, () => ({ program: 0, bankMSB: 0, bankLSB: 0 }))
+    this._instrumentDirty = false
+
     this._raf = 0
     this._prevFinished = false
     this._isAdvancing = false
     this._isStopping = false
 
-    this._xgMapper.setEnabled(DEFAULT_CONFIG.xgDrumMapEnabled)
-    this._xgMapper.setPreferGsPlayback(DEFAULT_CONFIG.xgPreferGsPlayback)
-    this._xgMapper.onStateChange = (state) => {
-      this._setState({ xgDrumMapState: state })
+    this._midiMapper.setEnabled(DEFAULT_CONFIG.enableMIDIStandardMapping)
+    this._midiMapper.onStateChange = (state) => {
+      this._setState({ midiMapState: state })
+      this._bgSyncDrums(state.drumChannels)
     }
     this._setState({
-      xgDrumMapEnabled: DEFAULT_CONFIG.xgDrumMapEnabled,
-      xgPreferGsPlayback: DEFAULT_CONFIG.xgPreferGsPlayback,
-      xgDrumMapState: this._xgMapper.getState(),
+      enableMIDIStandardMapping: DEFAULT_CONFIG.enableMIDIStandardMapping,
+      midiMapState: this._midiMapper.getState(),
       reverbGain: DEFAULT_CONFIG.reverb,
       chorusGain: DEFAULT_CONFIG.chorus,
     })
@@ -403,6 +410,10 @@ class SynthEngine {
           patch.polyphonyCount = this._polyphonyCount
           this._polyphonyDirty = false
         }
+        if (this._instrumentDirty) {
+          patch.channelInstrumentNames = this._channelInstrumentNames.slice()
+          this._instrumentDirty = false
+        }
         this._setState(patch)
         setKaraokeStoreState({ activeLyricIndex, karaokeProgress })
 
@@ -419,8 +430,23 @@ class SynthEngine {
     this._raf = window.requestAnimationFrame(tick)
   }
 
+  _bgSyncDrums(drumChannels) {
+    if (!this._synth || !drumChannels) return
+    if (typeof this._synth.setDrums !== 'function') return
+    try {
+      drumChannels.forEach((isDrum, channel) => {
+        this._synth.setDrums(channel, Boolean(isDrum))
+      })
+    } catch (e) {
+      console.warn('Failed to sync drums', e)
+    }
+  }
+
   _setupMidiMapper() {
-    if (!this._seq || !this._synth || !this._xgMapper) return
+    if (!this._seq || !this._synth || !this._midiMapper) return
+    // Sync initial state
+    this._bgSyncDrums(this._midiMapper.getState().drumChannels)
+
     this._seq.connectMIDIOutput({
       send: (data) => {
         this._handleMidiOutputMessage(data)
@@ -431,7 +457,7 @@ class SynthEngine {
   _handleMidiOutputMessage(message) {
     if (!this._synth) return
     const event = parseMidiMessage(message, this._midiEvent)
-    const events = this._xgMapper ? this._xgMapper(event) : [event]
+    const events = this._midiMapper ? this._midiMapper(event) : [event]
 
     for (const nextEvent of events) {
       if (!nextEvent) continue
@@ -440,22 +466,80 @@ class SynthEngine {
       if (!bytes) continue
       this._synth.sendMessage(bytes)
       this._trackChannelActivity(nextEvent)
+      this._synth.sendMessage(bytes)
+      this._trackChannelActivity(nextEvent)
       this._trackPolyphony(nextEvent)
+      this._trackProgramChange(nextEvent) // Track real-time program changes
     }
   }
 
-  _resetXgMapperState() {
-    if (!this._xgMapper) return
-    this._xgMapper.reset()
+  _trackProgramChange(event) {
+    if (!event) return
+    const channel = Number(event.channel)
+    if (!Number.isInteger(channel) || channel < 0 || channel > 15) return
+
+    let changed = false
+    const state = this._channelPrograms[channel]
+
+    if (event.type === 'program') {
+      const val = Number(event.value) || 0
+      if (state.program !== val) {
+        state.program = val
+        changed = true
+      }
+      // If program changes, re-check instrument name using current banks
+      // IMPORTANT: We use the *mapped* program if it came from the mapper.
+    } else if (event.type === 'cc') {
+      if (event.controller === 0) { // MSB
+        const val = Number(event.value) || 0
+        if (state.bankMSB !== val) {
+          state.bankMSB = val
+          changed = true
+        }
+      } else if (event.controller === 32) { // LSB
+        const val = Number(event.value) || 0
+        if (state.bankLSB !== val) {
+          state.bankLSB = val
+          changed = true
+        }
+      }
+    }
+
+    if (changed) {
+      // Resolve name
+      const patch = {
+        program: state.program,
+        bankMSB: state.bankMSB,
+        bankLSB: state.bankLSB,
+        isGMGSDrum: channel === 9 || (this._midiMapper?.getState()?.drumChannels?.[channel])
+      }
+      const name = resolvePatchName(this._synth.presetList, patch, channel)
+      if (this._channelInstrumentNames[channel] !== name) {
+        this._channelInstrumentNames[channel] = name
+        this._instrumentDirty = true
+      }
+    }
+  }
+
+  _resetMidiMapperState() {
+    if (!this._midiMapper) return
+    this._midiMapper.reset()
   }
 
   _resetChannelActivity() {
     this._channelActivityVelocity.fill(0)
     this._channelActivityTime.fill(-1)
     this._activityDirty = false
+
+    // Reset instrument state
+    this._channelInstrumentNames.fill('—')
+    this._channelPrograms.forEach(p => { p.program = 0; p.bankMSB = 0; p.bankLSB = 0 })
+    this._instrumentDirty = true
+
     this._setState({
       channelActivityVelocity: this._channelActivityVelocity.slice(),
       channelActivityTime: this._channelActivityTime.slice(),
+      channelInstrumentNames: this._channelInstrumentNames.slice()
     })
   }
 
@@ -522,13 +606,32 @@ class SynthEngine {
 
   async loadMidiFromUrl(url, options = {}) {
     await this.ensureInitialized()
-    this._resetXgMapperState()
+    // Buffer loading is needed for detection. Url load gets buffer later.
+    // Ideally we should move buffer fetch earlier if we want early mapper creation?
+    // Wait, loadFromUrl fetches buffer. We can update mapper AFTER fetch.
     this._resetChannelActivity()
     this._resetPolyphony()
     this._setState({ status: `Loading MIDI: ${url}` })
     const response = await fetch(url)
     if (!response.ok) throw new Error(`MIDI HTTP ${response.status}`)
     const buffer = await response.arrayBuffer()
+
+    // Re-create mapper with new buffer for detection
+    const prevEnabled = getKaraokeStoreState().enableMIDIStandardMapping ?? DEFAULT_CONFIG.enableMIDIStandardMapping
+    this._midiMapper = createMidiMapper(buffer)
+    this._midiMapper.setEnabled(prevEnabled)
+    this._midiMapper.onStateChange = (state) => {
+      this._setState({ midiMapState: state })
+      this._bgSyncDrums(state.drumChannels)
+    }
+    this._setupMidiMapper() // Re-attach if needed? Actually _seq.connectMIDIOutput is persistent, but the closure uses this._midiMapper ref?
+    // The loop in _handleMidiOutputMessage uses this._midiMapper, so updating the property is enough if the closure reads "this._midiMapper" dynamically.
+    // Yes: "this._xgMapper ? this._xgMapper(event)"
+
+    // Update State
+    const newState = this._midiMapper.getState()
+    this._setState({ midiMapState: newState })
+    this._bgSyncDrums(newState.drumChannels)
     console.log({ status: `Loading MIDI: ${url}` })
 
     this._seq.pause()
@@ -551,10 +654,21 @@ class SynthEngine {
 
   async loadMidiFromFile(file, options = {}) {
     await this.ensureInitialized()
-    this._resetXgMapperState()
+    const buffer = await file.arrayBuffer()
+
+    const prevEnabled = getKaraokeStoreState().enableMIDIStandardMapping ?? DEFAULT_CONFIG.enableMIDIStandardMapping
+    this._midiMapper = createMidiMapper(buffer)
+    this._midiMapper.setEnabled(prevEnabled)
+    this._midiMapper.onStateChange = (state) => {
+      this._setState({ midiMapState: state })
+      this._bgSyncDrums(state.drumChannels)
+    }
+    const newState = this._midiMapper.getState()
+    this._setState({ midiMapState: newState })
+    this._bgSyncDrums(newState.drumChannels)
+
     this._resetChannelActivity()
     this._resetPolyphony()
-    const buffer = await file.arrayBuffer()
     const midiName = file.name
     this._seq.pause()
     this._seq.currentTime = 0
@@ -787,16 +901,10 @@ class SynthEngine {
     this._setState({ transposition: v })
   }
 
-  setXgDrumMapEnabled(enabled) {
+  setEnableMIDIStandardMapping(enabled) {
     const next = Boolean(enabled)
-    this._xgMapper?.setEnabled(next)
-    this._setState({ xgDrumMapEnabled: next })
-  }
-
-  setXgPreferGsPlayback(preferGsPlayback) {
-    const next = Boolean(preferGsPlayback)
-    this._xgMapper?.setPreferGsPlayback(next)
-    this._setState({ xgPreferGsPlayback: next })
+    this._midiMapper?.setEnabled(next)
+    this._setState({ enableMIDIStandardMapping: next })
   }
 
   shiftTransposition(deltaSemitones) {
@@ -832,7 +940,14 @@ class SynthEngine {
     })
     const midi = await Promise.race([this._seq.getMIDI(), timeout])
     const patches = extractChannelPatchesFromMIDI(midi)
+    // Update internal state
+    patches.forEach((p, i) => {
+      if (p) {
+        this._channelPrograms[i] = { ...p }
+      }
+    })
     const channelInstrumentNames = patches.map((patch, idx) => resolvePatchName(this._synth.presetList, patch, idx))
+    this._channelInstrumentNames = channelInstrumentNames
     this._setState({ channelInstrumentNames })
   }
 }
