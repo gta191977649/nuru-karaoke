@@ -12,6 +12,7 @@ import { useKaraokePitchHistory } from '../hooks/useKaraokePitchHistory.js'
 import { useKaraokeSongIntro } from '../hooks/useKaraokeSongIntro.js'
 import { useSingingTechnique } from '../hooks/useSingingTechnique.js'
 import { useKaraokeScoring } from '../hooks/useKaraokeScoring.js'
+import RealtimeScoreCounter from '../../components/RealtimeScoreCounter.jsx'
 
 function splitRubySegments(text) {
     const raw = String(text ?? '')
@@ -85,6 +86,8 @@ function SingingPage({ onFinish }) {
         queueIndex: state.queueIndex,
         transposition: state.transposition,
         showKeyChangeAlert,
+        reference,
+        currentTime: state.currentTime,
     })
     const { pitchHistoryRef, lastPitchRef } = useKaraokePitchHistory({
         pitchEngine,
@@ -115,7 +118,8 @@ function SingingPage({ onFinish }) {
     }
 
 
-    // Memoize segments to avoid recomputing every frame
+
+
     const scoringSegments = useMemo(() => {
         return groupNotesToSegments(reference?.notes, 0.4)
     }, [reference?.notes])
@@ -129,6 +133,17 @@ function SingingPage({ onFinish }) {
         if (!seg) return false
         return seg.t0Sec <= t
     }, [scoringSegments, state.currentTime])
+
+    // Live Score Polling
+    const [liveScore, setLiveScore] = useState(0)
+    useEffect(() => {
+        if (!isScoring) return
+        const interval = setInterval(() => {
+            const s = getScore()
+            setLiveScore(s)
+        }, 100)
+        return () => clearInterval(interval)
+    }, [isScoring, getScore])
 
     const lines = useMemo(() => {
         const entries = state.lrcEntries || []
@@ -212,6 +227,7 @@ function SingingPage({ onFinish }) {
 
     return (
         <div className={`karaokePage${showSongInfo ? ' karaokePage--intro' : ''}`}>
+            <RealtimeScoreCounter score={liveScore} />
             <KeyChangeAlert />
             {showSongInfo ? (
                 <div className="karaokeSongIntro">

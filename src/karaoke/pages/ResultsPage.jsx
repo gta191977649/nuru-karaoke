@@ -10,17 +10,17 @@ const SCORE_RING_CONFIG = {
 }
 
 function ResultsPage({ score, techniques, songInfo, onNext }) {
-    score = 94.25 // Preserving user debug value
+
     const displayScore = (Number(score) || 0).toFixed(2)
     const [intPart, decPart] = displayScore.split('.')
 
     // Mock Analysis Data (since we don't have real analytics for these yet)
     const analysisdata = useMemo(() => ({
-        pitch: { label: '音程', val: Math.min(40, (score / 100) * 40).toFixed(3), max: 40 },
-        stability: { label: '安定感', val: (Math.random() * 30).toFixed(3), max: 30 },
-        intonation: { label: '抑揚', val: (Math.random() * 15).toFixed(3), max: 15 },
-        longTone: { label: 'ロングトーン', val: (Math.random() * 10).toFixed(3), max: 10 },
-        technique: { label: 'テクニック', val: (Math.random() * 5).toFixed(3), max: 5 },
+        pitch: { label: '音程', val: 0, max: 40 },
+        stability: { label: '安定感', val: 0, max: 30 },
+        intonation: { label: '抑揚', val: 0, max: 15 },
+        longTone: { label: 'ロングトーン', val: 0, max: 10 },
+        technique: { label: 'テクニック', val: 0, max: 5 },
     }), [score])
 
     const circumference = 2 * Math.PI * SCORE_RING_CONFIG.radius
@@ -174,6 +174,12 @@ function ResultsPage({ score, techniques, songInfo, onNext }) {
                                 <span className="tech-icon-circle">~</span>
                                 <span className="tech-name">こぶし</span>
                                 <span className="tech-count">{techniques?.kobushi || 0}</span>
+                                <span className="tech-unit">回</span>
+                            </div>
+                            <div className="tech-row color-fall">
+                                <span className="tech-icon-circle">⤵</span>
+                                <span className="tech-name">フォール</span>
+                                <span className="tech-count">{techniques?.glissdown || 0}</span>
                                 <span className="tech-unit">回</span>
                             </div>
                             <div className="tech-row color-shakuri">

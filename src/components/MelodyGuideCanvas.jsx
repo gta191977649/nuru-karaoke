@@ -189,6 +189,7 @@ function MelodyGuideCanvas({
   className,
   style,
   onTechniqueCountsChange,
+  showPitchDebug = true,
 }) {
   const containerRef = useRef(null)
 
@@ -256,7 +257,8 @@ function MelodyGuideCanvas({
     glissandoUpCount,
     kobushiCount,
     glissandoDownCount,
-    vibratoCount
+    vibratoCount,
+    showPitchDebug
   })
 
   const triggerComboHit = (ref, color) => {
@@ -290,7 +292,8 @@ function MelodyGuideCanvas({
       kobushiCount,
       glissandoDownCount,
       vibratoCount,
-      techniqueEventsRef
+      techniqueEventsRef,
+      showPitchDebug
     }
   }, [
     reference,
@@ -311,7 +314,8 @@ function MelodyGuideCanvas({
     glissandoDownCount,
     vibratoCount,
     techniqueEventsRef,
-    onTechniqueCountsChange
+    onTechniqueCountsChange,
+    showPitchDebug
   ])
 
   useEffect(() => {
@@ -359,6 +363,7 @@ function MelodyGuideCanvas({
       const particleSystem = createParticleSystem(particleConfig)
       const comboSystem = createComboSystem()
       const playhead = new Graphics()
+      const debugTrace = new Graphics()
 
       userGlowContainer.addChild(particleSystem.container, comboSystem.container, userGlow, trail)
       userGlowContainer.filters = [
@@ -368,7 +373,7 @@ function MelodyGuideCanvas({
           threshold: 0.2,
         }),
       ]
-      app.stage.addChild(bg, grid, notes, miss, user, userGlowContainer, playhead, techniqueIcons)
+      app.stage.addChild(bg, grid, notes, miss, user, userGlowContainer, playhead, techniqueIcons, debugTrace)
 
       pixiRef.current = {
         app,
@@ -385,6 +390,7 @@ function MelodyGuideCanvas({
         particleSystem,
         comboSystem,
         playhead,
+        debugTrace,
         lastSize: { w: 0, h: 0 },
         lastGrid: { w: 0, h: 0, lineCount: 12 },
         lastCenterPitch: null,
@@ -813,6 +819,51 @@ function MelodyGuideCanvas({
           })
           state.userGlow.fill()
           state.userGlow.stroke()
+        }
+
+        // --- DEBUG PITCH TRACE ---
+        if (state.debugTrace) {
+          state.debugTrace.clear()
+          if (snap.showPitchDebug) {
+            const debugColor = 0x00FFFF // Cyan
+            state.debugTrace.setStrokeStyle({ width: 2, color: debugColor, alpha: 0.8 })
+            state.debugTrace.beginPath()
+
+            let started = false
+            history.forEach((point) => {
+              if (point.t < visibleStart || point.t > visibleEnd) return
+              const userMidi = Number.isFinite(point.userMidi) ? Number(point.userMidi) : null
+              const rms = Number.isFinite(point.rms) ? Number(point.rms) : 0
+
+              // Draw even if low RMS, or maybe gate it slightly? 
+              // User asked for "raw f0 indicate", usually raw means even if noisy, but let's key off > 0 midi
+              if (userMidi === null || userMidi <= 0) {
+                started = false
+                return
+              }
+
+              const x = playheadX + (point.t - songTimeSec) * pixelsPerSec
+              const { y, inRange } = midiToY(userMidi)
+
+              // Clamp Y visually so it doesn't go off canvas wildly
+              const drawY = Math.max(0, Math.min(h, y))
+
+              if (!started) {
+                state.debugTrace.moveTo(x, drawY)
+                started = true
+              } else {
+                state.debugTrace.lineTo(x, drawY)
+              }
+            })
+            state.debugTrace.stroke()
+
+            // Draw label
+            /*
+            state.debugTrace.fillStyle = '#00FFFF'
+            state.debugTrace.font = '12px monospace'
+            state.debugTrace.fillText('RAW F0', 10, 20)
+            */
+          }
         }
 
         let playheadDotY = null

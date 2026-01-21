@@ -1,11 +1,30 @@
 import { useEffect, useState } from 'react'
 import { useKaraokeStore } from '../../state/karaokeStore.js'
 
-function useKaraokeSongIntro({ midiUrl, midiName, queue, queueIndex, transposition, showKeyChangeAlert }) {
+function useKaraokeSongIntro({
+  midiUrl,
+  midiName,
+  queue,
+  queueIndex,
+  transposition,
+  showKeyChangeAlert,
+  reference,
+  currentTime = 0
+}) {
   const [showSongInfo, setShowSongInfo] = useState(false)
   const [songInfo, setSongInfo] = useState({ title: '', artist: '' })
   const lastIntroMidiUrl = useKaraokeStore((state) => state.lastIntroMidiUrl)
   const setLastIntroMidiUrl = useKaraokeStore((state) => state.setLastIntroMidiUrl)
+
+  // Force hide if melody is visible (approaching within 3 seconds)
+  useEffect(() => {
+    if (!showSongInfo || !reference?.notes?.length) return
+    const firstNoteTime = reference.notes[0].t0Sec
+    // If first note is within 3 seconds (visible window roughly), hide intro
+    if (firstNoteTime < currentTime + 3.0) {
+      setShowSongInfo(false)
+    }
+  }, [showSongInfo, reference, currentTime])
 
   useEffect(() => {
     if (!midiUrl) return

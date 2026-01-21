@@ -401,7 +401,8 @@
 .text {
   font-size: 3.5rem;
   color: #ffffff;
-  -webkit-text-stroke: 2px #000000;
+  -webkit-text-stroke: 6px #000000;
+  paint-order: stroke fill;
 
   /* text-shadow: 3px 3px 0px #000; */
   white-space: nowrap;
@@ -417,7 +418,8 @@
 
 .karaokeTextBase {
   color: #ffffff;
-  -webkit-text-stroke: 2px #000000;
+  -webkit-text-stroke: 6px #000000;
+  paint-order: stroke fill;
 
 }
 
@@ -428,7 +430,8 @@
   width: var(--karaoke-progress);
   overflow: hidden;
   color: #e60000;
-  -webkit-text-stroke: 2px #ffffff;
+  -webkit-text-stroke: 6px #ffffff;
+  paint-order: stroke fill;
   white-space: nowrap;
   pointer-events: none;
 }
@@ -909,70 +912,98 @@
 }
 
 /* Details Section */
+/* Details Section - Footer Panel */
 .details-section {
-  flex: 1;
+  flex: 0 0 auto;
   display: flex;
-  gap: 20px;
+  gap: 15px;
   min-height: 0;
   margin-bottom: 2vh;
+  background: rgba(10, 15, 20, 0.4);
+  /* Transparent Dark */
+  padding: 12px 20px;
+  border-radius: 12px;
+  border: none;
+  box-shadow: 0 10px 20px rgba(0, 0, 0, 0.5);
 }
 
 .detail-box {
   flex: 1;
   background: rgba(0, 0, 0, 0.4);
-  border: 2px solid #333;
-  border-radius: 10px;
-  padding: 10px;
+  border-radius: 6px;
+  padding: 8px;
   display: flex;
   flex-direction: column;
+  position: relative;
+  overflow: hidden;
 }
 
 /* Tech Detail specific */
 .tech-detail {
+  flex: 1.8;
+  /* Increase width to prevent overflow */
   flex-direction: row;
-  align-items: center;
-  background: #000;
-  border: 1px solid #555;
-  box-shadow: inset 0 0 20px rgba(0, 0, 0, 0.8);
+  align-items: stretch;
+  background-color: transparent;
+  /* Pure Black */
+  border: none;
 }
 
 .detail-circle-badge {
-  width: 10vh;
-  height: 10vh;
-  min-width: 60px;
-  min-height: 60px;
+  width: 75px;
+  height: 75px;
+  flex: 0 0 75px;
+  align-self: center;
   border-radius: 50%;
-  border: 2px solid #fff;
+  border: 2px solid #ccc;
   display: flex;
   align-items: center;
   justify-content: center;
-  background: radial-gradient(circle, #003366, #000);
+  background: radial-gradient(circle at 30% 30%, #444, #000);
   margin-right: 15px;
-  /* box-shadow: 0 0 15px #00a8ff; */
+  box-shadow: 0 0 5px rgba(255, 255, 255, 0.2);
 }
 
-.badget-text {
-  text-align: center;
-  font-size: 0.9rem;
-  font-weight: bold;
+.badge-content {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  line-height: 1.1;
+  color: #fff;
 }
 
-/* Tech List - Superseded by Reference Styles below */
+.badge-small {
+  font-size: 0.7rem;
+  color: #aaa;
+}
 
+.badge-large {
+  font-size: 1.2rem;
+  font-weight: 900;
+  letter-spacing: 0.1em;
+}
 
 
 /* Vibrato Type */
 .vibrato-type {
-  background: #3e2723;
+  background: rgba(62, 39, 35, 0.6);
   /* Brownish like image */
-  border: 2px solid #5d4037;
+  border: none;
+}
+
+/* Rhythm Box */
+.rhythm-box {
+  background: rgba(0, 77, 64, 0.6);
+  /* Dark Teal */
+  border: none;
 }
 
 .detail-header {
-  color: #fff;
-  border-bottom: 1px solid rgba(255, 255, 255, 0.2);
+  color: #ddd;
+  /* border-bottom: 1px solid rgba(255, 255, 255, 0.1); */
   margin-bottom: 5px;
-  font-size: 1rem;
+  font-size: 0.9rem;
+  padding-left: 5px;
 }
 
 .vibrato-grid {
@@ -1025,7 +1056,6 @@
 /* Rhythm Box */
 .rhythm-box {
   background: #002244;
-  border: 2px solid #004488;
 }
 
 .rhythm-meter {
@@ -1257,9 +1287,7 @@
 }
 
 /* Calorie specific styling (optional tweaks) */
-.calorie-row {
-  /* Maybe slightly different gradient or same? sticking to same for consistency */
-}
+
 
 .calorie-badge {
   /* Redder gradient for calories? */
@@ -1384,9 +1412,7 @@
   background-color: #00befc;
 }
 
-.bar-type-pitch .bar-label-new {
-  /* Maybe text shadow color matches bar? Reference has white text with black outline. */
-}
+
 
 /* Stability: Yellow */
 .bar-type-stability .bar-fill-layer {
@@ -1430,16 +1456,21 @@
 /* --- Figure 4/Reference Style Technique Details --- */
 
 .tech-list {
-  display: flex;
-  flex-direction: column;
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  grid-template-rows: 1fr 1fr;
+  width: 100%;
+  height: 100%;
 }
 
 .tech-row {
   display: flex;
+  flex-direction: row;
+  justify-content: flex-start;
   align-items: center;
-  padding: 5px 15px;
-  height: 45px;
-  /* Slightly taller */
+  padding: 5px 10px;
+  height: 100%;
+  /* height variable with grid */
   color: #fff;
   font-family: 'Hiragino Sans', 'Meiryo', sans-serif;
   text-shadow: 0 1px 2px rgba(0, 0, 0, 0.5);
@@ -1448,70 +1479,64 @@
 
 .tech-name {
   flex: 1;
-  font-size: 1.2rem;
+  font-size: 0.9rem;
   letter-spacing: 1px;
   text-align: left;
   white-space: nowrap;
   overflow: hidden;
-  /* padding-left: 10px; */
+  margin-bottom: 0px;
+  margin-left: 5px;
 }
 
 /* Specific Gradient Colors */
 .color-kobushi {
-  background: linear-gradient(to right, #00bfff, #0078d7);
-  border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+  background: linear-gradient(to bottom, #006064, #00363a);
+}
+
+.color-fall {
+  background: linear-gradient(to bottom, #827717, #524c09);
 }
 
 .color-shakuri {
-  background: linear-gradient(to right, #ce6aff, #9000ff);
-  border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+  background: linear-gradient(to bottom, #4a148c, #12005e);
 }
 
 .color-vibrato {
-  background: linear-gradient(to right, #ff8a65, #a04000);
+  background: linear-gradient(to bottom, #3e2723, #1b0000);
 }
 
 .tech-icon-circle {
   display: flex;
   align-items: center;
   justify-content: center;
-  width: 28px;
-  height: 28px;
+  width: 24px;
+  height: 24px;
   border-radius: 50%;
   border: 2px solid #fff;
   background: transparent;
-  margin-right: 15px;
-  font-size: 1rem;
+  margin-right: 0;
+  margin-bottom: 0;
+  font-size: 0.9rem;
   line-height: 1;
   padding-bottom: 2px;
   /* Visual adjustment for text icons */
 }
 
 .tech-count {
-  font-size: 1.8rem;
+  font-size: 1.4rem;
   font-family: monospace;
-  margin-right: 5px;
+  margin-right: 2px;
   text-align: right;
+  line-height: 1;
 }
 
 .tech-unit {
-  font-size: 1rem;
+  font-size: 0.8rem;
   color: #fff;
-  height: 24px;
-  line-height: 22px;
+  height: auto;
+  line-height: 1;
   display: inline-block;
   font-weight: normal;
-}
-
-
-/* --- Refined Badge Text Style --- */
-
-.detail-circle-badge {
-  /* Ensure circle looks like reference */
-  background: transparent;
-  border: 2px solid #fff;
-  /* box-shadow: 0 0 10px #00befc, inset 0 0 10px #00befc; */
-  /* Blue glow */
 }
 
 .badge-content {

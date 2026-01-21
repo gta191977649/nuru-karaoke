@@ -1,5 +1,6 @@
 const DEFAULT_CONFIG = {
-  windowSize: 2048,
+  sampleRate: 44100,
+  windowSize: 1024,
   hopSize: 256,
   rmsGate: 0.01,
   clarityGate: 0.8,
@@ -19,7 +20,6 @@ const DEFAULT_CONFIG = {
   enableTemporalSmooth: false, // Disabled to recover low-freq sensitivity & avoid dropouts
   debugPipeline: false,
   debugPipelineStride: 4,
-  sampleRate: 48000,
   pitchAlgoId: 'pitchy',
   yinConfidenceGate: 0.2,
 }

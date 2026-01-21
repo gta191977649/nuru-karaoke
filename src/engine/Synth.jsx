@@ -132,6 +132,7 @@ function Synth({ onNavigateHome }) {
     Math.max(1, Number(DEFAULT_CONFIG.debugPipelineStride) || 4),
   )
   const [showMelodyGuide, setShowMelodyGuide] = useState(false)
+  const [showPitchDebug, setShowPitchDebug] = useState(false)
   const [showFullPitchTrace, setShowFullPitchTrace] = useState(false)
   const [particlePreviewEmit, setParticlePreviewEmit] = useState(true)
   const [particleConfig, setParticleConfig] = useState(() =>
@@ -393,9 +394,9 @@ function Synth({ onNavigateHome }) {
         targetMidi: transposedTargetMidi,
         rms: last?.rms ?? null,
       })
-      const maxLen = 240
+      const maxLen = 2000
       if (fullHistory.length > maxLen) fullHistory.splice(0, fullHistory.length - maxLen)
-    }, 150)
+    }, 16)
 
     return () => window.clearInterval(interval)
   }, [reference, latencyCompMs, detectorOptions, algoId])
@@ -1026,31 +1027,44 @@ function Synth({ onNavigateHome }) {
                 </Row>
 
                 <div className="d-flex align-items-center justify-content-between mt-3">
-                  <div className="small text-muted">Melody Guide (target vs mic)</div>
-                  <Button
-                    size="sm"
-                    variant="outline-secondary"
-                    onClick={() => setShowMelodyGuide((prev) => !prev)}
-                  >
-                    {showMelodyGuide ? 'Hide' : 'Show'}
-                  </Button>
-                </div>
-                {showMelodyGuide ? (
-                  <MelodyGuideCanvas
-                    className="melodyGuideCanvas"
-                    reference={reference}
-                    historyRef={fullPitchHistoryRef}
-                    lastPitchRef={lastPitchRef}
-                    currentTimeRef={currentTimeRef}
-                    transpositionRef={transpositionRef}
-                    rmsGate={rmsGate}
-                    gateUserByTarget
-                    userOffsetSec={userPitchOffsetMs / 1000}
-                    width={760}
-                    height={180}
-                    style={{ width: '100%', height: 180, borderRadius: 8 }}
+                  <div className="small text-muted">Melody Guide                    <Form.Check
+                    type="switch"
+                    id="debug-pitch-guide"
+                    label="Melody Guide"
+                    checked={showMelodyGuide}
+                    onChange={(e) => setShowMelodyGuide(e.currentTarget.checked)}
+                    className="text-nowrap"
                   />
-                ) : null}
+                    <Form.Check
+                      type="switch"
+                      id="debug-pitch-raw"
+                      label="Show Raw F0"
+                      checked={showPitchDebug}
+                      onChange={(e) => setShowPitchDebug(e.currentTarget.checked)}
+                      className="text-nowrap"
+                    />
+                  </div>
+                </div>
+
+                {showMelodyGuide && (
+                  <div className="mt-2" style={{ backgroundColor: 'black', borderRadius: 8, overflow: 'hidden' }}>
+                    <MelodyGuideCanvas
+                      className="melodyGuideCanvas"
+                      reference={reference}
+                      historyRef={fullPitchHistoryRef}
+                      lastPitchRef={lastPitchRef}
+                      currentTimeRef={currentTimeRef}
+                      transpositionRef={transpositionRef}
+                      rmsGate={rmsGate}
+                      gateUserByTarget={false}
+                      windowSec={8}
+                      showPitchDebug={showPitchDebug}
+                      width={830}
+                      height={220}
+                      style={{ width: '100%', height: 220 }}
+                    />
+                  </div>
+                )}
                 <div className="d-flex align-items-center justify-content-between mt-3">
                   <div className="small text-muted">Full Pitch Trace (target vs mic)</div>
                   <Button
