@@ -475,8 +475,6 @@ class SynthEngine {
       if (!bytes) continue
       this._synth.sendMessage(bytes)
       this._trackChannelActivity(nextEvent)
-      this._synth.sendMessage(bytes)
-      this._trackChannelActivity(nextEvent)
       this._trackPolyphony(nextEvent)
       this._trackProgramChange(nextEvent) // Track real-time program changes
     }
