@@ -349,7 +349,6 @@ class SynthEngine {
 
       this._initialized = true
       this._setState({ ready: true, status: 'Ready' })
-      this._startClock()
     })()
 
     try {
@@ -425,9 +424,19 @@ class SynthEngine {
         }
         if (!seq.isFinished) this._prevFinished = false
       }
-      this._raf = window.requestAnimationFrame(tick)
+      if (seq && !seq.paused && !seq.isFinished) {
+        this._raf = window.requestAnimationFrame(tick)
+      } else {
+        this._raf = 0
+      }
     }
     this._raf = window.requestAnimationFrame(tick)
+  }
+
+  _stopClock() {
+    if (!this._raf) return
+    window.cancelAnimationFrame(this._raf)
+    this._raf = 0
   }
 
   _bgSyncDrums(drumChannels) {
@@ -866,11 +875,15 @@ class SynthEngine {
   play() {
     if (!this._seq) return
     this._seq.play()
+    this._setState({ isPlaying: true })
+    this._startClock()
   }
 
   pause() {
     if (!this._seq) return
     this._seq.pause()
+    this._setState({ isPlaying: false })
+    this._stopClock()
   }
 
   stop() {
@@ -880,6 +893,8 @@ class SynthEngine {
     this._synth.stopAll(true)
     this._resetChannelActivity()
     this._resetPolyphony()
+    this._setState({ isPlaying: false, currentTime: 0 })
+    this._stopClock()
   }
 
   async stopAndAdvance(options = {}) {

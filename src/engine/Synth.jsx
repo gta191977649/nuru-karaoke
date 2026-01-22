@@ -329,6 +329,7 @@ function Synth({ onNavigateHome }) {
   }, [pitchEngine, algoId])
 
   useEffect(() => {
+    if (!micActive) return
     const unsubscribe = pitchEngine.onDebug((msg) => {
       const rawValue = Number.isFinite(msg?.metrics?.rawF0Hz) ? msg.metrics.rawF0Hz : 0
       const postValue = Number.isFinite(msg?.metrics?.result?.f0Hz) ? msg.metrics.result.f0Hz : 0
@@ -355,9 +356,10 @@ function Synth({ onNavigateHome }) {
     return () => {
       unsubscribe()
     }
-  }, [pitchEngine])
+  }, [pitchEngine, micActive])
 
   useEffect(() => {
+    if (!state.isPlaying || !micActive) return
     const interval = window.setInterval(() => {
       const songTimeSec = Math.max(0, currentTimeRef.current + latencyCompMs / 1000)
       const rawTargetMidi = reference ? getTargetMidiAtTime(reference, songTimeSec) : null
@@ -400,9 +402,10 @@ function Synth({ onNavigateHome }) {
     }, 16)
 
     return () => window.clearInterval(interval)
-  }, [reference, latencyCompMs, detectorOptions, algoId])
+  }, [reference, latencyCompMs, detectorOptions, algoId, micActive, state.isPlaying])
 
   useEffect(() => {
+    if (!state.isPlaying) return
     let raf = 0
     const minMidi = 36
     const maxMidi = 96
@@ -521,7 +524,7 @@ function Synth({ onNavigateHome }) {
 
     raf = window.requestAnimationFrame(draw)
     return () => window.cancelAnimationFrame(raf)
-  }, [])
+  }, [state.isPlaying])
 
   useEffect(() => {
     return () => stopSharedMic()
