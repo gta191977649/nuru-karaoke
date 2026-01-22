@@ -146,12 +146,12 @@ function ResultsPage({ score, techniques, songInfo, onNext }) {
                             </div>
                             <div className="song-info-row">
                                 <div className="song-info-badge">全国順位</div>
-                                <div className="song-info-val">1 位</div>
+                                <div className="song-info-val">0 位</div>
                             </div>
                             {/* Calories integrated as a row */}
                             <div className="song-info-row">
                                 <div className="song-info-badge">消費</div>
-                                <div className="song-info-val calorie-val">12 kcal <span className="fire-icon">🔥</span></div>
+                                <div className="song-info-val calorie-val">0 kcal <span className="fire-icon">🔥</span></div>
                             </div>
                         </div>
                     </div>
