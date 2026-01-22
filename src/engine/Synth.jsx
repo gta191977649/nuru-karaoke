@@ -587,7 +587,9 @@ function Synth({ onNavigateHome }) {
     })
   }, [state.channelActivityTime, state.channelActivityVelocity, state.currentTime])
 
-  const { activeTechniques, techniqueHistory } = useSingingTechnique(sharedPitchEngine, currentTimeRef)
+  const { activeTechniques, techniqueHistory } = useSingingTechnique(sharedPitchEngine, currentTimeRef, micActive)
+  const [activeTab, setActiveTab] = useState('pitch-debug')
+  const hasLcdActivity = state.isPlaying && Array.isArray(lcdLevels) && lcdLevels.some((level) => level > 0)
 
   return (
     <Container className="py-3 synthDebug" style={{ maxWidth: 860 }}>
@@ -769,6 +771,8 @@ function Synth({ onNavigateHome }) {
                 levels={lcdLevels}
                 enabledChannels={state.enabledChannels}
                 height={64}
+                isPlaying={state.isPlaying}
+                hasActivity={hasLcdActivity}
               />
             </div>
 
@@ -864,7 +868,15 @@ function Synth({ onNavigateHome }) {
 
         <Col xs={12}>
           <div className="p-3 border rounded-3">
-            <Tabs defaultActiveKey="pitch-debug" className="mb-3">
+            <Tabs
+              activeKey={activeTab}
+              onSelect={(key) => {
+                if (key) setActiveTab(key)
+              }}
+              mountOnEnter
+              unmountOnExit
+              className="mb-3"
+            >
               <Tab eventKey="pitch-debug" title="Pitch Debug">
                 <div className="fw-semibold mb-2">Karaoke Pitch Debug</div>
                 <Row className="g-2 align-items-center mb-3">
@@ -1006,7 +1018,7 @@ function Synth({ onNavigateHome }) {
                   </div>
                 </div>
 
-                {showMelodyGuide && (
+                {showMelodyGuide && state.isPlaying ? (
                   <div className="mt-2" style={{ backgroundColor: 'black', borderRadius: 8, overflow: 'hidden' }}>
                     <MelodyGuideCanvas
                       className="melodyGuideCanvas"
@@ -1024,7 +1036,7 @@ function Synth({ onNavigateHome }) {
                       style={{ width: '100%', height: 220 }}
                     />
                   </div>
-                )}
+                ) : null}
                 <div className="d-flex align-items-center justify-content-between mt-3">
                   <div className="small text-muted">Full Pitch Trace (target vs mic)</div>
                   <Button
@@ -1552,33 +1564,41 @@ function Synth({ onNavigateHome }) {
                   />
                 </div>
                 <div className="mt-2">
-                  <ParticlePreview
-                    particleConfig={particleConfig}
-                    emit={particlePreviewEmit}
-                    width={760}
-                    height={160}
-                    style={{ width: '100%', height: 160, borderRadius: 8 }}
-                  />
+                  {activeTab === 'particle-debug' && state.isPlaying ? (
+                    <ParticlePreview
+                      particleConfig={particleConfig}
+                      emit={particlePreviewEmit}
+                      width={760}
+                      height={160}
+                      style={{ width: '100%', height: 160, borderRadius: 8 }}
+                    />
+                  ) : (
+                    <div style={{ width: '100%', height: 160, borderRadius: 8, background: '#0f1115' }} />
+                  )}
                 </div>
                 <div className="small text-muted mt-3">
                   Hit the correct note to emit particles on the melody guide (mic required).
                 </div>
                 <div className="mt-2" style={{ backgroundColor: 'grey' }}>
-                  <MelodyGuideCanvas
-                    className="melodyGuideCanvas"
-                    reference={reference}
-                    historyRef={fullPitchHistoryRef}
-                    lastPitchRef={lastPitchRef}
-                    currentTimeRef={currentTimeRef}
-                    transpositionRef={transpositionRef}
-                    rmsGate={rmsGate}
-                    gateUserByTarget
-                    userOffsetSec={userPitchOffsetMs / 1000}
-                    width={760}
-                    height={180}
-                    particleConfig={particleConfig}
-                    style={{ width: '100%', height: 180, borderRadius: 8 }}
-                  />
+                  {activeTab === 'particle-debug' && state.isPlaying ? (
+                    <MelodyGuideCanvas
+                      className="melodyGuideCanvas"
+                      reference={reference}
+                      historyRef={fullPitchHistoryRef}
+                      lastPitchRef={lastPitchRef}
+                      currentTimeRef={currentTimeRef}
+                      transpositionRef={transpositionRef}
+                      rmsGate={rmsGate}
+                      gateUserByTarget
+                      userOffsetSec={userPitchOffsetMs / 1000}
+                      width={760}
+                      height={180}
+                      particleConfig={particleConfig}
+                      style={{ width: '100%', height: 180, borderRadius: 8 }}
+                    />
+                  ) : (
+                    <div style={{ width: '100%', height: 180, borderRadius: 8, background: '#0f1115' }} />
+                  )}
                 </div>
               </Tab>
             </Tabs>

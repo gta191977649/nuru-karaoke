@@ -1,6 +1,6 @@
 import { useRef, useEffect, useState } from 'react'
 
-export function useSingingTechnique(pitchEngine, currentTimeRef) {
+export function useSingingTechnique(pitchEngine, currentTimeRef, micActive) {
     const workerRef = useRef(null)
 
     // Accumulated counts for the session
@@ -24,7 +24,7 @@ export function useSingingTechnique(pitchEngine, currentTimeRef) {
     })
 
     useEffect(() => {
-        if (!pitchEngine) return
+        if (!pitchEngine || !micActive) return
 
         // Initialize Worker
         const worker = new Worker(
@@ -111,7 +111,7 @@ export function useSingingTechnique(pitchEngine, currentTimeRef) {
             workerRef.current?.postMessage({ type: 'stop' }) // Use ref specific check
             workerRef.current?.terminate()
         }
-    }, [pitchEngine])
+    }, [pitchEngine, micActive])
 
     const resetCounts = () => {
         setCounts({ vibrato: 0, kobushi: 0, glissup: 0, glissdown: 0 })

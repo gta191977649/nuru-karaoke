@@ -69,6 +69,7 @@ function renderRubySegments(segments) {
 function SingingPage({ onFinish }) {
     const state = useKaraokeStore()
     const pitchEngine = sharedPitchEngine
+    const [micActive, setMicActive] = useState(false)
     const currentTimeRef = useRef(0)
     const transpositionRef = useRef(0)
     const micRmsGate = 0.01
@@ -99,7 +100,7 @@ function SingingPage({ onFinish }) {
     })
 
     // Technique Detection
-    const { techniqueEventsRef } = useSingingTechnique(pitchEngine, currentTimeRef)
+    const { techniqueEventsRef } = useSingingTechnique(pitchEngine, currentTimeRef, micActive)
 
     // Scoring
     const { getScore } = useKaraokeScoring({
@@ -188,6 +189,7 @@ function SingingPage({ onFinish }) {
         const start = async () => {
             try {
                 await startSharedMic()
+                if (!cancelled) setMicActive(true)
             } catch (err) {
                 if (!cancelled) console.error(err)
             }
@@ -196,6 +198,7 @@ function SingingPage({ onFinish }) {
         return () => {
             cancelled = true
             stopSharedMic()
+            setMicActive(false)
         }
     }, [pitchEngine])
 
