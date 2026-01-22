@@ -550,6 +550,11 @@ class SynthEngine {
     this._setState({ polyphonyCount: 0 })
   }
 
+  _reportPolyphony() {
+    this._setState({ polyphonyCount: this._polyphonyCount })
+    this._polyphonyDirty = false
+  }
+
   _trackChannelActivity(event) {
     if (event?.type !== 'note_on') return
     const velocity = Number(event.velocity)
@@ -587,11 +592,60 @@ class SynthEngine {
 
   panic() {
     if (!this._synth) return
-    // Send All Notes Off (123) and All Sound Off (120) to all channels
-    for (let ch = 0; ch < 16; ch++) {
-      this._synth.controller(ch, 120, 0) // All Sound Off
-      this._synth.controller(ch, 123, 0) // All Notes Off
+    const synth = this._synth
+    const sendController =
+      typeof synth.controllerChange === 'function'
+        ? (channel, controller, value) => synth.controllerChange(channel, controller, value)
+        : typeof synth.controller === 'function'
+          ? (channel, controller, value) => synth.controller(channel, controller, value)
+          : typeof synth.sendMessage === 'function'
+            ? (channel, controller, value) =>
+              synth.sendMessage(new Uint8Array([0xb0 + channel, controller, value]))
+            : null
+    const sendProgram =
+      typeof synth.programChange === 'function'
+        ? (channel, program) => synth.programChange(channel, program)
+        : typeof synth.sendMessage === 'function'
+          ? (channel, program) => synth.sendMessage(new Uint8Array([0xc0 + channel, program]))
+          : null
+    if (typeof synth.resetControllers === 'function') {
+      try {
+        synth.resetControllers()
+      } catch {
+        // ignore
+      }
     }
+    if (sendController) {
+      // Reset controllers/effects and stop active notes without stopping playback.
+      for (let ch = 0; ch < 16; ch++) {
+        sendController(ch, 121, 0) // Reset All Controllers
+        sendController(ch, 120, 0) // All Sound Off
+        sendController(ch, 123, 0) // All Notes Off
+        sendController(ch, 91, 0) // Reverb (Effect 1 Depth)
+        sendController(ch, 93, 0) // Chorus (Effect 3 Depth)
+        sendController(ch, 0, 0) // Bank Select MSB
+        sendController(ch, 32, 0) // Bank Select LSB
+        if (sendProgram) sendProgram(ch, 0)
+      }
+    }
+    // Reset internal instrument tracking to default state
+    this._channelPrograms.forEach((state, channel) => {
+      state.program = 0
+      state.bankMSB = 0
+      state.bankLSB = 0
+      const patch = {
+        program: state.program,
+        bankMSB: state.bankMSB,
+        bankLSB: state.bankLSB,
+        isGMGSDrum: channel === 9 || (this._midiMapper?.getState()?.drumChannels?.[channel]),
+      }
+      const name = resolvePatchName(this._synth.presetList, patch, channel)
+      this._channelInstrumentNames[channel] = name
+    })
+    this._instrumentDirty = true
+    this._channelActivityVelocity.fill(0)
+    this._channelActivityTime.fill(-1)
+    this._activityDirty = true
     // Reset polyphony tracking
     this._activeNoteCounts.forEach((notes) => notes.fill(0))
     this._polyphonyCount = 0
@@ -619,8 +673,8 @@ class SynthEngine {
   }
 
   async loadMidiFromUrl(url, options = {}) {
-    this.panic()
     await this.ensureInitialized()
+    this.panic()
     // Buffer loading is needed for detection. Url load gets buffer later.
     // Ideally we should move buffer fetch earlier if we want early mapper creation?
     // Wait, loadFromUrl fetches buffer. We can update mapper AFTER fetch.
@@ -668,8 +722,8 @@ class SynthEngine {
   }
 
   async loadMidiFromFile(file, options = {}) {
-    this.panic()
     await this.ensureInitialized()
+    this.panic()
     const buffer = await file.arrayBuffer()
 
     const prevEnabled = getKaraokeStoreState().enableMIDIStandardMapping ?? DEFAULT_CONFIG.enableMIDIStandardMapping
