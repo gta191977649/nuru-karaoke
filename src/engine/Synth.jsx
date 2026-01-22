@@ -5,6 +5,7 @@ import { sharedPitchEngine, startSharedMic, stopSharedMic } from './audio/pitch/
 import { DEFAULT_CONFIG } from './audioEngine.js'
 import { centsError } from './audio/pitch/utils/dspUtils.js'
 import { synthEngine } from './SynthEngine.js'
+import SynthPlaybackControls from './SynthPlaybackControls.jsx'
 import { useKaraokeStore } from '../state/karaokeStore.js'
 import MelodyGuideCanvas from '../components/MelodyGuideCanvas.jsx'
 import ParticlePreview from '../components/particles/ParticlePreview.jsx'
@@ -748,51 +749,7 @@ function Synth({ onNavigateHome }) {
         </Col>
 
         <Col xs={12}>
-          <div className="p-3 border rounded-3">
-            <div className="fw-semibold mb-2">Playback</div>
-            <div className="d-flex flex-wrap gap-2 mb-2">
-              <Button
-                onClick={() => {
-                  synthEngine.play()
-                }}
-                disabled={!canPlay || state.isPlaying}
-                type="button"
-              >
-                Play
-              </Button>
-              <Button
-                onClick={() => synthEngine.pause()}
-                disabled={!canPlay || !state.isPlaying}
-                variant="secondary"
-                type="button"
-              >
-                Pause
-              </Button>
-              <Button
-                onClick={() => {
-                  synthEngine.stop()
-                }}
-                disabled={!canPlay}
-                variant="outline-danger"
-                type="button"
-              >
-                Stop
-              </Button>
-            </div>
-            <Form.Range
-              min={0}
-              max={Math.max(0, state.duration)}
-              step={0.01}
-              value={Math.min(state.currentTime, Math.max(0, state.duration))}
-              disabled={!canPlay || state.duration <= 0}
-              onChange={(e) => synthEngine.seek(Number(e.currentTarget.value))}
-            />
-            <div className="small text-muted">
-              {state.currentTime.toFixed(2)} / {state.duration.toFixed(2)} s
-            </div>
-
-
-          </div>
+          <SynthPlaybackControls />
         </Col>
 
         <Col xs={12}>

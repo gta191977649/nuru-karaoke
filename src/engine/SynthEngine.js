@@ -585,6 +585,20 @@ class SynthEngine {
     this._polyphonyDirty = true
   }
 
+  panic() {
+    if (!this._synth) return
+    // Send All Notes Off (123) and All Sound Off (120) to all channels
+    for (let ch = 0; ch < 16; ch++) {
+      this._synth.controller(ch, 120, 0) // All Sound Off
+      this._synth.controller(ch, 123, 0) // All Notes Off
+    }
+    // Reset polyphony tracking
+    this._activeNoteCounts.forEach((notes) => notes.fill(0))
+    this._polyphonyCount = 0
+    this._polyphonyDirty = true
+    this._reportPolyphony()
+  }
+
   async resumeAudio() {
     await this.ensureInitialized()
     const audioEngine = getKaraokeAudioEngine()
@@ -605,6 +619,7 @@ class SynthEngine {
   }
 
   async loadMidiFromUrl(url, options = {}) {
+    this.panic()
     await this.ensureInitialized()
     // Buffer loading is needed for detection. Url load gets buffer later.
     // Ideally we should move buffer fetch earlier if we want early mapper creation?
@@ -653,6 +668,7 @@ class SynthEngine {
   }
 
   async loadMidiFromFile(file, options = {}) {
+    this.panic()
     await this.ensureInitialized()
     const buffer = await file.arrayBuffer()
 
