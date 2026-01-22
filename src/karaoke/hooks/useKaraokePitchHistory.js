@@ -15,6 +15,7 @@ function useKaraokePitchHistory({
   const lastValidPitchRef = useRef(null)
   const lastValidPitchTimeRef = useRef(null)
   const mergedReferenceRef = useRef(null)
+  const lastHistoryTimeRef = useRef(null)
 
   useEffect(() => {
     pitchHistoryRef.current = []
@@ -22,6 +23,7 @@ function useKaraokePitchHistory({
     lastValidPitchRef.current = null
     lastValidPitchTimeRef.current = null
     mergedReferenceRef.current = null
+    lastHistoryTimeRef.current = null
   }, [resetKey])
 
   useEffect(() => {
@@ -31,13 +33,12 @@ function useKaraokePitchHistory({
   useEffect(() => {
     const unsubscribe = pitchEngine.onPitch((result) => {
       lastPitchRef.current = result
-    })
-    return () => unsubscribe()
-  }, [pitchEngine])
 
-  useEffect(() => {
-    const interval = window.setInterval(() => {
       const songTimeSec = currentTimeRef.current
+      if (!Number.isFinite(songTimeSec)) return
+      if (Number.isFinite(lastHistoryTimeRef.current) && songTimeSec <= lastHistoryTimeRef.current) return
+      lastHistoryTimeRef.current = songTimeSec
+
       const breakToleranceSec = Number(DEFAULT_CONFIG.breakToleranceMs) / 1000
       const edgeToleranceSec = Math.min(0.08, Math.max(0, breakToleranceSec / 2))
       if (reference && !mergedReferenceRef.current) {
@@ -58,12 +59,12 @@ function useKaraokePitchHistory({
       const rawTargetMidi = rawTargetNote ? rawTargetNote.midi : null
       const transposedTargetMidi =
         rawTargetMidi != null ? rawTargetMidi + transpositionRef.current : null
-      const last = lastPitchRef.current
-      const hasRms = Number.isFinite(last?.rms)
-      const rmsOk = !hasRms || last.rms >= rmsGate
+
+      const hasRms = Number.isFinite(result?.rms)
+      const rmsOk = !hasRms || result.rms >= rmsGate
       let userMidi =
-        Number.isFinite(last?.midi) && rmsOk
-          ? Number(last.midi)
+        Number.isFinite(result?.midi) && rmsOk
+          ? Number(result.midi)
           : null
       if (Number.isFinite(userMidi)) {
         lastValidPitchRef.current = userMidi
@@ -75,13 +76,14 @@ function useKaraokePitchHistory({
       ) {
         userMidi = Number(lastValidPitchRef.current)
       }
+
       const history = pitchHistoryRef.current
-      history.push({ t: songTimeSec, userMidi, targetMidi: transposedTargetMidi, rms: last?.rms ?? null })
+      history.push({ t: songTimeSec, userMidi, targetMidi: transposedTargetMidi, rms: result?.rms ?? null })
       const cutoff = songTimeSec - 12
       while (history.length && history[0].t < cutoff) history.shift()
-    }, 80)
-    return () => window.clearInterval(interval)
-  }, [reference, rmsGate, currentTimeRef, transpositionRef])
+    })
+    return () => unsubscribe()
+  }, [pitchEngine, reference, rmsGate, currentTimeRef, transpositionRef])
 
   return { lastPitchRef, pitchHistoryRef }
 }
