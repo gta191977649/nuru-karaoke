@@ -9,18 +9,23 @@ const DEFAULT_CONFIG = {
   smoothBeta: 0.1, // Trend smoothing factor
   f0MinHz: 80, //  Detection Range for vocal low bound (Hz)
   f0MaxHz: 1000, // Detection Range for vocal high bound (Hz)
-  medianWindowSize: 5, //中值滤波窗口大小（抗尖刺）
-  maxJumpSemitones: 3, //半音跳变约束（MIDI domain） 人声物理约束。
-  holdFrames: 5, // 音高短暂保持（Hold）
+  // allkaraoke-like stability knobs
+  breakToleranceMs: 100, // Short unvoiced gap tolerance (~100ms)
+  medianWindowSize: 3, // 中值滤波窗口大小（抗尖刺）
+  maxJumpSemitones: 6, // 半音跳变约束（MIDI domain） 人声物理约束。
+  holdFrames: 0, // Will be derived from breakToleranceMs unless overridden
+  enablePitchSnap: true, // Snap tiny jitter to last stable pitch
+  snapToleranceSemis: 0.35, // Snap tolerance in semitones
   hpfCutoffHz: 80, //High-pass filter cutoff for mic conditioning
   enableDcRemoval: true,
   enableHpf: true,
   enableRmsGate: true,
   enableF0Validate: true,
-  enableTemporalSmooth: false, // Disabled to recover low-freq sensitivity & avoid dropouts
+  enableTemporalSmooth: false, // Keep false; allkaraoke-like stability uses breakTolerance/snap
   debugPipeline: false,
   debugPipelineStride: 4,
   pitchAlgoId: 'pitchy',
+  aubioTolerance: 0.5,
   yinConfidenceGate: 0.2,
 }
 

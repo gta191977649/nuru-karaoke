@@ -47,6 +47,7 @@ export function getTargetNoteAtTime(ref, songTimeSec, opts = {}) {
   const time = Number(songTimeSec)
   if (!Number.isFinite(time)) return null
   const maxGap = Number.isFinite(opts.maxGap) ? opts.maxGap : 0
+  const edgeToleranceSec = Number.isFinite(opts.edgeToleranceSec) ? opts.edgeToleranceSec : 0
 
   const notes = ref.notes
   let lo = 0
@@ -83,10 +84,46 @@ export function getTargetNoteAtTime(ref, songTimeSec, opts = {}) {
     }
   }
 
+  if (edgeToleranceSec > 0) {
+    const prev = notes[lo - 1]
+    const next = notes[lo]
+    if (prev && time >= prev.t0Sec - edgeToleranceSec && time <= prev.t1Sec + edgeToleranceSec) {
+      return prev
+    }
+    if (next && time >= next.t0Sec - edgeToleranceSec && time <= next.t1Sec + edgeToleranceSec) {
+      return next
+    }
+  }
+
   return null
 }
 
 export function getTargetMidiAtTime(ref, songTimeSec, opts = {}) {
   const note = getTargetNoteAtTime(ref, songTimeSec, opts)
   return note ? note.midi : null
+}
+
+export function mergeAdjacentNotesByPitch(notes = [], opts = {}) {
+  if (!Array.isArray(notes) || notes.length === 0) return []
+  const maxGapSec = Number.isFinite(opts.maxGapSec) ? opts.maxGapSec : 0
+  const pitchToleranceSemis = Number.isFinite(opts.pitchToleranceSemis) ? opts.pitchToleranceSemis : 0
+
+  const sorted = [...notes].sort((a, b) => a.t0Sec - b.t0Sec || a.t1Sec - b.t1Sec)
+  const merged = []
+
+  let current = { ...sorted[0] }
+  for (let i = 1; i < sorted.length; i += 1) {
+    const next = sorted[i]
+    const gap = next.t0Sec - current.t1Sec
+    const midiDiff = Math.abs(Number(next.midi) - Number(current.midi))
+    const canMerge = gap <= maxGapSec && Number.isFinite(midiDiff) && midiDiff <= pitchToleranceSemis
+    if (canMerge) {
+      current.t1Sec = Math.max(current.t1Sec, next.t1Sec)
+    } else {
+      merged.push(current)
+      current = { ...next }
+    }
+  }
+  merged.push(current)
+  return merged
 }

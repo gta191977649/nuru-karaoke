@@ -1,7 +1,8 @@
 import { useEffect, useRef, forwardRef, useState } from 'react'
 import { Application, Container, Graphics, Sprite, Texture, Assets } from 'pixi.js'
 import { BloomFilter } from 'pixi-filters'
-import { getTargetMidiAtTime, getTargetNoteAtTime } from '../engine/audio/midi/referenceMelody.js'
+import { getTargetNoteAtTime, mergeAdjacentNotesByPitch } from '../engine/audio/midi/referenceMelody.js'
+import { DEFAULT_CONFIG } from '../engine/audioEngine.js'
 import { DEFAULT_PARTICLE_CONFIG, createParticleSystem, createComboSystem } from './particles/particleSystem.js'
 
 const TECHNIQUE_CONFIG = {
@@ -102,12 +103,15 @@ const PLAYHEAD_DOT_RADIUS = 5
 const FILL_DELAY_SEC = 0.65
 const NOTE_MERGE_CONFIG = {
   // Semitone tolerance for considering the user's pitch "in range" of the target.
-  pitchToleranceSemis: 2,
+  pitchToleranceSemis: 1.5,
   // Minimum fraction of target note duration the user must cover to treat it as full-length.
-  coverageRatio: 0.6,
+  coverageRatio: 0.5,
   // Silence gap (seconds) to consider a note ended when RMS drops below the gate.
-  gapThresholdSec: 0.5,
+  gapThresholdSec: 0.1,
 }
+
+// Visual in-tune tolerance for trail + particles
+const VISUAL_TOLERANCE_SEMIS = 1.0
 
 function getNotesBounds(notes, transposition, fallbackMin, fallbackMax) {
   if (!notes?.length) {
@@ -519,8 +523,13 @@ function MelodyGuideCanvas({
         }
 
         const songTimeSec = snap.currentTimeRef?.current ?? 0
+        const breakToleranceSec = Number(DEFAULT_CONFIG.breakToleranceMs) / 1000
+        const edgeToleranceSec = Math.min(0.08, Math.max(0, breakToleranceSec / 2))
         const transposition = snap.transpositionRef?.current ?? 0
         const notesData = snap.reference?.notes || []
+        const scoringNotes = notesData.length
+          ? mergeAdjacentNotesByPitch(notesData, { maxGapSec: breakToleranceSec, pitchToleranceSemis: 0 })
+          : []
         const bounds = getNotesBounds(notesData, transposition, snap.minMidi, snap.maxMidi)
         const lineCount = 12
         const lineStep = Math.max(1, lineCount - 1)
@@ -635,7 +644,9 @@ function MelodyGuideCanvas({
         drawMelodyNotes(COLORS.melodyOutFill, ALPHAS.melodyOutFill, false)
 
         const history = snap.historyRef?.current || []
-        const gapThreshold = NOTE_MERGE_CONFIG.gapThresholdSec
+        const gapThreshold = Number.isFinite(breakToleranceSec) && breakToleranceSec > 0
+          ? breakToleranceSec
+          : NOTE_MERGE_CONFIG.gapThresholdSec
         const historyStep = history.length > 1
           ? Math.max(
             0.02,
@@ -645,9 +656,31 @@ function MelodyGuideCanvas({
         const nextTime = (idx) =>
           idx + 1 < history.length ? history[idx + 1].t : history[idx].t + historyStep
 
-        const forcedNotes = []
-        if (notesData.length && history.length) {
-          notesData.forEach((note) => {
+        const scoringReference = snap.reference ? { ...snap.reference, notes: scoringNotes } : null
+        const getTargetNoteAt = (t, opts = {}) =>
+          scoringReference
+            ? getTargetNoteAtTime(scoringReference, t, {
+                maxGap: breakToleranceSec,
+                edgeToleranceSec,
+                ...opts,
+              })
+            : null
+        const getTargetMidiAt = (t, opts = {}) => {
+          const note = getTargetNoteAt(t, opts)
+          return note ? note.midi : null
+        }
+        const getTargetMidiForUserTime = (t) => {
+          if (!snap.reference) return null
+          if (snap.gateUserByTarget) {
+            const offset = Math.max(0, Number(snap.userOffsetSec) || 0)
+            return getTargetMidiAt(t - offset) ?? getTargetMidiAt(t + offset)
+          }
+          return getTargetMidiAt(t)
+        }
+
+        const correctNotes = []
+        if (scoringNotes.length && history.length) {
+          scoringNotes.forEach((note) => {
             if (note.t1Sec < visibleStart || note.t0Sec > visibleEnd) return
             const noteStart = note.t0Sec
             const noteEnd = note.t1Sec
@@ -666,8 +699,8 @@ function MelodyGuideCanvas({
                 const t = Number(point.t)
                 const offset = Math.max(0, Number(snap.userOffsetSec) || 0)
                 const targetMidiGate =
-                  getTargetMidiAtTime(snap.reference, t - offset, { maxGap: 0.4 }) ??
-                  getTargetMidiAtTime(snap.reference, t + offset, { maxGap: 0.4 })
+                  getTargetMidiAt(t - offset) ??
+                  getTargetMidiAt(t + offset)
                 if (targetMidiGate == null) continue
               }
               const mappedMidi = mapUserMidiToTargetOctave(userMidi, targetMidi)
@@ -680,13 +713,13 @@ function MelodyGuideCanvas({
             }
             if (covered / duration >= NOTE_MERGE_CONFIG.coverageRatio) {
               const { y, inRange } = midiToY(targetMidi)
-              forcedNotes.push({ t0: noteStart, t1: noteEnd, y, inRange, targetMidi })
+              correctNotes.push({ t0: noteStart, t1: noteEnd, y, inRange, targetMidi })
             }
           })
         }
 
         const isForcedTime = (t) =>
-          forcedNotes.some((note) => t >= note.t0 && t <= note.t1)
+          correctNotes.some((note) => t >= note.t0 && t <= note.t1)
 
         const buildSegments = (classifier) => {
           const segments = []
@@ -738,8 +771,8 @@ function MelodyGuideCanvas({
             const t = Number(point.t)
             const offset = Math.max(0, Number(snap.userOffsetSec) || 0)
             const targetMidiGate =
-              getTargetMidiAtTime(snap.reference, t - offset, { maxGap: 0.4 }) ??
-              getTargetMidiAtTime(snap.reference, t + offset, { maxGap: 0.4 })
+              getTargetMidiAt(t - offset) ??
+              getTargetMidiAt(t + offset)
             if (targetMidiGate == null) return null
           }
           if (!Number.isFinite(targetMidiPoint)) return null
@@ -748,12 +781,8 @@ function MelodyGuideCanvas({
           const { y: userY, inRange } = midiToY(mappedMidi)
           const inTolerance = Math.abs(mappedMidi - targetMidiPoint) <= NOTE_MERGE_CONFIG.pitchToleranceSemis
           const forcedTime = isForcedTime(point.t)
-          if (inRange && inTolerance) {
-            if (forcedTime) return null
-            // SNAP TO GRID: Use target pitch Y
-            const { y: targetY } = midiToY(targetMidiPoint)
-            return { type: 'correct', key: `correct-${Math.round(targetMidiPoint)}`, y: targetY }
-          }
+          if (forcedTime) return null
+          if (inRange && inTolerance) return null
           return {
             type: 'incorrect',
             key: `incorrect-${Math.round(userMidi)}-${Math.round(targetMidiPoint)}`,
@@ -762,7 +791,7 @@ function MelodyGuideCanvas({
         })
 
         const forcedCorrect = []
-        forcedNotes.forEach((note) => {
+        correctNotes.forEach((note) => {
           const entry = {
             t0: note.t0,
             t1: note.t1,
@@ -771,7 +800,7 @@ function MelodyGuideCanvas({
           if (note.inRange) forcedCorrect.push(entry)
         })
 
-        const correctSegments = segments.filter((seg) => seg.type === 'correct').concat(forcedCorrect)
+        const correctSegments = forcedCorrect
         const incorrectSegments = segments.filter((seg) => seg.type === 'incorrect')
         const userBarW = Math.max(6, pixelsPerSec * 0.18)
         const userBarH = 10
@@ -885,14 +914,7 @@ function MelodyGuideCanvas({
         if (passesGate) {
           let targetMidi = null
           if (snap.reference) {
-            if (snap.gateUserByTarget) {
-              const offset = Math.max(0, Number(snap.userOffsetSec) || 0)
-              targetMidi =
-                getTargetMidiAtTime(snap.reference, songTimeSec - offset) ??
-                getTargetMidiAtTime(snap.reference, songTimeSec + offset)
-            } else {
-              targetMidi = getTargetMidiAtTime(snap.reference, songTimeSec)
-            }
+            targetMidi = getTargetMidiForUserTime(songTimeSec)
           }
           if (!(snap.gateUserByTarget && snap.reference && targetMidi == null)) {
             const transposedTarget = targetMidi != null ? targetMidi + transposition : null
@@ -904,10 +926,11 @@ function MelodyGuideCanvas({
             // Expose y for combo system
             state.playheadDotY = y
 
-            const isCorrectKey =
+            const inTune =
               Number.isFinite(transposedTarget) &&
-              mod12(Math.round(userMidi)) === mod12(Math.round(transposedTarget))
-            emitParticles = isCorrectKey && inRange
+              Number.isFinite(mappedMidi) &&
+              Math.abs(mappedMidi - transposedTarget) <= VISUAL_TOLERANCE_SEMIS
+            emitParticles = inTune && inRange
           }
         }
 
@@ -924,30 +947,27 @@ function MelodyGuideCanvas({
             // Check if this segment is "correct". 
             // We verify if the time t covers any correct segment.
             // Since correctSegments are time-ranges, we check overlap.
-            const isCorrect1 = correctSegments.some(seg => p1.t >= seg.t0 && p1.t <= seg.t1)
-
-            // Optimize: If not correct, maybe skip? User wants "correct notes" drawn in yellow.
-            // If we want a continuous line specifically for correct parts:
-            if (!isCorrect1) continue
+            const userMidi = Number(p1.userMidi)
+            const rms = Number.isFinite(p1.rms) ? Number(p1.rms) : null
+            if (Number.isFinite(rms) && rms < (Number(snap.rmsGate) || 0)) continue
+            const targetMidi = getTargetMidiForUserTime(p1.t)
+            if (!Number.isFinite(userMidi) || !Number.isFinite(targetMidi)) continue
+            const transposedTarget = targetMidi + transposition
+            const mappedMidi = mapUserMidiToTargetOctave(userMidi, transposedTarget)
+            if (!Number.isFinite(mappedMidi)) continue
+            const inTune = Math.abs(mappedMidi - transposedTarget) <= VISUAL_TOLERANCE_SEMIS
+            if (!inTune) continue
 
             // We also need screen coordinates
             // p1.y might not be computed yet if we didn't map it.
             // We need to re-map or store mapped values.
             // Let's re-map quickly.
             const getPointY = (p) => {
-              let tm = null
-              if (snap.reference) {
-                if (snap.gateUserByTarget) {
-                  const offset = Math.max(0, Number(snap.userOffsetSec) || 0)
-                  tm = getTargetMidiAtTime(snap.reference, p.t - offset) ?? getTargetMidiAtTime(snap.reference, p.t + offset)
-                } else {
-                  tm = getTargetMidiAtTime(snap.reference, p.t)
-                }
-              }
+              const tm = getTargetMidiForUserTime(p.t)
               if (tm == null) return null // No target, can't map correct
               const userMidi = Number(p.userMidi)
               if (!Number.isFinite(userMidi)) return null
-              const mapped = mapUserMidiToTargetOctave(userMidi, tm)
+              const mapped = mapUserMidiToTargetOctave(userMidi, tm + transposition)
               const { y } = midiToY(mapped) // uses closure variables !
               return y
             }

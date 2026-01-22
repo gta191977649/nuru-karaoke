@@ -13,17 +13,35 @@ export class SimpleScoreCalculator {
     /**
      * Initialize/Reset the calculator with the song's notes.
      * @param {Array} referenceNotes - Array of note objects from reference melody.
+     * @param {Object} options - Scoring options.
      */
-    reset(referenceNotes = []) {
+    reset(referenceNotes = [], options = {}) {
         this.totalMelodyNotes = referenceNotes.length || 1 // Avoid division by zero
         this.correctNotes = 0
+        this.breakToleranceSec = Number.isFinite(options.breakToleranceSec) ? options.breakToleranceSec : 0.1
+        this.edgeToleranceSec = Number.isFinite(options.edgeToleranceSec) ? options.edgeToleranceSec : 0.05
+        this.pitchToleranceSemis = Number.isFinite(options.pitchToleranceSemis) ? options.pitchToleranceSemis : 1.5
+        this.minHitRatio = Number.isFinite(options.minHitRatio) ? options.minHitRatio : 0.5
+        this.rmsGate = Number.isFinite(options.rmsGate) ? options.rmsGate : 0.01
+        this.defaultSampleSec = Number.isFinite(options.defaultSampleSec) ? options.defaultSampleSec : 0.05
 
         // Track the currently active note processing
         this.activeNoteState = {
             note: null, // The note object reference
-            hitSamples: 0,
-            processedSamples: 0
+            hitSec: 0,
+            processedSec: 0
         }
+        this._lastSampleTime = null
+        this._lastValidPitch = null
+        this._lastValidPitchTime = null
+    }
+
+    getMaxGapSec() {
+        return this.breakToleranceSec
+    }
+
+    getEdgeToleranceSec() {
+        return this.edgeToleranceSec
     }
 
     /**
@@ -31,8 +49,36 @@ export class SimpleScoreCalculator {
      * @param {Object|null} targetNote - The expected Note object { t0Sec, t1Sec, midi } or null.
      * @param {Object|null} userPitch - The user's detected pitch object { midi, rms }, or null.
      * @param {number} transposition - Key shift to apply to target.
+     * @param {number} timeSec - Current song time in seconds.
      */
-    process(targetNote, userPitch, transposition) {
+    process(targetNote, userPitch, transposition, timeSec) {
+        const t = Number(timeSec)
+        const hasTime = Number.isFinite(t)
+        let dt = this.defaultSampleSec
+        if (hasTime && Number.isFinite(this._lastSampleTime)) {
+            dt = Math.max(0, t - this._lastSampleTime)
+        }
+        if (hasTime) this._lastSampleTime = t
+
+        const hasUserPitch = userPitch && Number.isFinite(userPitch.midi)
+        const hasRms = userPitch && Number.isFinite(userPitch.rms)
+        const rmsOk = hasRms ? userPitch.rms >= this.rmsGate : true
+
+        if (hasUserPitch && rmsOk) {
+            this._lastValidPitch = Number(userPitch.midi)
+            this._lastValidPitchTime = hasTime ? t : null
+        } else if (hasTime && Number.isFinite(this._lastValidPitchTime)) {
+            if (t - this._lastValidPitchTime > this.breakToleranceSec) {
+                this._lastValidPitch = null
+            }
+        }
+
+        const effectiveMidi =
+            Number.isFinite(this._lastValidPitch) &&
+            (!hasTime || !Number.isFinite(this._lastValidPitchTime) || t - this._lastValidPitchTime <= this.breakToleranceSec)
+                ? this._lastValidPitch
+                : null
+
         // 1. Detect Note Change (or end of note)
         if (this.activeNoteState.note !== targetNote) {
             this.evaluateActiveNote()
@@ -40,52 +86,46 @@ export class SimpleScoreCalculator {
             if (targetNote) {
                 this.activeNoteState = {
                     note: targetNote,
-                    hitSamples: 0,
-                    processedSamples: 0
+                    hitSec: 0,
+                    processedSec: 0
                 }
             } else {
-                this.activeNoteState = { note: null, hitSamples: 0, processedSamples: 0 }
+                this.activeNoteState = { note: null, hitSec: 0, processedSec: 0 }
             }
         }
 
         // If no target active, nothing to do
         if (!targetNote) return
 
-        this.activeNoteState.processedSamples++
+        this.activeNoteState.processedSec += dt
 
-        if (!userPitch) return
-
-        // Check RMS
-        if (userPitch.rms !== undefined && userPitch.rms < 0.01) return
-
-        const userMidi = userPitch.midi
-        if (!Number.isFinite(userMidi)) return
+        if (!Number.isFinite(effectiveMidi)) return
 
         // Adjust Target
         const finalTarget = targetNote.midi + transposition
 
         // Map Octave
-        const mappedMidi = this.mapUserToTargetOctave(userMidi, finalTarget)
+        const mappedMidi = this.mapUserToTargetOctave(effectiveMidi, finalTarget)
         if (mappedMidi === null) return
 
         // Check Tolerance (1.5 semitones)
         const diff = Math.abs(mappedMidi - finalTarget)
-        if (diff <= 1.5) {
-            this.activeNoteState.hitSamples++
+        if (diff <= this.pitchToleranceSemis) {
+            this.activeNoteState.hitSec += dt
         }
     }
 
     evaluateActiveNote() {
-        const { note, hitSamples, processedSamples } = this.activeNoteState
+        const { note, hitSec, processedSec } = this.activeNoteState
         if (!note) return
 
         // If we processed some samples for this note
-        if (processedSamples > 0) {
+        if (processedSec > 0) {
             // Threshold: 50% correctness
-            const accuracy = hitSamples / processedSamples
-            if (accuracy >= 0.5) {
+            const accuracy = hitSec / processedSec
+            if (accuracy >= this.minHitRatio) {
                 this.correctNotes++
-                // console.log(`[ScoreCalc] Note Correct! ${hitSamples}/${processedSamples}`)
+                // console.log(`[ScoreCalc] Note Correct! ${hitSec}/${processedSec}`)
             }
         }
     }

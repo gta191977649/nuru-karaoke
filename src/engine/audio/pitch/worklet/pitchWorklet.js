@@ -2,6 +2,7 @@ import { DEFAULT_CONFIG } from '../../../audioEngine.js'
 import Essentia from 'essentia.js/dist/essentia.js-core.es.js'
 import { EssentiaWASM } from 'essentia.js/dist/essentia-wasm.es.js'
 import { PitchyPlugin } from '../plugins/pitchyPlugin.js'
+import { AubioPlugin } from '../plugins/aubioPlugin.js'
 import { PyinPlugin } from '../plugins/pyinPlugin.js'
 import {
   applyHpfInPlace,
@@ -162,19 +163,24 @@ class PitchFrameProcessor extends AudioWorkletProcessor {
     this._algoId = DEFAULT_CONFIG.pitchAlgoId || 'pitchy'
     this._detectors = new Map([
       ['pitchy', new PitchyPlugin()],
+      ['aubio', new AubioPlugin()],
       ['pyin', new PyinPlugin()],
     ])
     this._detector = this._detectors.get(this._algoId) || null
     this._config = {
       rmsGate: DEFAULT_CONFIG.rmsGate,
       enableDoubleExponentialSmoothing: DEFAULT_CONFIG.enableDoubleExponentialSmoothing,
+      aubioTolerance: DEFAULT_CONFIG.aubioTolerance,
       clarityGate: DEFAULT_CONFIG.clarityGate,
       yinConfidenceGate: DEFAULT_CONFIG.yinConfidenceGate,
       f0MinHz: DEFAULT_CONFIG.f0MinHz,
       f0MaxHz: DEFAULT_CONFIG.f0MaxHz,
+      breakToleranceMs: DEFAULT_CONFIG.breakToleranceMs,
       medianWindowSize: DEFAULT_CONFIG.medianWindowSize,
       maxJumpSemitones: DEFAULT_CONFIG.maxJumpSemitones,
       holdFrames: DEFAULT_CONFIG.holdFrames,
+      enablePitchSnap: DEFAULT_CONFIG.enablePitchSnap !== false,
+      snapToleranceSemis: DEFAULT_CONFIG.snapToleranceSemis,
       enableDcRemoval: DEFAULT_CONFIG.enableDcRemoval !== false,
       enableHpf: DEFAULT_CONFIG.enableHpf !== false,
       enableRmsGate: DEFAULT_CONFIG.enableRmsGate !== false,
@@ -245,6 +251,8 @@ class PitchFrameProcessor extends AudioWorkletProcessor {
     if (Number.isFinite(clarityGate)) this._config.clarityGate = clarityGate
     const yinConfidenceGate = Number(msg.yinConfidenceGate)
     if (Number.isFinite(yinConfidenceGate)) this._config.yinConfidenceGate = yinConfidenceGate
+    const aubioTolerance = Number(msg.aubioTolerance)
+    if (Number.isFinite(aubioTolerance)) this._config.aubioTolerance = aubioTolerance
 
     const f0MinHz = Number(msg.f0MinHz)
     if (Number.isFinite(f0MinHz)) {
@@ -264,8 +272,19 @@ class PitchFrameProcessor extends AudioWorkletProcessor {
     const maxJumpSemitones = Number(msg.maxJumpSemitones)
     if (Number.isFinite(maxJumpSemitones)) this._config.maxJumpSemitones = maxJumpSemitones
 
+    const breakToleranceMs = Number(msg.breakToleranceMs)
+    if (Number.isFinite(breakToleranceMs)) {
+      this._config.breakToleranceMs = breakToleranceMs
+      const derivedHold = Math.max(0, Math.round((breakToleranceMs / 1000) * sampleRate / this._hopSize))
+      if (Number.isFinite(derivedHold)) this._config.holdFrames = derivedHold
+    }
+
     const holdFrames = Number(msg.holdFrames)
-    if (Number.isFinite(holdFrames)) this._config.holdFrames = holdFrames
+    if (!Number.isFinite(breakToleranceMs) && Number.isFinite(holdFrames)) this._config.holdFrames = holdFrames
+
+    if (typeof msg.enablePitchSnap === 'boolean') this._config.enablePitchSnap = msg.enablePitchSnap
+    const snapToleranceSemis = Number(msg.snapToleranceSemis)
+    if (Number.isFinite(snapToleranceSemis)) this._config.snapToleranceSemis = snapToleranceSemis
     if (typeof msg.enableDcRemoval === 'boolean') this._config.enableDcRemoval = msg.enableDcRemoval
     if (typeof msg.enableHpf === 'boolean') this._config.enableHpf = msg.enableHpf
     if (typeof msg.enableRmsGate === 'boolean') this._config.enableRmsGate = msg.enableRmsGate
@@ -479,6 +498,10 @@ class PitchFrameProcessor extends AudioWorkletProcessor {
       ? this._config.maxJumpSemitones
       : 3
     const holdFrames = Number.isFinite(this._config.holdFrames) ? this._config.holdFrames : 2
+    const enablePitchSnap = this._config.enablePitchSnap !== false
+    const snapToleranceSemis = Number.isFinite(this._config.snapToleranceSemis)
+      ? this._config.snapToleranceSemis
+      : 0.35
     let usedHold = false
 
     if (this._config.enableF0Validate) {
@@ -496,7 +519,7 @@ class PitchFrameProcessor extends AudioWorkletProcessor {
       f0Hz = isValidRange ? f0Hz : null
     }
 
-    // 1. Median Smoothing (De-spiking)
+    // 1. Median Smoothing (De-spiking) + Stability
     if (this._config.enableTemporalSmooth) {
       if (Number.isFinite(f0Hz)) {
         this._stabilityState.window = pushWindow(this._stabilityState.window, f0Hz, medianWindowSize)
@@ -505,26 +528,55 @@ class PitchFrameProcessor extends AudioWorkletProcessor {
 
         const candidateMidi = hzToMidi(f0Hz)
         if (
+          enablePitchSnap &&
           Number.isFinite(candidateMidi) &&
           Number.isFinite(this._stabilityState.lastStableMidi) &&
-          Math.abs(candidateMidi - this._stabilityState.lastStableMidi) > maxJumpSemitones
+          Math.abs(candidateMidi - this._stabilityState.lastStableMidi) <= snapToleranceSemis
+        ) {
+          f0Hz = this._stabilityState.lastStableF0 ?? f0Hz
+        }
+
+        const jumpMidi = hzToMidi(f0Hz)
+        if (
+          Number.isFinite(jumpMidi) &&
+          Number.isFinite(this._stabilityState.lastStableMidi) &&
+          Math.abs(jumpMidi - this._stabilityState.lastStableMidi) > maxJumpSemitones
         ) {
           f0Hz = null
-        } else {
+        } else if (Number.isFinite(f0Hz)) {
           this._stabilityState.lastStableF0 = f0Hz
-          this._stabilityState.lastStableMidi = candidateMidi
+          this._stabilityState.lastStableMidi = jumpMidi
           this._stabilityState.holdLeft = holdFrames
         }
       }
-
-      if (!Number.isFinite(f0Hz)) {
-        if (this._stabilityState.holdLeft > 0 && Number.isFinite(this._stabilityState.lastStableF0)) {
-          f0Hz = this._stabilityState.lastStableF0
-          usedHold = true
-          this._stabilityState.holdLeft -= 1
-        } else {
-          this._stabilityState.holdLeft = 0
+    } else {
+      // allkaraoke-like stability: snap tiny jitter + short break tolerance
+      if (Number.isFinite(f0Hz)) {
+        const candidateMidi = hzToMidi(f0Hz)
+        if (
+          enablePitchSnap &&
+          Number.isFinite(candidateMidi) &&
+          Number.isFinite(this._stabilityState.lastStableMidi) &&
+          Math.abs(candidateMidi - this._stabilityState.lastStableMidi) <= snapToleranceSemis
+        ) {
+          f0Hz = this._stabilityState.lastStableF0 ?? f0Hz
         }
+        const stableMidi = hzToMidi(f0Hz)
+        if (Number.isFinite(stableMidi)) {
+          this._stabilityState.lastStableF0 = f0Hz
+          this._stabilityState.lastStableMidi = stableMidi
+          this._stabilityState.holdLeft = holdFrames
+        }
+      }
+    }
+
+    if (!Number.isFinite(f0Hz)) {
+      if (this._stabilityState.holdLeft > 0 && Number.isFinite(this._stabilityState.lastStableF0)) {
+        f0Hz = this._stabilityState.lastStableF0
+        usedHold = true
+        this._stabilityState.holdLeft -= 1
+      } else {
+        this._stabilityState.holdLeft = 0
       }
     }
 

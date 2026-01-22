@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef, useCallback } from 'react'
-import { getTargetNoteAtTime } from '../../engine/audio/midi/referenceMelody.js'
+import { getTargetNoteAtTime, mergeAdjacentNotesByPitch } from '../../engine/audio/midi/referenceMelody.js'
+import { DEFAULT_CONFIG } from '../../engine/audioEngine.js'
 import { SimpleScoreCalculator } from '../scoring/SimpleScoreCalculator.js'
 
 export function useKaraokeScoring({
@@ -13,6 +14,7 @@ export function useKaraokeScoring({
 }) {
     // Scoring Engine Instance
     const calculatorRef = useRef(new SimpleScoreCalculator())
+    const scoringRef = useRef(null)
 
     // To avoid duplicate processing
     const lastProcessedTimeRef = useRef(-1)
@@ -20,8 +22,21 @@ export function useKaraokeScoring({
     // Reset score when resetKey changes
     useEffect(() => {
         // Initialize with total notes from reference
-        const notes = reference?.notes || []
-        calculatorRef.current.reset(notes)
+        const rawNotes = reference?.notes || []
+        const breakToleranceSec = Number(DEFAULT_CONFIG.breakToleranceMs) / 1000
+        const scoringNotes = mergeAdjacentNotesByPitch(rawNotes, {
+            maxGapSec: breakToleranceSec,
+            pitchToleranceSemis: 0,
+        })
+        scoringRef.current = reference ? { ...reference, notes: scoringNotes } : reference
+        calculatorRef.current.reset(scoringNotes, {
+            breakToleranceSec,
+            edgeToleranceSec: Math.min(0.08, Math.max(0, breakToleranceSec / 2)),
+            pitchToleranceSemis: 1.5,
+            minHitRatio: 0.5,
+            rmsGate,
+            defaultSampleSec: 0.05,
+        })
         lastProcessedTimeRef.current = -1
     }, [resetKey, reference]) // Add reference dependency to catch melody load
 
@@ -45,14 +60,17 @@ export function useKaraokeScoring({
             if (songTime <= lastProcessedTimeRef.current + 0.001) return
             lastProcessedTimeRef.current = songTime
 
-            const rawTargetNote = getTargetNoteAtTime(reference, songTime, { maxGap: 0.4 })
+            const rawTargetNote = getTargetNoteAtTime(scoringRef.current || reference, songTime, {
+                maxGap: calculatorRef.current.getMaxGapSec(),
+                edgeToleranceSec: calculatorRef.current.getEdgeToleranceSec(),
+            })
             // Note: rawTargetNote is null if no note is active
 
             const userPitch = latestPitchRef.current
             const transposition = transpositionRef.current || 0
 
             // Delegate to calculator
-            calculatorRef.current.process(rawTargetNote, userPitch, transposition)
+            calculatorRef.current.process(rawTargetNote, userPitch, transposition, songTime)
 
         }, 50) // 20 times per second
 
@@ -65,4 +83,3 @@ export function useKaraokeScoring({
 
     return { getScore }
 }
-
