@@ -125,9 +125,17 @@ const SONG_LIBRARY = [
   {
     id: 'presentendr',
     title: 'Pretender',
-    artist: '髭男dism',
+    artist: 'Offcial髭男dism',
     url: assetUrl(midiAssetMap, 'pretender.MID'),
     lrc: assetUrl(lrcAssetMap, 'pretender.lrc'),
+    lrc_offset: 1100,
+  },
+  {
+    id: 'kumoninote',
+    title: '雲に乗って',
+    artist: '三枝夕夏 IN db',
+    url: assetUrl(midiAssetMap, 'kumoninote.MID'),
+    lrc: assetUrl(lrcAssetMap, 'kumoninote.lrc'),
     lrc_offset: 1100,
   },
 ]
