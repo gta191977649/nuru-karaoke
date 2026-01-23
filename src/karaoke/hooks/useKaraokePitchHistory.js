@@ -1,5 +1,5 @@
 import { useEffect, useRef } from 'react'
-import { getTargetNoteAtTime, mergeAdjacentNotesByPitch } from '../../engine/audio/midi/referenceMelody.js'
+import { getTargetNoteAtBeat, mergeAdjacentNotesByPitch } from '../../engine/audio/midi/referenceMelody.js'
 import { DEFAULT_CONFIG } from '../../engine/audioEngine.js'
 
 function useKaraokePitchHistory({
@@ -42,18 +42,26 @@ function useKaraokePitchHistory({
       const breakToleranceSec = Number(DEFAULT_CONFIG.breakToleranceMs) / 1000
       const edgeToleranceSec = Math.min(0.08, Math.max(0, breakToleranceSec / 2))
       if (reference && !mergedReferenceRef.current) {
+        const bps = reference?.getBeatsPerSecond ? reference.getBeatsPerSecond(0) : 2
+        const maxGapBeat = breakToleranceSec * (Number.isFinite(bps) ? bps : 2)
         mergedReferenceRef.current = {
           ...reference,
           notes: mergeAdjacentNotesByPitch(reference.notes || [], {
-            maxGapSec: breakToleranceSec,
+            maxGapBeat,
             pitchToleranceSemis: 0,
+            useBeat: true,
           }),
         }
       }
-      const rawTargetNote = reference
-        ? getTargetNoteAtTime(mergedReferenceRef.current || reference, songTimeSec, {
-            maxGap: breakToleranceSec,
-            edgeToleranceSec,
+      const ref = mergedReferenceRef.current || reference
+      const beat = ref?.getBeatAtTime ? ref.getBeatAtTime(songTimeSec) : songTimeSec
+      const bpsNow = ref?.getBeatsPerSecond ? ref.getBeatsPerSecond(songTimeSec) : 2
+      const maxGapBeat = breakToleranceSec * (Number.isFinite(bpsNow) ? bpsNow : 2)
+      const edgeToleranceBeat = edgeToleranceSec * (Number.isFinite(bpsNow) ? bpsNow : 2)
+      const rawTargetNote = ref
+        ? getTargetNoteAtBeat(ref, beat, {
+            maxGap: maxGapBeat,
+            edgeToleranceBeat,
           })
         : null
       const rawTargetMidi = rawTargetNote ? rawTargetNote.midi : null

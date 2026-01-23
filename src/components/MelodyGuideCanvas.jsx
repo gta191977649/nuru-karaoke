@@ -1,7 +1,7 @@
 import { useEffect, useRef, forwardRef, useState } from 'react'
 import { Application, Container, Graphics, Sprite, Texture, Assets } from 'pixi.js'
 import { BloomFilter } from 'pixi-filters'
-import { getTargetNoteAtTime, mergeAdjacentNotesByPitch } from '../engine/audio/midi/referenceMelody.js'
+import { getTargetNoteAtBeat, mergeAdjacentNotesByPitch } from '../engine/audio/midi/referenceMelody.js'
 import { DEFAULT_CONFIG } from '../engine/audioEngine.js'
 import { DEFAULT_PARTICLE_CONFIG, createParticleSystem, createComboSystem } from './particles/particleSystem.js'
 
@@ -446,7 +446,11 @@ function MelodyGuideCanvas({
 
             if (snap.reference) {
               // Technique validation rule 1: Strict note duration
-              const targetNote = getTargetNoteAtTime(snap.reference, songTime, { maxGap: 0 })
+              const beat = snap.reference?.getBeatAtTime ? snap.reference.getBeatAtTime(songTime) : songTime
+              const bpsNow = snap.reference?.getBeatsPerSecond ? snap.reference.getBeatsPerSecond(songTime) : 2
+              const edgeToleranceBeat = 0
+              const maxGap = 0 * (Number.isFinite(bpsNow) ? bpsNow : 2)
+              const targetNote = getTargetNoteAtBeat(snap.reference, beat, { maxGap, edgeToleranceBeat })
 
               if (targetNote) {
                 const targetMidi = targetNote.midi
@@ -527,8 +531,10 @@ function MelodyGuideCanvas({
         const edgeToleranceSec = Math.min(0.08, Math.max(0, breakToleranceSec / 2))
         const transposition = snap.transpositionRef?.current ?? 0
         const notesData = snap.reference?.notes || []
+        const bps = snap.reference?.getBeatsPerSecond ? snap.reference.getBeatsPerSecond(songTimeSec) : 2
+        const maxGapBeat = breakToleranceSec * (Number.isFinite(bps) ? bps : 2)
         const scoringNotes = notesData.length
-          ? mergeAdjacentNotesByPitch(notesData, { maxGapSec: breakToleranceSec, pitchToleranceSemis: 0 })
+          ? mergeAdjacentNotesByPitch(notesData, { maxGapBeat, pitchToleranceSemis: 0, useBeat: true })
           : []
         const bounds = getNotesBounds(notesData, transposition, snap.minMidi, snap.maxMidi)
         const lineCount = 12
@@ -657,14 +663,18 @@ function MelodyGuideCanvas({
           idx + 1 < history.length ? history[idx + 1].t : history[idx].t + historyStep
 
         const scoringReference = snap.reference ? { ...snap.reference, notes: scoringNotes } : null
-        const getTargetNoteAt = (t, opts = {}) =>
-          scoringReference
-            ? getTargetNoteAtTime(scoringReference, t, {
-                maxGap: breakToleranceSec,
-                edgeToleranceSec,
-                ...opts,
-              })
-            : null
+        const getTargetNoteAt = (t, opts = {}) => {
+          if (!scoringReference) return null
+          const beat = scoringReference.getBeatAtTime ? scoringReference.getBeatAtTime(t) : t
+          const bpsNow = scoringReference.getBeatsPerSecond ? scoringReference.getBeatsPerSecond(t) : 2
+          const maxGap = breakToleranceSec * (Number.isFinite(bpsNow) ? bpsNow : 2)
+          const edgeToleranceBeat = edgeToleranceSec * (Number.isFinite(bpsNow) ? bpsNow : 2)
+          return getTargetNoteAtBeat(scoringReference, beat, {
+            maxGap,
+            edgeToleranceBeat,
+            ...opts,
+          })
+        }
         const getTargetMidiAt = (t, opts = {}) => {
           const note = getTargetNoteAt(t, opts)
           return note ? note.midi : null

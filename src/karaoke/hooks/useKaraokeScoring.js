@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef, useCallback } from 'react'
-import { getTargetNoteAtTime, mergeAdjacentNotesByPitch } from '../../engine/audio/midi/referenceMelody.js'
+import { getTargetNoteAtBeat, mergeAdjacentNotesByPitch } from '../../engine/audio/midi/referenceMelody.js'
 import { DEFAULT_CONFIG } from '../../engine/audioEngine.js'
 import { SimpleScoreCalculator } from '../scoring/SimpleScoreCalculator.js'
 
@@ -24,9 +24,12 @@ export function useKaraokeScoring({
         // Initialize with total notes from reference
         const rawNotes = reference?.notes || []
         const breakToleranceSec = Number(DEFAULT_CONFIG.breakToleranceMs) / 1000
+        const bps = reference?.getBeatsPerSecond ? reference.getBeatsPerSecond(0) : 2
+        const maxGapBeat = breakToleranceSec * (Number.isFinite(bps) ? bps : 2)
         const scoringNotes = mergeAdjacentNotesByPitch(rawNotes, {
-            maxGapSec: breakToleranceSec,
+            maxGapBeat,
             pitchToleranceSemis: 0,
+            useBeat: true,
         })
         scoringRef.current = reference ? { ...reference, notes: scoringNotes } : reference
         calculatorRef.current.reset(scoringNotes, {
@@ -60,9 +63,14 @@ export function useKaraokeScoring({
             if (songTime <= lastProcessedTimeRef.current + 0.001) return
             lastProcessedTimeRef.current = songTime
 
-            const rawTargetNote = getTargetNoteAtTime(scoringRef.current || reference, songTime, {
-                maxGap: calculatorRef.current.getMaxGapSec(),
-                edgeToleranceSec: calculatorRef.current.getEdgeToleranceSec(),
+            const ref = scoringRef.current || reference
+            const beat = ref?.getBeatAtTime ? ref.getBeatAtTime(songTime) : songTime
+            const bpsNow = ref?.getBeatsPerSecond ? ref.getBeatsPerSecond(songTime) : 2
+            const maxGapBeat = calculatorRef.current.getMaxGapSec() * (Number.isFinite(bpsNow) ? bpsNow : 2)
+            const edgeToleranceBeat = calculatorRef.current.getEdgeToleranceSec() * (Number.isFinite(bpsNow) ? bpsNow : 2)
+            const rawTargetNote = getTargetNoteAtBeat(ref, beat, {
+                maxGap: maxGapBeat,
+                edgeToleranceBeat,
             })
             // Note: rawTargetNote is null if no note is active
 
