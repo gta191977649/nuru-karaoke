@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef, useCallback } from 'react'
+import { useEffect, useRef, useCallback } from 'react'
 import { getTargetNoteAtBeat, mergeAdjacentNotesByPitch } from '../../engine/audio/midi/referenceMelody.js'
 import { DEFAULT_CONFIG } from '../../engine/audioEngine.js'
 import { SimpleScoreCalculator } from '../scoring/SimpleScoreCalculator.js'
@@ -41,7 +41,7 @@ export function useKaraokeScoring({
             defaultSampleSec: 0.05,
         })
         lastProcessedTimeRef.current = -1
-    }, [resetKey, reference]) // Add reference dependency to catch melody load
+    }, [resetKey, reference, rmsGate]) // Add reference dependency to catch melody load
 
     // Subscription to Pitch Engine
     const latestPitchRef = useRef(null)

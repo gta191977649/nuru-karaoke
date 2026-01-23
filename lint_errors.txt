@@ -1,0 +1,264 @@
+yarn run v1.22.22
+$ eslint .
+
+/Users/nurupo/Desktop/dev/nurukaraoke/src/components/MelodyGuideCanvas.jsx
+   212:12  error    React Hook "useState" cannot be called inside a callback. React Hooks must be called in a React function component or a custom React Hook function                                                                                                                       react-hooks/rules-of-hooks
+   875:21  error    'rms' is assigned a value but never used. Allowed unused vars must match /^[A-Z_]/u                                                                                                                                                                                      no-unused-vars
+   885:26  error    'inRange' is assigned a value but never used. Allowed unused vars must match /^[A-Z_]/u                                                                                                                                                                                  no-unused-vars
+  1021:15  error    'processedNotes' is assigned a value but never used. Allowed unused vars must match /^[A-Z_]/u                                                                                                                                                                           no-unused-vars
+  1139:46  warning  The ref value 'containerRef.current' will likely have changed by the time this effect cleanup function runs. If this ref points to a node rendered by React, copy 'containerRef.current' to a variable inside the effect, and use that variable in the cleanup function  react-hooks/exhaustive-deps
+  1162:6   warning  React Hook useEffect has missing dependencies: 'glissandoDownCount', 'glissandoUpCount', 'height', 'kobushiCount', 'particleConfig', 'setValidCounts', 'techniqueEventsRef', 'vibratoCount', and 'width'. Either include them or remove the dependency array             react-hooks/exhaustive-deps
+  1330:46  error    'color' is defined but never used                                                                                                                                                                                                                                        no-unused-vars
+
+/Users/nurupo/Desktop/dev/nurukaraoke/src/components/Spectrogram.jsx
+  65:9  error  'offscreenRef' is assigned a value but never used. Allowed unused vars must match /^[A-Z_]/u  no-unused-vars
+
+/Users/nurupo/Desktop/dev/nurukaraoke/src/components/SpectrumView.jsx
+  1:46  error  'useMemo' is defined but never used. Allowed unused vars must match /^[A-Z_]/u  no-unused-vars
+
+/Users/nurupo/Desktop/dev/nurukaraoke/src/components/WiiAlert.jsx
+  28:5  error  Error: Calling setState synchronously within an effect can trigger cascading renders
+
+Effects are intended to synchronize state between React and external systems such as manually updating the DOM, state management libraries, or other platform APIs. In general, the body of an effect should do one or both of the following:
+* Update external systems with the latest state from React.
+* Subscribe for updates from some external system, calling setState in a callback function when external state changes.
+
+Calling setState synchronously within an effect body causes cascading renders that can hurt performance, and is not recommended. (https://react.dev/learn/you-might-not-need-an-effect).
+
+  26 |   useEffect(() => {
+  27 |     if (!alert || !visible) return
+> 28 |     setRemainingMs(timeoutMs)
+     |     ^^^^^^^^^^^^^^ Avoid calling setState() directly within an effect
+  29 |   }, [alert, visible, timeoutMs])
+  30 |
+  31 |   const showTime = timeoutMs > 0  react-hooks/set-state-in-effect
+
+/Users/nurupo/Desktop/dev/nurukaraoke/src/components/particles/ParticlePreview.jsx
+  102:46  warning  The ref value 'containerRef.current' will likely have changed by the time this effect cleanup function runs. If this ref points to a node rendered by React, copy 'containerRef.current' to a variable inside the effect, and use that variable in the cleanup function  react-hooks/exhaustive-deps
+
+/Users/nurupo/Desktop/dev/nurukaraoke/src/components/particles/particleSystem.js
+  228:9  error  'decay' is assigned a value but never used. Allowed unused vars must match /^[A-Z_]/u  no-unused-vars
+
+/Users/nurupo/Desktop/dev/nurukaraoke/src/engine/MidiStandardDetector.js
+  155:27  error  'addr3' is assigned a value but never used. Allowed unused vars must match /^[A-Z_]/u  no-unused-vars
+  196:27  error  'note' is assigned a value but never used. Allowed unused vars must match /^[A-Z_]/u   no-unused-vars
+
+/Users/nurupo/Desktop/dev/nurukaraoke/src/engine/Synth.jsx
+  177:9   error    'normalizeMidiToTarget' is assigned a value but never used. Allowed unused vars must match /^[A-Z_]/u                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                no-unused-vars
+  193:9   error    'canPlay' is assigned a value but never used. Allowed unused vars must match /^[A-Z_]/u                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                              no-unused-vars
+  383:27  error    Error: Cannot access variable before it is declared
+
+`midiToPitchClass` is accessed before it is declared, which prevents the earlier access from updating when this value changes over time.
+
+  381 |         songTimeSec,
+  382 |         targetMidi: transposedTargetMidi,
+> 383 |         targetPitchClass: midiToPitchClass(transposedTargetMidi),
+      |                           ^^^^^^^^^^^^^^^^ `midiToPitchClass` accessed before it is declared
+  384 |         userMidi,
+  385 |         userPitchClass: midiToPitchClass(userMidi),
+  386 |         pitchErrorCents,
+
+  554 |   const noteNames = ['C', 'C#', 'D', 'D#', 'E', 'F', 'F#', 'G', 'G#', 'A', 'A#', 'B']
+  555 |   const formatNumber = (value, digits = 2) => (Number.isFinite(value) ? value.toFixed(digits) : 'n/a')
+> 556 |   const midiToPitchClass = (midi) => {
+      |   ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+> 557 |     const m = Number(midi)
+      | ^^^^^^^^^^^^^^^^^^^^^^^^^^
+> 558 |     if (!Number.isFinite(m)) return null
+      | ^^^^^^^^^^^^^^^^^^^^^^^^^^
+> 559 |     return ((Math.round(m) % 12) + 12) % 12
+      | ^^^^^^^^^^^^^^^^^^^^^^^^^^
+> 560 |   }
+      | ^^^^ `midiToPitchClass` is declared here
+  561 |   const formatPitchClass = (midi) => {
+  562 |     const pc = midiToPitchClass(midi)
+  563 |     if (pc == null) return 'n/a'  react-hooks/immutability
+  405:6   warning  React Hook useEffect has a missing dependency: 'rmsGate'. Either include it or remove the dependency array                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                           react-hooks/exhaustive-deps
+
+/Users/nurupo/Desktop/dev/nurukaraoke/src/engine/analysis/TechniqueRegistry.js
+  18:13  error  'time' is defined but never used           no-unused-vars
+  18:19  error  'f0Cents' is defined but never used        no-unused-vars
+  18:28  error  'historyBuffer' is defined but never used  no-unused-vars
+
+/Users/nurupo/Desktop/dev/nurukaraoke/src/engine/analysis/plugins/GlissandoPlugin.js
+  81:23  error  'timeSinceGliss' is assigned a value but never used. Allowed unused vars must match /^[A-Z_]/u  no-unused-vars
+
+/Users/nurupo/Desktop/dev/nurukaraoke/src/engine/analysis/worker/technique.worker.js
+  1:1  warning  Unused eslint-disable directive (no problems were reported from 'no-restricted-globals')
+
+/Users/nurupo/Desktop/dev/nurukaraoke/src/engine/audio/pitch/plugins/PitchDetectorPlugin.js
+  7:13  error  '_cfg' is defined but never used    no-unused-vars
+  9:10  error  '_frame' is defined but never used  no-unused-vars
+
+/Users/nurupo/Desktop/dev/nurukaraoke/src/engine/audio/pitch/worklet/pitchWorklet.js
+  15:3  error  'smoothMovingAverage' is defined but never used. Allowed unused vars must match /^[A-Z_]/u  no-unused-vars
+
+/Users/nurupo/Desktop/dev/nurukaraoke/src/engine/converters/SoundCanvasConverter.js
+  201:52  error  'program' is defined but never used                                no-unused-vars
+  213:18  error  Unexpected control character(s) in regular expression: \x00, \x1f  no-control-regex
+  214:23  error  Unnecessary escape character: \/                                   no-useless-escape
+
+/Users/nurupo/Desktop/dev/nurukaraoke/src/engine/converters/XGConverter.js
+   48:10  error  'isSfxKit' is defined but never used. Allowed unused vars must match /^[A-Z_]/u        no-unused-vars
+   48:19  error  'program' is defined but never used                                                    no-unused-vars
+   89:10  error  'findNearest' is defined but never used. Allowed unused vars must match /^[A-Z_]/u     no-unused-vars
+  223:23  error  'isSfx' is assigned a value but never used. Allowed unused vars must match /^[A-Z_]/u  no-unused-vars
+
+/Users/nurupo/Desktop/dev/nurukaraoke/src/home/ViewSelectedSong.jsx
+  7:37  error  'onOpenKaraoke' is defined but never used  no-unused-vars
+
+/Users/nurupo/Desktop/dev/nurukaraoke/src/karaoke/hooks/useKaraokeReference.js
+  10:7  error  Error: Calling setState synchronously within an effect can trigger cascading renders
+
+Effects are intended to synchronize state between React and external systems such as manually updating the DOM, state management libraries, or other platform APIs. In general, the body of an effect should do one or both of the following:
+* Update external systems with the latest state from React.
+* Subscribe for updates from some external system, calling setState in a callback function when external state changes.
+
+Calling setState synchronously within an effect body causes cascading renders that can hurt performance, and is not recommended. (https://react.dev/learn/you-might-not-need-an-effect).
+
+   8 |   useEffect(() => {
+   9 |     if (!ready || !midiName) {
+> 10 |       setReference(null)
+     |       ^^^^^^^^^^^^ Avoid calling setState() directly within an effect
+  11 |       return
+  12 |     }
+  13 |     let active = true  react-hooks/set-state-in-effect
+
+/Users/nurupo/Desktop/dev/nurukaraoke/src/karaoke/hooks/useKaraokeScoring.js
+   1:10  error    'useState' is defined but never used. Allowed unused vars must match /^[A-Z_]/u                             no-unused-vars
+  44:8   warning  React Hook useEffect has a missing dependency: 'rmsGate'. Either include it or remove the dependency array  react-hooks/exhaustive-deps
+
+/Users/nurupo/Desktop/dev/nurukaraoke/src/karaoke/hooks/useKaraokeSongIntro.js
+  25:7  error    Error: Calling setState synchronously within an effect can trigger cascading renders
+
+Effects are intended to synchronize state between React and external systems such as manually updating the DOM, state management libraries, or other platform APIs. In general, the body of an effect should do one or both of the following:
+* Update external systems with the latest state from React.
+* Subscribe for updates from some external system, calling setState in a callback function when external state changes.
+
+Calling setState synchronously within an effect body causes cascading renders that can hurt performance, and is not recommended. (https://react.dev/learn/you-might-not-need-an-effect).
+
+  23 |     // If first note is within 3 seconds (visible window roughly), hide intro
+  24 |     if (firstNoteTime < currentTime + 3.0) {
+> 25 |       setShowSongInfo(false)
+     |       ^^^^^^^^^^^^^^^ Avoid calling setState() directly within an effect
+  26 |     }
+  27 |   }, [showSongInfo, reference, currentTime])
+  28 |           react-hooks/set-state-in-effect
+  37:7  error    Error: Calling setState synchronously within an effect can trigger cascading renders
+
+Effects are intended to synchronize state between React and external systems such as manually updating the DOM, state management libraries, or other platform APIs. In general, the body of an effect should do one or both of the following:
+* Update external systems with the latest state from React.
+* Subscribe for updates from some external system, calling setState in a callback function when external state changes.
+
+Calling setState synchronously within an effect body causes cascading renders that can hurt performance, and is not recommended. (https://react.dev/learn/you-might-not-need-an-effect).
+
+  35 |     // Always update song info so it's available for ResultsPage
+  36 |     if (title) {
+> 37 |       setSongInfo({ title, artist: currentSong?.artist || '' })
+     |       ^^^^^^^^^^^ Avoid calling setState() directly within an effect
+  38 |     }
+  39 |
+  40 |     // Only trigger the intro animation if it's a new song load  react-hooks/set-state-in-effect
+  50:6  warning  React Hook useEffect has missing dependencies: 'lastIntroMidiUrl' and 'setLastIntroMidiUrl'. Either include them or remove the dependency array                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                   react-hooks/exhaustive-deps
+
+/Users/nurupo/Desktop/dev/nurukaraoke/src/karaoke/hooks/useSingingTechnique.js
+   93:41  error    'prev' is defined but never used                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                         no-unused-vars
+  114:8   warning  React Hook useEffect has a missing dependency: 'currentTimeRef'. Either include it or remove the dependency array. If 'setCounts' needs the current value of 'currentTimeRef', you can also switch to useReducer instead of useState and read 'currentTimeRef' in the reducer                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                            react-hooks/exhaustive-deps
+  130:27  error    Error: Cannot access refs during render
+
+React refs are values that are not needed for rendering. Refs should only be accessed outside of render, such as in event handlers or effects. Accessing a ref value (the `current` property) during render can cause your component not to update as expected (https://react.dev/reference/react/useRef).
+
+  128 |         counts,
+  129 |         activeTechniques,
+> 130 |         techniqueHistory: {
+      |                           ^
+> 131 |             vibrato: [...historyRef.current.vibrato],
+      | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+> 132 |             kobushi: [...historyRef.current.kobushi],
+      | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+> 133 |             glissando: [...historyRef.current.glissando]
+      | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+> 134 |         },
+      | ^^^^^^^^^^ Cannot access ref value during render
+  135 |         techniqueEventsRef,
+  136 |         resetCounts
+  137 |     }  react-hooks/refs
+  131:22  error    Error: Cannot access refs during render
+
+React refs are values that are not needed for rendering. Refs should only be accessed outside of render, such as in event handlers or effects. Accessing a ref value (the `current` property) during render can cause your component not to update as expected (https://react.dev/reference/react/useRef).
+
+  129 |         activeTechniques,
+  130 |         techniqueHistory: {
+> 131 |             vibrato: [...historyRef.current.vibrato],
+      |                      ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ Cannot access ref value during render
+  132 |             kobushi: [...historyRef.current.kobushi],
+  133 |             glissando: [...historyRef.current.glissando]
+  134 |         },                                                                                                                                                                                                                                                                                            react-hooks/refs
+  131:26  error    Error: Cannot access refs during render
+
+React refs are values that are not needed for rendering. Refs should only be accessed outside of render, such as in event handlers or effects. Accessing a ref value (the `current` property) during render can cause your component not to update as expected (https://react.dev/reference/react/useRef).
+
+  129 |         activeTechniques,
+  130 |         techniqueHistory: {
+> 131 |             vibrato: [...historyRef.current.vibrato],
+      |                          ^^^^^^^^^^^^^^^^^^^^^^^^^^ Cannot access ref value during render
+  132 |             kobushi: [...historyRef.current.kobushi],
+  133 |             glissando: [...historyRef.current.glissando]
+  134 |         },                                                                                                                                                                                                                                                                                             react-hooks/refs
+  132:22  error    Error: Cannot access refs during render
+
+React refs are values that are not needed for rendering. Refs should only be accessed outside of render, such as in event handlers or effects. Accessing a ref value (the `current` property) during render can cause your component not to update as expected (https://react.dev/reference/react/useRef).
+
+  130 |         techniqueHistory: {
+  131 |             vibrato: [...historyRef.current.vibrato],
+> 132 |             kobushi: [...historyRef.current.kobushi],
+      |                      ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ Cannot access ref value during render
+  133 |             glissando: [...historyRef.current.glissando]
+  134 |         },
+  135 |         techniqueEventsRef,                                                                                                                                                                                                                                                                                          react-hooks/refs
+  132:26  error    Error: Cannot access refs during render
+
+React refs are values that are not needed for rendering. Refs should only be accessed outside of render, such as in event handlers or effects. Accessing a ref value (the `current` property) during render can cause your component not to update as expected (https://react.dev/reference/react/useRef).
+
+  130 |         techniqueHistory: {
+  131 |             vibrato: [...historyRef.current.vibrato],
+> 132 |             kobushi: [...historyRef.current.kobushi],
+      |                          ^^^^^^^^^^^^^^^^^^^^^^^^^^ Cannot access ref value during render
+  133 |             glissando: [...historyRef.current.glissando]
+  134 |         },
+  135 |         techniqueEventsRef,                                                                                                                                                                                                                                                                                           react-hooks/refs
+  133:24  error    Error: Cannot access refs during render
+
+React refs are values that are not needed for rendering. Refs should only be accessed outside of render, such as in event handlers or effects. Accessing a ref value (the `current` property) during render can cause your component not to update as expected (https://react.dev/reference/react/useRef).
+
+  131 |             vibrato: [...historyRef.current.vibrato],
+  132 |             kobushi: [...historyRef.current.kobushi],
+> 133 |             glissando: [...historyRef.current.glissando]
+      |                        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ Cannot access ref value during render
+  134 |         },
+  135 |         techniqueEventsRef,
+  136 |         resetCounts                                                                                                                                                                                                                                                                                              react-hooks/refs
+  133:28  error    Error: Cannot access refs during render
+
+React refs are values that are not needed for rendering. Refs should only be accessed outside of render, such as in event handlers or effects. Accessing a ref value (the `current` property) during render can cause your component not to update as expected (https://react.dev/reference/react/useRef).
+
+  131 |             vibrato: [...historyRef.current.vibrato],
+  132 |             kobushi: [...historyRef.current.kobushi],
+> 133 |             glissando: [...historyRef.current.glissando]
+      |                            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^ Cannot access ref value during render
+  134 |         },
+  135 |         techniqueEventsRef,
+  136 |         resetCounts                                                                                                                                                                                                                                                                                               react-hooks/refs
+
+/Users/nurupo/Desktop/dev/nurukaraoke/src/karaoke/pages/ResultsPage.jsx
+   3:10  error    'useKaraokeStore' is defined but never used. Allowed unused vars must match /^[A-Z_]/u                       no-unused-vars
+  24:9   warning  React Hook useMemo has an unnecessary dependency: 'score'. Either exclude it or remove the dependency array  react-hooks/exhaustive-deps
+
+/Users/nurupo/Desktop/dev/nurukaraoke/src/karaoke/pages/SingingPage.jsx
+  229:8  warning  React Hook useEffect has a missing dependency: 'state.status'. Either include it or remove the dependency array  react-hooks/exhaustive-deps
+
+✖ 52 problems (42 errors, 10 warnings)
+  0 errors and 1 warning potentially fixable with the `--fix` option.
+
+error Command failed with exit code 1.
+info Visit https://yarnpkg.com/en/docs/cli/run for documentation about this command.

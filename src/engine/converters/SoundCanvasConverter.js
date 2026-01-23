@@ -198,7 +198,7 @@ const OVERRIDES_BY_NAME = [
     { test: /\bbagpipe\b/, to: GM1.families.BAGPIPE }
 ]
 
-function overrideByBankProgram({ bankMSB, bankLSB, program, isDrumChan }) {
+function overrideByBankProgram({ bankMSB, bankLSB, isDrumChan }) {
     if (isDrumChan) return null
     if (bankMSB === 0 && (bankLSB >= 120)) {
         return GM1.families.FX_8_SCI_FI
@@ -210,8 +210,9 @@ function normName(s) {
     if (!s) return ''
     return String(s)
         .toLowerCase()
+        // eslint-disable-next-line no-control-regex
         .replace(/[\u0000-\u001f]/g, ' ')
-        .replace(/[_\-\/]+/g, ' ')
+        .replace(/[_\-/]+/g, ' ')
         .replace(/[^\w\s]+/g, ' ')
         .replace(/\s+/g, ' ')
         .trim()

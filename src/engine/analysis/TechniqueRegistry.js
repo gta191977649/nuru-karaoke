@@ -15,7 +15,7 @@ export class TechniquePlugin {
      * @param {Array<{t: number, v: number}>} historyBuffer - Circular buffer of {t, v} (cents)
      * @returns {Object|null} - Event object if detected (e.g. { type: 'vibrato', start: ..., end: ... }), or null
      */
-    analyze(time, f0Cents, historyBuffer) {
+    analyze(_time, _f0Cents, _historyBuffer) { // eslint-disable-line no-unused-vars
         throw new Error('Plugin must implement analyze()')
     }
 

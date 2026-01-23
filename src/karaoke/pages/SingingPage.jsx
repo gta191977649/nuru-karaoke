@@ -226,7 +226,7 @@ function SingingPage({ onFinish }) {
                 onFinish({ score: finalScore, techniques: finalTechniques, songInfo })
             }
         }
-    }, [state.currentTime, state.duration, onFinish, getScore, songInfo])
+    }, [state.currentTime, state.duration, onFinish, getScore, songInfo, state.status])
 
     return (
         <div className={`karaokePage${showSongInfo ? ' karaokePage--intro' : ''}`}>

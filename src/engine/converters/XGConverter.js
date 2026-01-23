@@ -45,12 +45,7 @@ function getGm2KitFromXgProgram(program) {
     return GM2_DRUM_KITS.STANDARD
 }
 
-function isSfxKit(program) {
-    // XG SFX Kit 1 is 0 in Bank 126.
-    // XG SFX Kit 2 is 0 in Bank 126 (LSB 0 vs 1?)
-    // Actually XG SFX is usually Bank 126.
-    return false // Todo: pass bank info
-}
+
 
 // GM Drum Constants
 const STRICT_GM_DRUM_RANGE = true
@@ -86,11 +81,7 @@ const XG_HIGH_CYMBALS = {
     // If input > 81, we assume it's "Cymbal-like" if reasonable, or drop.
 }
 
-function findNearest(note, candidates) {
-    return candidates.reduce((prev, curr) =>
-        Math.abs(curr - note) < Math.abs(prev - note) ? curr : prev
-    )
-}
+
 
 export function mapXgDrumNoteToGm(note) {
     if (!STRICT_GM_DRUM_RANGE) return note
@@ -220,7 +211,9 @@ export function createXGConverter() {
         if (event.type === 'note_on' || event.type === 'note_off') {
             const ch = event.channel
             if (state.drumChannels[ch]) {
-                const isSfx = (state.bankMSB[ch] === 126) || (state.program[ch] === GM2_DRUM_KITS.SFX)
+                if (state.bankMSB[ch] === 126 || state.program[ch] === GM2_DRUM_KITS.SFX) {
+                    // sfx logic if needed
+                }
 
                 const original = event.note
                 const remapped = mapXgDrumNoteToGm(original)

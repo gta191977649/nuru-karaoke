@@ -12,7 +12,7 @@ import {
   pushWindow,
   removeDcOffsetInPlace,
   rms,
-  smoothMovingAverage,
+
   smoothDoubleExponential,
   updateHpfState,
 } from '../utils/dspUtils.js'

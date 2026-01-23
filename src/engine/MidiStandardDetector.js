@@ -152,7 +152,7 @@ function scanMidiForSysex(buffer) {
                     // bytes: [41 dev 42 12 addr1 addr2 addr3 ...]
                     const addr1 = sysexData[4] ?? 0x00
                     const addr2 = sysexData[5] ?? 0x00
-                    const addr3 = sysexData[6] ?? 0x00
+
 
                     // Strong SC-88-ish signal #1: 0x50 bank addresses (2nd module / extra parts)
                     // If your file writes to both 0x40.. and 0x50.. blocks, it’s almost certainly SC-88ST/Pro-ish targeting.
@@ -193,7 +193,7 @@ function scanMidiForSysex(buffer) {
                 case 0x90: { // note on
                     // status already consumed, now data bytes
                     if (offset + 2 > end) { offset = end; break }
-                    const note = view.getUint8(offset); offset++
+                    view.getUint8(offset); offset++
                     const vel = view.getUint8(offset); offset++
                     if (vel > 0) {
                         result.noteActivity++

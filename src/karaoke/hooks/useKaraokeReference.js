@@ -7,7 +7,8 @@ function useKaraokeReference({ ready, midiName, midiUrl, queueIndex }) {
 
   useEffect(() => {
     if (!ready || !midiName) {
-      setReference(null)
+      // eslint-disable-next-line react-hooks/set-state-in-effect
+      if (reference) setReference(null)
       return
     }
     let active = true
@@ -24,7 +25,7 @@ function useKaraokeReference({ ready, midiName, midiUrl, queueIndex }) {
     return () => {
       active = false
     }
-  }, [ready, midiName, midiUrl, queueIndex])
+  }, [ready, midiName, midiUrl, queueIndex, reference])
 
   return reference
 }

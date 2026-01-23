@@ -204,18 +204,12 @@ function MelodyGuideCanvas({
   const vibratoRef = useRef(null)
 
   /* Internal state for validated counts */
-  const [validCounts, setValidCounts] = (function () {
-    // Using a lazy initializer or just standard useState
-    // We can't use useState inside the ticker, so we define it here at component level
-    // But wait, the replace_file_content context is restricted to these lines.
-    // I will just use standard useState import which is available in file scope.
-    return useState({
-      glissup: 0,
-      kobushi: 0,
-      glissdown: 0,
-      vibrato: 0
-    })
-  })()
+  const [validCounts, setValidCounts] = useState({
+    glissup: 0,
+    kobushi: 0,
+    glissdown: 0,
+    vibrato: 0
+  })
   // Just standard usage:
   // const [validCounts, setValidCounts] = useState({...})
 
@@ -872,7 +866,7 @@ function MelodyGuideCanvas({
             history.forEach((point) => {
               if (point.t < visibleStart || point.t > visibleEnd) return
               const userMidi = Number.isFinite(point.userMidi) ? Number(point.userMidi) : null
-              const rms = Number.isFinite(point.rms) ? Number(point.rms) : 0
+
 
               // Draw even if low RMS, or maybe gate it slightly? 
               // User asked for "raw f0 indicate", usually raw means even if noisy, but let's key off > 0 midi
@@ -882,7 +876,7 @@ function MelodyGuideCanvas({
               }
 
               const x = playheadX + (point.t - songTimeSec) * pixelsPerSec
-              const { y, inRange } = midiToY(userMidi)
+              const { y } = midiToY(userMidi)
 
               // Clamp Y visually so it doesn't go off canvas wildly
               const drawY = Math.max(0, Math.min(h, y))
@@ -1018,7 +1012,6 @@ function MelodyGuideCanvas({
         if (!state.techniqueSpritePool) state.techniqueSpritePool = pool
 
         let poolIdx = 0
-        const processedNotes = new Set()
 
         visibleEvents.forEach(evt => {
           if (!evt.isValid) return // Only render validated techniques
@@ -1327,7 +1320,7 @@ function KaraokeOverlay({
   )
 }
 
-const CountBox = forwardRef(({ label, count, color, borderColor, icon, labelColor }, ref) => {
+const CountBox = forwardRef(({ label, count, borderColor, icon, labelColor }, ref) => {
   return (
     <div
       ref={ref}

@@ -22,7 +22,8 @@ function useKaraokeSongIntro({
     const firstNoteTime = reference.notes[0].t0Sec
     // If first note is within 3 seconds (visible window roughly), hide intro
     if (firstNoteTime < currentTime + 3.0) {
-      setShowSongInfo(false)
+      // eslint-disable-next-line react-hooks/set-state-in-effect
+      if (showSongInfo) setShowSongInfo(false)
     }
   }, [showSongInfo, reference, currentTime])
 
@@ -33,7 +34,8 @@ function useKaraokeSongIntro({
     const title = currentSong?.title || midiName || ''
 
     // Always update song info so it's available for ResultsPage
-    if (title) {
+    if (title && (songInfo.title !== title || songInfo.artist !== (currentSong?.artist || ''))) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect
       setSongInfo({ title, artist: currentSong?.artist || '' })
     }
 
@@ -54,6 +56,10 @@ function useKaraokeSongIntro({
     queueIndex,
     transposition,
     showKeyChangeAlert,
+    lastIntroMidiUrl,
+    setLastIntroMidiUrl,
+    songInfo.artist,
+    songInfo.title
   ])
 
   return { showSongInfo, songInfo }

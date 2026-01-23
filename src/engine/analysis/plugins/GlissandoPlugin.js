@@ -78,7 +78,7 @@ class GlissandoPlugin extends TechniquePlugin {
             // If we were potentially glissing, check if we "landed"
 
             if (this.state.potential && this.state.direction) {
-                const timeSinceGliss = now - this.state.startTime;
+
 
                 // Debounce: Only count if it hasn't been triggered very recently (0.5s)
                 if (now - this.lastEventTime > 0.5) {

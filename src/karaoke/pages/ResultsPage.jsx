@@ -1,6 +1,6 @@
 import React, { useMemo } from 'react'
 import '../Karaoke.css'
-import { useKaraokeStore } from '../../state/karaokeStore.js'
+
 
 const SCORE_RING_CONFIG = {
     radius: 48, // Larger radius to be "outside"
@@ -21,7 +21,7 @@ function ResultsPage({ score, techniques, songInfo, onNext }) {
         intonation: { label: '抑揚', val: 0, max: 15 },
         longTone: { label: 'ロングトーン', val: 0, max: 10 },
         technique: { label: 'テクニック', val: 0, max: 5 },
-    }), [score])
+    }), [])
 
     const circumference = 2 * Math.PI * SCORE_RING_CONFIG.radius
     const progressOffset = circumference * (1 - (Math.min(100, Math.max(0, Number(score) || 0)) / 100))

@@ -168,29 +168,25 @@ function Synth({ onNavigateHome }) {
   const pipelineStages = pipelineDebug.stages || {}
   const pipelineMetrics = pipelineDebug.metrics || {}
 
+  /* eslint-disable react-hooks/exhaustive-deps */
+  const noteNames = ['C', 'C#', 'D', 'D#', 'E', 'F', 'F#', 'G', 'G#', 'A', 'A#', 'B']
+  const formatNumber = (value, digits = 2) => (Number.isFinite(value) ? value.toFixed(digits) : 'n/a')
+  const midiToPitchClass = (midi) => {
+    const m = Number(midi)
+    if (!Number.isFinite(m)) return null
+    return ((Math.round(m) % 12) + 12) % 12
+  }
+  const formatPitchClass = (midi) => {
+    const pc = midiToPitchClass(midi)
+    if (pc == null) return 'n/a'
+    return `${noteNames[pc]} (pc ${pc})`
+  }
+
   const getCssVar = (el, name, fallback) => {
     if (!el) return fallback
     const value = getComputedStyle(el).getPropertyValue(name)
     return value ? value.trim() : fallback
   }
-
-  const normalizeMidiToTarget = (userMidi, targetMidi, minMidi, maxMidi) => {
-    const u = Number(userMidi)
-    if (!Number.isFinite(u)) return null
-    const t = Number(targetMidi)
-    let next = u
-    if (Number.isFinite(t)) {
-      const shift = Math.round((t - u) / 12)
-      next = u + shift * 12
-    } else {
-      while (next < minMidi) next += 12
-      while (next > maxMidi) next -= 12
-    }
-    if (!Number.isFinite(next)) return null
-    return Math.max(minMidi, Math.min(maxMidi, next))
-  }
-
-  const canPlay = useMemo(() => Boolean(state.midiName) && state.ready, [state.midiName, state.ready])
 
   useEffect(() => {
     const unsubscribe = pitchEngine.onPitch((result) => {
@@ -551,18 +547,6 @@ function Synth({ onNavigateHome }) {
     }
   }, [state.ready, state.midiName, state.midiUrl, state.queueIndex])
 
-  const noteNames = ['C', 'C#', 'D', 'D#', 'E', 'F', 'F#', 'G', 'G#', 'A', 'A#', 'B']
-  const formatNumber = (value, digits = 2) => (Number.isFinite(value) ? value.toFixed(digits) : 'n/a')
-  const midiToPitchClass = (midi) => {
-    const m = Number(midi)
-    if (!Number.isFinite(m)) return null
-    return ((Math.round(m) % 12) + 12) % 12
-  }
-  const formatPitchClass = (midi) => {
-    const pc = midiToPitchClass(midi)
-    if (pc == null) return 'n/a'
-    return `${noteNames[pc]} (pc ${pc})`
-  }
   const formatChannelList = (channels) => {
     if (!Array.isArray(channels)) return '—'
     const list = []

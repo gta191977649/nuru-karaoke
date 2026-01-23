@@ -1,4 +1,4 @@
-/* eslint-disable no-restricted-globals */
+
 import { SingingTechniqueDetector } from '../SingingTechniqueDetector.js'
 // Import plugins to register them
 import '../plugins/VibratoPlugin.js'
