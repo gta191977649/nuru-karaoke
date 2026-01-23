@@ -1175,15 +1175,15 @@ function Synth({ onNavigateHome }) {
                     <Row>
                       <Col xs={4}>
                         <div className="small text-muted mb-1">Vibrato</div>
-                        <WaveformPixi data={techniqueHistory.vibrato} height={40} color="#2ecc71" />
+                        <WaveformPixi data={techniqueHistory.vibrato.slice()} height={40} color="#2ecc71" />
                       </Col>
                       <Col xs={4}>
                         <div className="small text-muted mb-1">Kobushi</div>
-                        <WaveformPixi data={techniqueHistory.kobushi} height={40} color="#4fc3f7" />
+                        <WaveformPixi data={techniqueHistory.kobushi.slice()} height={40} color="#4fc3f7" />
                       </Col>
                       <Col xs={4}>
                         <div className="small text-muted mb-1">Glissando</div>
-                        <WaveformPixi data={techniqueHistory.glissando} height={40} color="#9c27b0" />
+                        <WaveformPixi data={techniqueHistory.glissando.slice()} height={40} color="#9c27b0" />
                       </Col>
                     </Row>
                     <div className="d-flex gap-2 mt-3">
