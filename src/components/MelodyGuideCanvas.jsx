@@ -682,49 +682,6 @@ function MelodyGuideCanvas({
           return getTargetMidiAt(t)
         }
 
-        const correctNotes = []
-        if (scoringNotes.length && history.length) {
-          scoringNotes.forEach((note) => {
-            if (note.t1Sec < visibleStart || note.t0Sec > visibleEnd) return
-            const noteStart = note.t0Sec
-            const noteEnd = note.t1Sec
-            const duration = noteEnd - noteStart
-            if (duration <= 0) return
-            const targetMidi = note.midi + transposition
-            let covered = 0
-            for (let i = 0; i < history.length; i += 1) {
-              const point = history[i]
-              if (point.t < noteStart || point.t > noteEnd) continue
-              const userMidi = Number.isFinite(point.userMidi) ? Number(point.userMidi) : null
-              if (!Number.isFinite(userMidi)) continue
-              const pointRms = Number.isFinite(point.rms) ? Number(point.rms) : null
-              if (Number.isFinite(pointRms) && pointRms < snap.rmsGate) continue
-              if (snap.gateUserByTarget && snap.reference) {
-                const t = Number(point.t)
-                const offset = Math.max(0, Number(snap.userOffsetSec) || 0)
-                const targetMidiGate =
-                  getTargetMidiAt(t - offset) ??
-                  getTargetMidiAt(t + offset)
-                if (targetMidiGate == null) continue
-              }
-              const mappedMidi = mapUserMidiToTargetOctave(userMidi, targetMidi)
-              if (!Number.isFinite(mappedMidi)) continue
-              if (Math.abs(mappedMidi - targetMidi) > NOTE_MERGE_CONFIG.pitchToleranceSemis) continue
-              const segStart = Math.max(noteStart, point.t)
-              const segEnd = Math.min(noteEnd, nextTime(i))
-              const dt = segEnd - segStart
-              if (dt > 0) covered += dt
-            }
-            if (covered / duration >= NOTE_MERGE_CONFIG.coverageRatio) {
-              const { y, inRange } = midiToY(targetMidi)
-              correctNotes.push({ t0: noteStart, t1: noteEnd, y, inRange, targetMidi })
-            }
-          })
-        }
-
-        const isForcedTime = (t) =>
-          correctNotes.some((note) => t >= note.t0 && t <= note.t1)
-
         const buildSegments = (classifier) => {
           const segments = []
           let current = null
@@ -784,27 +741,16 @@ function MelodyGuideCanvas({
           if (!Number.isFinite(mappedMidi)) return null
           const { y: userY, inRange } = midiToY(mappedMidi)
           const inTolerance = Math.abs(mappedMidi - targetMidiPoint) <= NOTE_MERGE_CONFIG.pitchToleranceSemis
-          const forcedTime = isForcedTime(point.t)
-          if (forcedTime) return null
-          if (inRange && inTolerance) return null
+          if (inRange && inTolerance) {
+            return { type: 'correct', key: `correct-${Math.round(mappedMidi)}`, y: userY }
+          }
           return {
             type: 'incorrect',
             key: `incorrect-${Math.round(userMidi)}-${Math.round(targetMidiPoint)}`,
             y: userY,
           }
         })
-
-        const forcedCorrect = []
-        correctNotes.forEach((note) => {
-          const entry = {
-            t0: note.t0,
-            t1: note.t1,
-            y: note.y,
-          }
-          if (note.inRange) forcedCorrect.push(entry)
-        })
-
-        const correctSegments = forcedCorrect
+        const correctSegments = segments.filter((seg) => seg.type === 'correct')
         const incorrectSegments = segments.filter((seg) => seg.type === 'incorrect')
         const userBarW = Math.max(6, pixelsPerSec * 0.18)
         const userBarH = 10
