@@ -1,5 +1,5 @@
 import { useEffect, useRef, useCallback } from 'react'
-import { getTargetNoteAtBeat, mergeAdjacentNotesByPitch } from '../../engine/audio/midi/referenceMelody.js'
+import { getTargetNoteAtBeat } from '../../engine/audio/midi/referenceMelody.js'
 import { DEFAULT_CONFIG } from '../../engine/audioEngine.js'
 import { SimpleScoreCalculator } from '../scoring/SimpleScoreCalculator.js'
 
@@ -9,36 +9,40 @@ export function useKaraokeScoring({
     currentTimeRef,
     transpositionRef,
     rmsGate = 0.01,
+    userOffsetSec = 0,
+    historyRef,
     enabled = true,
     resetKey,
+    debug = false,
+    debugIntervalMs = 1000,
+    debugRef,
+    onDebug,
+    onScoreChange,
 }) {
     // Scoring Engine Instance
     const calculatorRef = useRef(new SimpleScoreCalculator())
     const scoringRef = useRef(null)
+    const lastDebugTimeRef = useRef(0)
 
     // To avoid duplicate processing
     const lastProcessedTimeRef = useRef(-1)
+    const lastScoreRef = useRef(0)
 
     // Reset score when resetKey changes
     useEffect(() => {
         // Initialize with total notes from reference
         const rawNotes = reference?.notes || []
         const breakToleranceSec = Number(DEFAULT_CONFIG.breakToleranceMs) / 1000
-        const bps = reference?.getBeatsPerSecond ? reference.getBeatsPerSecond(0) : 2
-        const maxGapBeat = breakToleranceSec * (Number.isFinite(bps) ? bps : 2)
-        const scoringNotes = mergeAdjacentNotesByPitch(rawNotes, {
-            maxGapBeat,
-            pitchToleranceSemis: 0,
-            useBeat: true,
-        })
-        scoringRef.current = reference ? { ...reference, notes: scoringNotes } : reference
-        calculatorRef.current.reset(scoringNotes, {
+        // Scoring: avoid merging so note finalization happens sooner.
+        scoringRef.current = reference ? { ...reference, notes: rawNotes } : reference
+        calculatorRef.current.reset(rawNotes, {
+            reference,
             breakToleranceSec,
             edgeToleranceSec: Math.min(0.08, Math.max(0, breakToleranceSec / 2)),
-            pitchToleranceSemis: 1.5,
-            minHitRatio: 0.5,
+            pitchToleranceSemis: Number(DEFAULT_CONFIG.pitchToleranceSemis) || 1.5,
             rmsGate,
             defaultSampleSec: 0.05,
+            scoreDelaySec: 0.2,
         })
         lastProcessedTimeRef.current = -1
     }, [resetKey, reference, rmsGate]) // Add reference dependency to catch melody load
@@ -59,13 +63,15 @@ export function useKaraokeScoring({
 
         const interval = setInterval(() => {
             const songTime = currentTimeRef.current
+            const offsetSec = Number.isFinite(userOffsetSec) ? Number(userOffsetSec) : 0
+            const alignedTime = Number.isFinite(songTime) ? songTime - offsetSec : songTime
             // basic debounce/forward check
-            if (songTime <= lastProcessedTimeRef.current + 0.001) return
-            lastProcessedTimeRef.current = songTime
+            if (alignedTime <= lastProcessedTimeRef.current + 0.001) return
+            lastProcessedTimeRef.current = alignedTime
 
             const ref = scoringRef.current || reference
-            const beat = ref?.getBeatAtTime ? ref.getBeatAtTime(songTime) : songTime
-            const bpsNow = ref?.getBeatsPerSecond ? ref.getBeatsPerSecond(songTime) : 2
+            const beat = ref?.getBeatAtTime ? ref.getBeatAtTime(alignedTime) : alignedTime
+            const bpsNow = ref?.getBeatsPerSecond ? ref.getBeatsPerSecond(alignedTime) : 2
             const maxGapBeat = calculatorRef.current.getMaxGapSec() * (Number.isFinite(bpsNow) ? bpsNow : 2)
             const edgeToleranceBeat = calculatorRef.current.getEdgeToleranceSec() * (Number.isFinite(bpsNow) ? bpsNow : 2)
             const rawTargetNote = getTargetNoteAtBeat(ref, beat, {
@@ -74,16 +80,85 @@ export function useKaraokeScoring({
             })
             // Note: rawTargetNote is null if no note is active
 
-            const userPitch = latestPitchRef.current
+            let userPitch = latestPitchRef.current
+            const history = historyRef?.current
+            if (Array.isArray(history) && history.length && Number.isFinite(alignedTime)) {
+                let best = null
+                let minDiff = Infinity
+                for (let i = history.length - 1; i >= 0; i -= 1) {
+                    const point = history[i]
+                    const diff = Math.abs(point.t - alignedTime)
+                    if (diff < minDiff) {
+                        minDiff = diff
+                        best = point
+                    }
+                    if (diff > 0.25) break
+                }
+                if (best && minDiff <= 0.2 && Number.isFinite(best.userMidi)) {
+                    userPitch = { midi: Number(best.userMidi), rms: best.rms ?? null, f0Hz: null }
+                }
+            }
+            if (!userPitch || !Number.isFinite(userPitch.midi)) {
+                const last = Array.isArray(history) && history.length ? history[history.length - 1] : null
+                if (last && Number.isFinite(last.userMidi)) {
+                    userPitch = { midi: Number(last.userMidi), rms: last.rms ?? null, f0Hz: null }
+                }
+            }
             const transposition = transpositionRef.current || 0
 
             // Delegate to calculator
-            calculatorRef.current.process(rawTargetNote, userPitch, transposition, songTime)
+            calculatorRef.current.process({
+                targetNote: rawTargetNote,
+                userPitch,
+                transposition,
+                timeSec: alignedTime,
+                beat,
+                beatsPerSec: bpsNow,
+                historyRef,
+            })
+
+            const finalizeInfo = calculatorRef.current.getFinalizeInfo?.()
+            const finalized = Number(finalizeInfo?.count) || 0
+            if (finalized > 0) {
+                const score = Number(finalizeInfo?.score) || calculatorRef.current.getScore()
+                if (!Number.isFinite(lastScoreRef.current) || Math.abs(score - lastScoreRef.current) > 0.001) {
+                    lastScoreRef.current = score
+                    if (typeof onScoreChange === 'function') onScoreChange(score)
+                }
+                if (debug) console.log('[KaraokeScoreDebug]', score)
+            }
+
+            if (debug || debugRef || onDebug) {
+                const now = performance.now()
+                if (!debug || now - lastDebugTimeRef.current >= debugIntervalMs) {
+                    const info = calculatorRef.current.getDebugInfo()
+                    if (debugRef) debugRef.current = info
+                    if (typeof onDebug === 'function') onDebug(info)
+                    if (debug) {
+                        // fallback periodic log
+                        console.log('[KaraokeScoreDebug]', Number(info.score) || 0)
+                    }
+                    lastDebugTimeRef.current = now
+                }
+            }
 
         }, 50) // 20 times per second
 
         return () => clearInterval(interval)
-    }, [enabled, reference, currentTimeRef, transpositionRef, rmsGate])
+    }, [
+        enabled,
+        reference,
+        currentTimeRef,
+        transpositionRef,
+        rmsGate,
+        userOffsetSec,
+        historyRef,
+        debug,
+        debugIntervalMs,
+        debugRef,
+        onDebug,
+        onScoreChange,
+    ])
 
     const getScore = useCallback(() => {
         return calculatorRef.current.getScore()

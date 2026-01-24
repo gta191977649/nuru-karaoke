@@ -70,6 +70,7 @@ function beatsToSeconds(tempoMap, beats) {
 
 export function extractReferenceMelodyFromMidiData(midi, opts = {}) {
   const channel = Number.isFinite(Number(opts.channel)) ? Number(opts.channel) : 0
+  const resolveNoteType = typeof opts.noteTypeResolver === 'function' ? opts.noteTypeResolver : null
   if (!midi?.tracks?.length) {
     return { notes: [], channelUsed: channel, durationSec: 0 }
   }
@@ -88,6 +89,8 @@ export function extractReferenceMelodyFromMidiData(midi, opts = {}) {
       if (!Number.isFinite(midiValue)) return
       const t0Beat = secondsToBeats(tempoMap, t0Sec)
       const t1Beat = secondsToBeats(tempoMap, t1Sec)
+      const resolvedType = resolveNoteType ? resolveNoteType({ note, midi, channel }) : null
+      const type = typeof resolvedType === 'string' && resolvedType.length ? resolvedType : 'normal'
       notes.push({
         t0Sec,
         t1Sec,
@@ -95,6 +98,7 @@ export function extractReferenceMelodyFromMidiData(midi, opts = {}) {
         t1Beat,
         midi: midiValue,
         velocity: Number.isFinite(Number(note.velocity)) ? Number(note.velocity) : undefined,
+        type,
         channel,
         trackIndex: -1,
       })

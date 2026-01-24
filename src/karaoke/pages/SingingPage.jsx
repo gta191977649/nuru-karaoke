@@ -73,6 +73,7 @@ function SingingPage({ onFinish }) {
     const currentTimeRef = useRef(0)
     const transpositionRef = useRef(0)
     const micRmsGate = 0.01
+    const [liveScore, setLiveScore] = useState(0)
     const showKeyChangeAlert = useKeyChangeAlertStore((store) => store.showKeyChangeAlert)
     const reference = useKaraokeReference({
         ready: state.ready,
@@ -109,6 +110,10 @@ function SingingPage({ onFinish }) {
         currentTimeRef,
         transpositionRef,
         rmsGate: micRmsGate,
+        debug: true,
+        debugIntervalMs: 500,
+        onScoreChange: setLiveScore,
+        historyRef: pitchHistoryRef,
         resetKey: `${state.midiName || ''}-${state.queueIndex ?? -1}`,
     })
 
@@ -135,16 +140,7 @@ function SingingPage({ onFinish }) {
         return seg.t0Sec <= t
     }, [scoringSegments, state.currentTime])
 
-    // Live Score Polling
-    const [liveScore, setLiveScore] = useState(0)
-    useEffect(() => {
-        if (!isScoring) return
-        const interval = setInterval(() => {
-            const s = getScore()
-            setLiveScore(s)
-        }, 100)
-        return () => clearInterval(interval)
-    }, [isScoring, getScore])
+    // Live score now updates via onScoreChange from the scoring hook.
 
     const lines = useMemo(() => {
         const entries = state.lrcEntries || []

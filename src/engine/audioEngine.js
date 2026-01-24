@@ -9,6 +9,7 @@ const DEFAULT_CONFIG = {
   smoothBeta: 0.1, // Trend smoothing factor
   f0MinHz: 80, //  Detection Range for vocal low bound (Hz)
   f0MaxHz: 1000, // Detection Range for vocal high bound (Hz)
+  pitchToleranceSemis: 1.5, // Semitone tolerance for melody correctness
   // allkaraoke-like stability knobs
   breakToleranceMs: 100, // Short unvoiced gap tolerance (~100ms)
   medianWindowSize: 3, // 中值滤波窗口大小（抗尖刺）

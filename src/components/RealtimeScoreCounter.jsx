@@ -1,74 +1,92 @@
-import React from 'react'
+import React, { useState, useEffect, useRef } from 'react'
 import './RealtimeScoreCounter.css'
 
 export default function RealtimeScoreCounter({ score = 0, label = '総合得点' }) {
-    // We want to update the score ONLY when the cube is "rotating" or hidden behind the "In Progress" face.
-    // The animation cycle is 24s.
-    // 0-1s: Move (Front -> Right)
-    // 1-6s: Wait (Right/Progress is visible) -> SAFE TO UPDATE
-    // 6-7s: Move (Right -> Back)
-    // 7-12s: Wait (Back/Score is visible) -> DO NOT UPDATE
-    // 12-13s: Move (Back -> Left)
-    // 13-18s: Wait (Left/Progress is visible) -> SAFE TO UPDATE
-    // 18-19s: Move (Left -> Front)
-    // 19-24s: Wait (Front/Score is visible) -> DO NOT UPDATE
-    //
-    // Optimal update times: t=3.5s (Phase 1) and t=15.5s (Phase 3).
-    // Loop length: 12s between updates. (3.5 -> 15.5 -> 27.5/3.5)
+    // State for the visualized score (updates only when showing "Score" face)
+    const [displayScore, setDisplayScore] = useState(score)
+    // Target rotation angle (decrements by 90 deg)
+    const [rotation, setRotation] = useState(0)
 
-    const [frozenScore, setFrozenScore] = React.useState(score)
-    const currentScoreRef = React.useRef(score)
+    const scoreRef = useRef(score)
+    const stateRef = useRef({
+        phase: 'IDLE', // 'IDLE' (Score face) or 'CALCULATING' (Computing face)
+        lastSwitchTime: Date.now(),
+        displayScore: score
+    })
 
-    // Keep ref updated with latest prop
-    React.useEffect(() => {
-        currentScoreRef.current = score
+    // Keep score ref updated
+    useEffect(() => {
+        scoreRef.current = score
     }, [score])
 
-    React.useEffect(() => {
-        // Function to latch the current score
-        const update = () => {
-            setFrozenScore(currentScoreRef.current)
-        }
+    useEffect(() => {
+        const interval = setInterval(() => {
+            const now = Date.now()
+            const { phase, lastSwitchTime, displayScore: currentDisplay } = stateRef.current
+            const latestScore = scoreRef.current
+            const timeInState = now - lastSwitchTime
 
-        // Initial Delay to sync with CSS Animation (mount at t=0)
-        // Target t=3.5s
-        const initialTimer = setTimeout(() => {
-            update()
-            // Start Interval for every 12s (t=15.5s, t=27.5s...)
-            const interval = setInterval(update, 12000)
+            // Tolerance for float comparison
+            const hasChange = Math.abs(latestScore - currentDisplay) > 0.1
 
-            // Cleanup interval on unmount (or if effects re-run)
-            return () => clearInterval(interval)
-        }, 3500)
+            if (phase === 'IDLE') {
+                // Showing Score Face (0, -180, -360...)
+                // Rule: Must stay at least 5 seconds.
+                if (timeInState >= 5000) {
+                    if (hasChange) {
+                        // Switch to Calculating
+                        stateRef.current.phase = 'CALCULATING'
+                        stateRef.current.lastSwitchTime = now
+                        setRotation(r => r - 90)
+                    }
+                }
+            } else if (phase === 'CALCULATING') {
+                // Showing Calculating Face (-90, -270...)
+                // Rule: Must stay 5 seconds, then return to Score.
+                if (timeInState >= 5000) {
+                    // Update display score to latest
+                    stateRef.current.displayScore = latestScore
+                    setDisplayScore(latestScore)
 
-        return () => clearTimeout(initialTimer)
-    }, []) // Run once on mount to sync with CSS start
+                    // Switch back to Score
+                    stateRef.current.phase = 'IDLE'
+                    stateRef.current.lastSwitchTime = now
+                    setRotation(r => r - 90)
+                }
+            }
+        }, 200) // Check every 200ms
 
-    const displayScore = Math.round(frozenScore)
+        return () => clearInterval(interval)
+    }, [])
+
+    const formattedScore = Math.round(displayScore)
 
     return (
         <div className="score-cube-scene">
-            <div className="score-cube">
-                {/* Front */}
+            <div
+                className="score-cube"
+                style={{ transform: `rotateY(${rotation}deg)` }}
+            >
+                {/* Front (0 deg) - Score */}
                 <div className="score-cube-face front">
                     <div className="score-cube-label">{label}</div>
-                    <div className="score-cube-value">{displayScore}</div>
+                    <div className="score-cube-value">{formattedScore}</div>
                     <div className="score-cube-sub">100</div>
                 </div>
 
-                {/* Right - In Progress */}
+                {/* Right (-90 deg) - Calculating */}
                 <div className="score-cube-face right">
                     <div className="score-cube-value" style={{ fontSize: '1.5rem', textAlign: 'center' }}>集計中</div>
                 </div>
 
-                {/* Back - Score (Mirrored logic or just same) */}
+                {/* Back (-180 deg) - Score */}
                 <div className="score-cube-face back">
                     <div className="score-cube-label">{label}</div>
-                    <div className="score-cube-value">{displayScore}</div>
+                    <div className="score-cube-value">{formattedScore}</div>
                     <div className="score-cube-sub">100</div>
                 </div>
 
-                {/* Left - In Progress */}
+                {/* Left (-270 deg) - Calculating */}
                 <div className="score-cube-face left">
                     <div className="score-cube-value" style={{ fontSize: '1.5rem', textAlign: 'center' }}>集計中</div>
                 </div>

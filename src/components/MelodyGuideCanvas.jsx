@@ -100,10 +100,11 @@ const STROKE_WIDTH = {
 }
 
 const PLAYHEAD_DOT_RADIUS = 5
-const FILL_DELAY_SEC = 0.65
+const TECHNIQUE_ICON_OFFSET_PX = 20
+const RESULT_DELAY_SEC = 0.2
 const NOTE_MERGE_CONFIG = {
   // Semitone tolerance for considering the user's pitch "in range" of the target.
-  pitchToleranceSemis: 1.5,
+  pitchToleranceSemis: Number(DEFAULT_CONFIG.pitchToleranceSemis) || 1.5,
   // Minimum fraction of target note duration the user must cover to treat it as full-length.
   coverageRatio: 0.5,
   // Silence gap (seconds) to consider a note ended when RMS drops below the gate.
@@ -151,6 +152,13 @@ function getMedianMidiInWindow(notes, startSec, endSec, transposition) {
 function mod12(value) {
   const m = value % 12
   return m < 0 ? m + 12 : m
+}
+
+function mod12Distance(a, b) {
+  const x = Number(a)
+  const y = Number(b)
+  if (!Number.isFinite(x) || !Number.isFinite(y)) return null
+  return ((x % 12) - (y % 12) + 18) % 12 - 6
 }
 
 function mapUserMidiToTargetOctave(userMidi, targetMidi) {
@@ -236,7 +244,8 @@ function MelodyGuideCanvas({
       fall: 0,
       vibrato: 0
     },
-    techniqueSprites: [] // For tracking active sprites
+    techniqueSprites: [], // For tracking active sprites
+    techniqueTextureCache: new Map()
   })
   const stateRef = useRef({
     reference,
@@ -363,6 +372,20 @@ function MelodyGuideCanvas({
       const playhead = new Graphics()
       const debugTrace = new Graphics()
 
+      // Generate Textures from SVG strings
+      const techniqueTextures = {}
+      Object.values(TECHNIQUE_CONFIG).forEach(conf => {
+        if (conf.svg) {
+          // Create a temporary Graphics object to parse SVG
+          const tempGfx = new Graphics().svg(conf.svg)
+          // Generate texture
+          const texture = app.renderer.generateTexture(tempGfx)
+          techniqueTextures[conf.id] = texture
+        }
+      })
+      // Stash textures in ref for access (or just closure since we are inside init)
+      // actually we can just keep them here since ticker closes over this scope.
+
       userGlowContainer.addChild(particleSystem.container, comboSystem.container, userGlow, trail)
       userGlowContainer.filters = [
         new BloomFilter({
@@ -478,10 +501,13 @@ function MelodyGuideCanvas({
                   if (Number.isFinite(userMidi)) {
                     const mappedMidi = mapUserMidiToTargetOctave(userMidi, transposedTarget)
                     if (Number.isFinite(mappedMidi)) {
-                      // Technique validation rule 2: Tune check
-                      if (Math.abs(mappedMidi - transposedTarget) <= NOTE_MERGE_CONFIG.pitchToleranceSemis) {
+                      // Technique validation rule 2: Tune check (mod-12 distance)
+                      const distance = mod12Distance(Math.round(userMidi), Math.round(transposedTarget))
+                      if (Number.isFinite(distance) && Math.abs(distance) <= NOTE_MERGE_CONFIG.pitchToleranceSemis) {
+                        // VALID: Trigger immediately
                         isValid = true
-                        // Mark this note as processed
+
+                        // Mark this note as processed to avoid duplicates
                         if (state.processedNotesRef) {
                           state.processedNotesRef.add(noteId)
                         }
@@ -493,32 +519,19 @@ function MelodyGuideCanvas({
             }
 
             if (isValid) {
-              // Trigger Combo
               const type = event.type
-              event.isValid = true // Mark for renderer
-
-              setValidCounts(prev => ({
-                ...prev,
-                [type]: (prev[type] || 0) + 1
-              }))
-
-              if (type === 'glissup') {
-                state.comboSystem.spawnCombo(startX, startY, 60, targetY, TECHNIQUE_CONFIG.glissup.color)
-                setTimeout(() => triggerComboHit(shakuriRef, toCssColor(TECHNIQUE_CONFIG.glissup.color)), 600)
-              } else if (type === 'kobushi') {
-                state.comboSystem.spawnCombo(startX, startY, 170, targetY, TECHNIQUE_CONFIG.kobushi.color)
-                setTimeout(() => triggerComboHit(kobushiRef, toCssColor(TECHNIQUE_CONFIG.kobushi.color)), 600)
-              } else if (type === 'glissdown') { // glissdown
-                state.comboSystem.spawnCombo(startX, startY, 280, targetY, TECHNIQUE_CONFIG.glissdown.color)
-                setTimeout(() => triggerComboHit(fallRef, toCssColor(TECHNIQUE_CONFIG.glissdown.color)), 600)
-              } else if (type === 'vibrato') {
-                state.comboSystem.spawnCombo(startX, startY, 390, targetY, TECHNIQUE_CONFIG.vibrato.color)
-                setTimeout(() => triggerComboHit(vibratoRef, toCssColor(TECHNIQUE_CONFIG.vibrato.color)), 600)
+              event.isValid = false
+              event.isPending = true
+              if (snap.reference?.getBeatAtTime) {
+                const beatIdx = Math.floor(snap.reference.getBeatAtTime(songTime))
+                event._beatIdx = beatIdx
               }
+              event._type = type
             }
           }
           state.lastTechniqueEventIndex = events.length
         }
+
 
         const songTimeSec = snap.currentTimeRef?.current ?? 0
         const breakToleranceSec = Number(DEFAULT_CONFIG.breakToleranceMs) / 1000
@@ -644,9 +657,6 @@ function MelodyGuideCanvas({
         drawMelodyNotes(COLORS.melodyOutFill, ALPHAS.melodyOutFill, false)
 
         const history = snap.historyRef?.current || []
-        const gapThreshold = Number.isFinite(breakToleranceSec) && breakToleranceSec > 0
-          ? breakToleranceSec
-          : NOTE_MERGE_CONFIG.gapThresholdSec
         const historyStep = history.length > 1
           ? Math.max(
             0.02,
@@ -682,123 +692,277 @@ function MelodyGuideCanvas({
           return getTargetMidiAt(t)
         }
 
-        const buildSegments = (classifier) => {
-          const segments = []
-          let current = null
-          for (let i = 0; i < history.length; i += 1) {
-            const point = history[i]
-            const info = classifier(point)
-            if (!info) {
-              if (current) {
-                segments.push(current)
-                current = null
+        const beatStates = []
+        if (snap.reference && typeof snap.reference.getBeatAtTime === 'function') {
+          const beatStart = Math.floor(snap.reference.getBeatAtTime(visibleStart))
+          const beatEnd = Math.ceil(snap.reference.getBeatAtTime(visibleEnd))
+          for (let b = beatStart; b < beatEnd; b += 1) {
+            const t0 = typeof snap.reference.beatsToSeconds === 'function'
+              ? snap.reference.beatsToSeconds(b)
+              : songTimeSec + (b - snap.reference.getBeatAtTime(songTimeSec)) / bps
+            const t1 = typeof snap.reference.beatsToSeconds === 'function'
+              ? snap.reference.beatsToSeconds(b + 1)
+              : songTimeSec + (b + 1 - snap.reference.getBeatAtTime(songTimeSec)) / bps
+            if (!Number.isFinite(t0) || !Number.isFinite(t1)) continue
+            if (t1 < visibleStart || t0 > visibleEnd) continue
+            if (songTimeSec < t1) continue
+
+            let total = 0
+            let correct = 0
+            for (let i = 0; i < history.length; i += 1) {
+              const point = history[i]
+              if (point.t < t0 || point.t >= t1) continue
+              const next = nextTime(i)
+              const sliceStart = Math.max(point.t, t0)
+              const sliceEnd = Math.min(next, t1)
+              if (sliceEnd <= sliceStart) continue
+              const userMidi = Number.isFinite(point.userMidi) ? Number(point.userMidi) : null
+              const targetMidiPoint = Number.isFinite(point.targetMidi) ? Number(point.targetMidi) : null
+              if (!Number.isFinite(userMidi) || !Number.isFinite(targetMidiPoint)) continue
+              const pointRms = Number.isFinite(point.rms) ? Number(point.rms) : null
+              if (Number.isFinite(pointRms) && pointRms < snap.rmsGate) continue
+              const userQuant = Math.round(userMidi)
+              const targetQuant = Math.round(targetMidiPoint)
+              const distance = mod12Distance(userQuant, targetQuant)
+              const dt = sliceEnd - sliceStart
+              total += dt
+              if (Number.isFinite(distance) && Math.abs(distance) <= NOTE_MERGE_CONFIG.pitchToleranceSemis) {
+                correct += dt
               }
-              continue
             }
-            const t = point.t
-            const dt = Math.max(0, nextTime(i) - t)
-            const sampleEnd = t + Math.min(dt, gapThreshold)
-            if (
-              !current ||
-              current.key !== info.key ||
-              t - current.lastT > gapThreshold
-            ) {
-              if (current) segments.push(current)
-              current = {
-                t0: t,
-                t1: sampleEnd,
-                y: info.y,
-                key: info.key,
-                type: info.type,
-                lastT: t,
+            if (total <= 0) continue
+            const ratio = correct / total
+            beatStates.push({
+              t0,
+              t1,
+              beatIdx: b,
+              correct: ratio >= NOTE_MERGE_CONFIG.coverageRatio,
+              showAt: t1 + RESULT_DELAY_SEC,
+            })
+          }
+        }
+        // Resolve pending technique events after beat completes.
+        if (state.techniqueEventsRef?.current && beatStates.length) {
+          const startX = activeApp.screen.width * 0.7
+          const startY = Number.isFinite(state.playheadDotY) ? state.playheadDotY : h / 2
+          const targetY = h - 30
+          for (const evt of state.techniqueEventsRef.current) {
+            if (!evt.isPending) continue
+            const beatIdx = Number.isFinite(evt._beatIdx) ? evt._beatIdx : null
+            if (beatIdx == null) continue
+            const beatState = beatStates.find((b) => b.beatIdx === beatIdx)
+            if (!beatState || songTimeSec < beatState.showAt) continue
+            if (beatState.correct) {
+              evt.isValid = true
+              const type = evt._type || evt.type
+              setValidCounts(prev => ({
+                ...prev,
+                [type]: (prev[type] || 0) + 1
+              }))
+              if (type === 'glissup') {
+                state.comboSystem.spawnCombo(startX, startY, 60, targetY, TECHNIQUE_CONFIG.glissup.color)
+                setTimeout(() => triggerComboHit(shakuriRef, toCssColor(TECHNIQUE_CONFIG.glissup.color)), 600)
+              } else if (type === 'kobushi') {
+                state.comboSystem.spawnCombo(startX, startY, 170, targetY, TECHNIQUE_CONFIG.kobushi.color)
+                setTimeout(() => triggerComboHit(kobushiRef, toCssColor(TECHNIQUE_CONFIG.kobushi.color)), 600)
+              } else if (type === 'glissdown') {
+                state.comboSystem.spawnCombo(startX, startY, 280, targetY, TECHNIQUE_CONFIG.glissdown.color)
+                setTimeout(() => triggerComboHit(fallRef, toCssColor(TECHNIQUE_CONFIG.glissdown.color)), 600)
+              } else if (type === 'vibrato') {
+                state.comboSystem.spawnCombo(startX, startY, 390, targetY, TECHNIQUE_CONFIG.vibrato.color)
+                setTimeout(() => triggerComboHit(vibratoRef, toCssColor(TECHNIQUE_CONFIG.vibrato.color)), 600)
               }
             } else {
-              current.t1 = Math.max(current.t1, sampleEnd)
-              current.lastT = t
+              evt.isValid = false
             }
+            evt.isPending = false
           }
-          if (current) segments.push(current)
-          return segments
         }
 
-        const segments = buildSegments((point) => {
-          if (point.t < visibleStart || point.t > visibleEnd) return null
-          const targetMidiPoint = Number.isFinite(point.targetMidi) ? Number(point.targetMidi) : null
-          const userMidi = Number.isFinite(point.userMidi) ? Number(point.userMidi) : null
-          if (!Number.isFinite(userMidi)) return null
-          const pointRms = Number.isFinite(point.rms) ? Number(point.rms) : null
-          if (Number.isFinite(pointRms) && pointRms < snap.rmsGate) return null
-          if (snap.gateUserByTarget && snap.reference) {
-            const t = Number(point.t)
-            const offset = Math.max(0, Number(snap.userOffsetSec) || 0)
-            const targetMidiGate =
-              getTargetMidiAt(t - offset) ??
-              getTargetMidiAt(t + offset)
-            if (targetMidiGate == null) return null
-          }
-          if (!Number.isFinite(targetMidiPoint)) return null
-          const mappedMidi = mapUserMidiToTargetOctave(userMidi, targetMidiPoint)
-          if (!Number.isFinite(mappedMidi)) return null
-          const { y: userY, inRange } = midiToY(mappedMidi)
-          const inTolerance = Math.abs(mappedMidi - targetMidiPoint) <= NOTE_MERGE_CONFIG.pitchToleranceSemis
-          if (inRange && inTolerance) {
-            return { type: 'correct', key: `correct-${Math.round(mappedMidi)}`, y: userY }
-          }
-          return {
-            type: 'incorrect',
-            key: `incorrect-${Math.round(userMidi)}-${Math.round(targetMidiPoint)}`,
-            y: userY,
-          }
-        })
-        const correctSegments = segments.filter((seg) => seg.type === 'correct')
-        const incorrectSegments = segments.filter((seg) => seg.type === 'incorrect')
-        const userBarW = Math.max(6, pixelsPerSec * 0.18)
         const userBarH = 10
         const userRadius = 5
 
         state.miss.clear()
         state.user.clear()
         if (state.userGlow) state.userGlow.clear()
-        state.user.setFillStyle({ color: COLORS.userMiss, alpha: ALPHAS.userMiss })
         state.user.setStrokeStyle({
           width: STROKE_WIDTH.f0,
-          color: COLORS.userGlowStroke,
-          alpha: ALPHAS.userGlowStroke,
+          color: COLORS.userMiss,
+          alpha: Math.max(0.2, ALPHAS.userMiss),
+          cap: 'round',
+          join: 'round',
         })
         state.user.beginPath()
-        incorrectSegments.forEach((seg) => {
-          const x0 = playheadX + (seg.t0 - songTimeSec) * pixelsPerSec
-          const x1 = playheadX + (seg.t1 - songTimeSec) * pixelsPerSec
-          const barW = Math.max(userBarW, x1 - x0)
-          if (barW <= 0) return
-          state.user.roundRect(x0, seg.y - userBarH / 2, barW, userBarH, userRadius)
-        })
-        state.user.fill()
-        state.user.stroke()
-        if (state.userGlow) {
-          state.userGlow.setFillStyle({ color: COLORS.userGlowFill, alpha: ALPHAS.userGlowFill })
-          state.userGlow.setStrokeStyle({
-            width: STROKE_WIDTH.f0,
-            color: COLORS.userGlowStroke,
-            alpha: ALPHAS.userGlowStroke,
-          })
-          state.userGlow.beginPath()
-          correctSegments.forEach((seg) => {
-            const renderEndTime = songTimeSec - FILL_DELAY_SEC
-            if (seg.t0 > renderEndTime) return
+        state.userGlow?.setFillStyle({ color: COLORS.userGlowFill, alpha: ALPHAS.userGlowFill })
+        state.userGlow?.beginPath()
 
-            const effectiveT1 = Math.min(seg.t1, renderEndTime)
-            if (effectiveT1 <= seg.t0) return
+        if (beatStates.length && notesData.length) {
+          for (const note of notesData) {
+            if (note.t1Sec < visibleStart || note.t0Sec > visibleEnd) continue
+            const noteT0 = Math.max(note.t0Sec, visibleStart)
+            const noteT1 = Math.min(note.t1Sec, visibleEnd)
+            if (noteT1 <= noteT0) continue
+            const midi = note.midi + transposition
+            const { y } = midiToY(midi)
+            const noteBeats = []
+            for (const beatSeg of beatStates) {
+              if (beatSeg.t1 <= note.t0Sec) continue
+              if (beatSeg.t0 >= note.t1Sec) break
+              const segStart = Math.max(note.t0Sec, beatSeg.t0)
+              const segEnd = Math.min(note.t1Sec, beatSeg.t1)
+              if (segEnd <= segStart) continue
+              noteBeats.push({
+                t0: segStart,
+                t1: segEnd,
+                correct: beatSeg.correct,
+                showAt: beatSeg.showAt,
+              })
+            }
+            if (!noteBeats.length || !state.userGlow) continue
+            const noteShowAt = note.t1Sec + RESULT_DELAY_SEC
+            if (songTimeSec < noteShowAt) continue
+            const noteDur = Math.max(0.001, note.t1Sec - note.t0Sec)
+            const progress = Math.max(0, Math.min(1, (songTimeSec - noteShowAt) / noteDur))
+            const revealEnd = note.t0Sec + noteDur * progress
 
-            const x0 = playheadX + (seg.t0 - songTimeSec) * pixelsPerSec
-            const x1 = playheadX + (effectiveT1 - songTimeSec) * pixelsPerSec
-            const barW = Math.max(userBarW, x1 - x0)
-            if (barW <= 0) return
-            state.userGlow.roundRect(x0, seg.y - userBarH / 2, barW, userBarH, userRadius)
-          })
-          state.userGlow.fill()
-          state.userGlow.stroke()
+            const allBeatsCorrectShown = noteBeats.every(
+              (seg) => seg.correct && songTimeSec >= seg.showAt,
+            )
+            if (allBeatsCorrectShown) {
+              const segStart = Math.max(noteT0, visibleStart)
+              const segEnd = Math.min(noteT1, revealEnd, visibleEnd)
+              if (segEnd > segStart) {
+                const x0 = playheadX + (segStart - songTimeSec) * pixelsPerSec
+                const x1 = playheadX + (segEnd - songTimeSec) * pixelsPerSec
+                const barW = Math.max(1, x1 - x0)
+                if (barW > 0) {
+                  state.userGlow.roundRect(x0, y - userBarH / 2, barW, userBarH, userRadius)
+                }
+              }
+              continue
+            }
+
+            for (const seg of noteBeats) {
+              if (!seg.correct || songTimeSec < seg.showAt) continue
+              const segStart = Math.max(seg.t0, visibleStart)
+              const segEnd = Math.min(seg.t1, revealEnd, visibleEnd)
+              if (segEnd <= segStart) continue
+              const x0 = playheadX + (segStart - songTimeSec) * pixelsPerSec
+              const x1 = playheadX + (segEnd - songTimeSec) * pixelsPerSec
+              const barW = Math.max(1, x1 - x0)
+              if (barW > 0) {
+                state.userGlow.roundRect(x0, y - userBarH / 2, barW, userBarH, userRadius)
+              }
+            }
+          }
         }
+        state.userGlow?.fill()
+
+        // F0 Trail
+        if (state.trail) state.trail.clear()
+        state.trail.setStrokeStyle({
+          width: 3,
+          color: COLORS.userGlowStroke,
+          alpha: 1,
+          cap: 'round',
+          join: 'round',
+        })
+        state.trail.beginPath()
+        let penDown = false
+        const trailHistory = history
+        for (let i = 0; i < trailHistory.length; i++) {
+          const pt = trailHistory[i]
+          if (pt.t < visibleStart || pt.t > visibleEnd) {
+            penDown = false
+            continue
+          }
+          const rms = Number(pt.rms)
+          if (rms < snap.rmsGate) {
+            penDown = false
+            continue
+          }
+          const midi = Number(pt.userMidi)
+          if (!Number.isFinite(midi)) {
+            penDown = false
+            continue
+          }
+          // Visual tolerance check?
+          const targetMidi = getTargetMidiForUserTime(pt.t)
+          const isTargetDefined = Number.isFinite(targetMidi)
+          let inTune = false
+          if (isTargetDefined) {
+            const mapped = mapUserMidiToTargetOctave(midi, targetMidi + transposition)
+            const diff = Math.abs(mapped - (targetMidi + transposition))
+            if (diff <= VISUAL_TOLERANCE_SEMIS) {
+              inTune = true
+            }
+          }
+          // Only draw if "in tune" enough for glow effect
+          if (!inTune) {
+            penDown = false
+            continue
+          }
+
+          const { y } = midiToY(mapUserMidiToTargetOctave(midi, targetMidi + transposition))
+          const x = playheadX + (pt.t - songTimeSec) * pixelsPerSec
+          if (!penDown) {
+            state.trail.moveTo(x, y)
+            penDown = true
+          } else {
+            state.trail.lineTo(x, y)
+          }
+        }
+        state.trail.stroke()
+
+        // Draw incorrect f0 only after beat is over + delay
+        if (beatStates.length) {
+          const wrongBeats = beatStates.filter((b) => !b.correct && songTimeSec >= b.showAt)
+          if (wrongBeats.length) {
+            let started = false
+            for (let i = 0; i < history.length; i += 1) {
+              const point = history[i]
+              if (point.t < visibleStart || point.t > visibleEnd) {
+                started = false
+                continue
+              }
+              const window = wrongBeats.find((b) => point.t >= b.t0 && point.t < b.t1)
+              if (!window) {
+                started = false
+                continue
+              }
+              const userMidi = Number.isFinite(point.userMidi) ? Number(point.userMidi) : null
+              const targetMidiPoint = Number.isFinite(point.targetMidi) ? Number(point.targetMidi) : null
+              if (!Number.isFinite(userMidi) || !Number.isFinite(targetMidiPoint)) {
+                started = false
+                continue
+              }
+              const pointRms = Number.isFinite(point.rms) ? Number(point.rms) : null
+              if (Number.isFinite(pointRms) && pointRms < snap.rmsGate) {
+                started = false
+                continue
+              }
+              const userQuant = Math.round(userMidi)
+              const targetQuant = Math.round(targetMidiPoint)
+              const distance = mod12Distance(userQuant, targetQuant)
+              if (!Number.isFinite(distance) || Math.abs(distance) <= NOTE_MERGE_CONFIG.pitchToleranceSemis) {
+                started = false
+                continue
+              }
+              const x = playheadX + (point.t - songTimeSec) * pixelsPerSec
+              const { y } = midiToY(userMidi)
+              const drawY = Math.max(staffTopPx, Math.min(staffBottomPx, y))
+              if (!started) {
+                state.user.moveTo(x, drawY)
+                started = true
+              } else {
+                state.user.lineTo(x, drawY)
+              }
+            }
+          }
+        }
+
+        state.user.stroke()
+        // state.userGlow?.fill() // Moved up
 
         // --- DEBUG PITCH TRACE ---
         if (state.debugTrace) {
@@ -876,10 +1040,12 @@ function MelodyGuideCanvas({
             // Expose y for combo system
             state.playheadDotY = y
 
+            const distance = Number.isFinite(transposedTarget)
+              ? mod12Distance(Math.round(userMidi), Math.round(transposedTarget))
+              : null
             const inTune =
-              Number.isFinite(transposedTarget) &&
-              Number.isFinite(mappedMidi) &&
-              Math.abs(mappedMidi - transposedTarget) <= VISUAL_TOLERANCE_SEMIS
+              Number.isFinite(distance) &&
+              Math.abs(distance) <= VISUAL_TOLERANCE_SEMIS
             emitParticles = inTune && inRange
           }
         }
@@ -905,7 +1071,8 @@ function MelodyGuideCanvas({
             const transposedTarget = targetMidi + transposition
             const mappedMidi = mapUserMidiToTargetOctave(userMidi, transposedTarget)
             if (!Number.isFinite(mappedMidi)) continue
-            const inTune = Math.abs(mappedMidi - transposedTarget) <= VISUAL_TOLERANCE_SEMIS
+            const distance = mod12Distance(Math.round(userMidi), Math.round(transposedTarget))
+            const inTune = Number.isFinite(distance) && Math.abs(distance) <= VISUAL_TOLERANCE_SEMIS
             if (!inTune) continue
 
             // We also need screen coordinates
@@ -935,8 +1102,8 @@ function MelodyGuideCanvas({
             const alpha = Math.max(0, 1 - age / trailDuration)
 
             state.trail.setStrokeStyle({
-              width: 4, // Slightly thicker than melody
-              color: COLORS.userGlowFill, // Yellow from config
+              width: 4,
+              color: COLORS.userGlowFill,
               alpha: alpha,
               cap: 'round',
               join: 'round'
@@ -948,34 +1115,40 @@ function MelodyGuideCanvas({
           }
         }
 
-        // Technique Icons Rendering (Sprites)
+        // Technique Icons Rendering (SVG -> Texture -> Sprite)
         const events = snap.techniqueEventsRef?.current || []
         const visibleEvents = events.filter(e => e.t >= visibleStart && e.t <= visibleEnd)
 
-        // Using sprite pool to avoid GC
         const pool = state.techniqueSpritePool || []
-        // Ensure pool is stored
         if (!state.techniqueSpritePool) state.techniqueSpritePool = pool
+        const textureCache = state.techniqueTextureCache || new Map()
+        if (!state.techniqueTextureCache) state.techniqueTextureCache = textureCache
+
+        const getTechniqueTexture = (type) => {
+          if (textureCache.has(type)) return textureCache.get(type)
+          const cfg = TECHNIQUE_CONFIG[type]
+          if (!cfg || !cfg.svg) return null
+          const gfx = new Graphics().svg(cfg.svg)
+          const texture = activeApp.renderer.generateTexture(gfx)
+          gfx.destroy(true)
+          textureCache.set(type, texture)
+          return texture
+        }
 
         let poolIdx = 0
-
         visibleEvents.forEach(evt => {
-          if (!evt.isValid) return // Only render validated techniques
-
+          if (!evt.isValid) return
           const config = TECHNIQUE_CONFIG[evt.type]
           if (!config) return
 
-          // Find corresponding note to align Y
-          // Robust search: strict overlap first, then closest distance
+          // Find corresponding note to align Y (strict overlap first, then closest distance)
           let note = notesData.find(n => evt.t >= n.t0Sec - 0.2 && evt.t <= n.t1Sec + 0.2)
-
           if (!note) {
             const threshold = 1.0
             const candidates = notesData.filter(n =>
               evt.t >= n.t0Sec - threshold && evt.t <= n.t1Sec + threshold
             )
             if (candidates.length > 0) {
-              // Sort by closeness to event time
               candidates.sort((a, b) => {
                 const distA = Math.min(Math.abs(evt.t - a.t0Sec), Math.abs(evt.t - a.t1Sec))
                 const distB = Math.min(Math.abs(evt.t - b.t0Sec), Math.abs(evt.t - b.t1Sec))
@@ -984,41 +1157,37 @@ function MelodyGuideCanvas({
               note = candidates[0]
             }
           }
-
-          // If still no note, strictly do not render (per user request to obtain Y from melody)
           if (!note) return
+
+          const texture = getTechniqueTexture(evt.type)
+          if (!texture) return
+
+          let sprite = pool[poolIdx]
+          if (!sprite) {
+            sprite = new Sprite(texture)
+            sprite.anchor.set(0.5, 1)
+            sprite.scale.set(0.65)
+            state.techniqueIcons.addChild(sprite)
+            pool.push(sprite)
+          }
+
+          if (sprite.texture !== texture) {
+            sprite.texture = texture
+          }
+          sprite.tint = config.color
 
           const midi = note.midi + transposition
           const { y: noteY } = midiToY(midi)
-          const y = noteY - 5 // User preferred offset
-
+          const y = noteY - TECHNIQUE_ICON_OFFSET_PX
           const x = playheadX + (evt.t - songTimeSec) * pixelsPerSec
 
-          let graphic = pool[poolIdx]
-          if (!graphic) {
-            graphic = new Graphics()
-            // Set Pivot to bottom center (32 width / 2 = 16, 32 height)
-            graphic.pivot.set(16, 32)
-            graphic.scale.set(0.65)
-            state.techniqueIcons.addChild(graphic)
-            pool.push(graphic)
-          }
-
-          if (graphic.lastType !== evt.type) {
-            graphic.clear()
-            graphic.svg(config.svg)
-            graphic.lastType = evt.type
-          }
-
-          graphic.tint = config.color
-          graphic.x = x
-          graphic.y = y
-          graphic.visible = true
+          sprite.x = x
+          sprite.y = y
+          sprite.visible = true
 
           poolIdx++
         })
 
-        // Hide unused sprites
         for (let i = poolIdx; i < pool.length; i++) {
           pool[i].visible = false
         }

@@ -25,7 +25,7 @@ function useKaraokeReference({ ready, midiName, midiUrl, queueIndex }) {
     return () => {
       active = false
     }
-  }, [ready, midiName, midiUrl, queueIndex, reference])
+  }, [ready, midiName, midiUrl, queueIndex])
 
   return reference
 }
