@@ -110,7 +110,7 @@ function SingingPage({ onFinish }) {
         currentTimeRef,
         transpositionRef,
         rmsGate: micRmsGate,
-        debug: true,
+        debug: false,
         debugIntervalMs: 500,
         onScoreChange: setLiveScore,
         historyRef: pitchHistoryRef,

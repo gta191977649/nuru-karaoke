@@ -825,53 +825,73 @@ function MelodyGuideCanvas({
             const spansToDraw = []
             noteBeats.forEach(seg => {
               if (seg.correct && songTimeSec >= seg.showAt) {
-                spansToDraw.push({ t0: seg.t0, t1: seg.t1 })
+                spansToDraw.push({ t0: seg.t0, t1: seg.t1, showAt: seg.showAt })
               }
             })
 
             if (!spansToDraw.length) continue
 
-            // 1. Merge contiguous spans
+            // 1. Merge contiguous spans AND track the latest segment info for animation
             spansToDraw.sort((a, b) => a.t0 - b.t0)
             const merged = []
-            let curr = { t0: spansToDraw[0].t0, t1: spansToDraw[0].t1 }
-            for (let i = 1; i < spansToDraw.length; i++) {
-              const next = spansToDraw[i]
-              if (next.t0 <= curr.t1 + 0.001) {
-                curr.t1 = Math.max(curr.t1, next.t1)
-              } else {
-                merged.push(curr)
-                curr = { t0: next.t0, t1: next.t1 }
+            if (spansToDraw.length) {
+              // We track 'maxT1Seg' which is the segment that defines the right-most edge of the merged block.
+              // This segment's 'showAt' time dictates the animation start for the extension.
+              let curr = {
+                t0: spansToDraw[0].t0,
+                t1: spansToDraw[0].t1,
+                latestSeg: spansToDraw[0]
               }
+
+              for (let i = 1; i < spansToDraw.length; i++) {
+                const next = spansToDraw[i]
+                if (next.t0 <= curr.t1 + 0.001) {
+                  curr.t1 = Math.max(curr.t1, next.t1)
+                  // If this segment extends the block, it's the new "latest"
+                  if (next.t1 > curr.latestSeg.t1) {
+                    curr.latestSeg = next
+                  }
+                } else {
+                  merged.push(curr)
+                  // New block
+                  curr = {
+                    t0: next.t0,
+                    t1: next.t1,
+                    latestSeg: next
+                  }
+                }
+              }
+              merged.push(curr)
             }
-            merged.push(curr)
 
-            // 2. Calculate Global Wipe Position
-            // The wipe conceptually starts at the beginning of the note (or delay adjusted start)
-            // and sweeps to the right at the configured speed.
-
-            // To make the animation visible (chasing the verified beats), we need to delay the start
-            // of the wipe so it "lags" behind the instant reveal of confirmed beats initially,
-            // then catches up due to being faster (1.2x).
-            // Tuned constant for visual fluidity:
-            const ANIMATION_LAG = 0.6 // Seconds to delay the wiper start relative to note T0
-
-            const wipeStartTime = note.t0Sec + RESULT_DELAY_SEC + ANIMATION_LAG
-            const timeSinceStart = Math.max(0, songTimeSec - wipeStartTime)
-            const wipeDistance = timeSinceStart * USER_GLOW_FILL_SPEED // distance in seconds
-            const wipeCursor = note.t0Sec + wipeDistance
-
-            // 3. Draw merged spans clipped by wipe cursor
+            // 3. Draw merged spans with "Latest Beat Anchor" wipe
             merged.forEach(m => {
+              // Calculate wipe cursor based on the latest added segment in this block.
+              // Visual Idea: The block is solid up to 'latestSeg.t0' (roughly).
+              // We animate the fill from 'latestSeg.t0' to 'latestSeg.t1' starting at 'latestSeg.showAt'.
+              // OR more simply: The wipe cursor starts at 'latestSeg.t0' at time 'latestSeg.showAt'.
+              const anchorBeat = m.latestSeg
+
+              // When does the animation for this specific beat start?
+              // It starts exactly when the beat is revealed: anchorBeat.showAt (beatEnd + 0.2s)
+              // The wiper starts at the beginning of that beat: anchorBeat.t0
+              const timeSinceReveal = Math.max(0, songTimeSec - anchorBeat.showAt)
+              const wipeDist = timeSinceReveal * USER_GLOW_FILL_SPEED // Speed > 1.0 means it catches up
+
+              // The cursor position in absolute song time
+              let wipeCursor = anchorBeat.t0 + wipeDist
+
+              // IMPORTANT: If this merged block consists of many beats traverse,
+              // we technically want the *previous* parts to be fully solid.
+              // Since 'anchorBeat.t0' is the start of the *latest* addition,
+              // ensuring the wiper starts there guarantees the previous parts ( < t0 ) are considered "passed".
+              const finalWipeCursor = Math.max(wipeCursor, anchorBeat.t0)
+
               // The segment is valid to draw up to m.t1.
-              // But visually, the "Gold Fill" only reaches `wipeCursor`.
-              // So we clip the right edge.
-
               const drawT0 = m.t0
-              // If the wipe hasn't reached this block yet, don't draw
-              if (wipeCursor <= drawT0) return
+              if (finalWipeCursor <= drawT0) return
 
-              const drawT1 = Math.min(m.t1, wipeCursor)
+              const drawT1 = Math.min(m.t1, finalWipeCursor)
 
               if (drawT1 > drawT0) {
                 const d0 = Math.max(drawT0, visibleStart)
