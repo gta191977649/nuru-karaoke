@@ -102,6 +102,7 @@ const STROKE_WIDTH = {
 const PLAYHEAD_DOT_RADIUS = 6
 const TECHNIQUE_ICON_OFFSET_PX = 20
 const RESULT_DELAY_SEC = 0.2
+const USER_GLOW_FILL_SPEED = 1.2 // speed for correct note fill animation
 const NOTE_MERGE_CONFIG = {
   // Semitone tolerance for considering the user's pitch "in range" of the target.
   pitchToleranceSemis: Number(DEFAULT_CONFIG.pitchToleranceSemis) || 1.5,
@@ -822,7 +823,9 @@ function MelodyGuideCanvas({
             const noteShowAt = note.t1Sec + RESULT_DELAY_SEC
             if (songTimeSec < noteShowAt) continue
             const noteDur = Math.max(0.001, note.t1Sec - note.t0Sec)
-            const progress = Math.max(0, Math.min(1, (songTimeSec - noteShowAt) / noteDur))
+            // Speed up the fill animation (3x faster than real-time) per user request
+            const fillDuration = noteDur / USER_GLOW_FILL_SPEED
+            const progress = Math.max(0, Math.min(1, (songTimeSec - noteShowAt) / fillDuration))
             const revealEnd = note.t0Sec + noteDur * progress
 
             const allBeatsCorrectShown = noteBeats.every(
@@ -1102,7 +1105,7 @@ function MelodyGuideCanvas({
             const alpha = Math.max(0, 1 - age / trailDuration)
 
             state.trail.setStrokeStyle({
-              width: 4,
+              width: 3,
               color: COLORS.userGlowFill,
               alpha: alpha,
               cap: 'round',
