@@ -102,7 +102,7 @@ const STROKE_WIDTH = {
 const PLAYHEAD_DOT_RADIUS = 6
 const TECHNIQUE_ICON_OFFSET_PX = 20
 const RESULT_DELAY_SEC = 0.2
-const USER_GLOW_FILL_SPEED = 1.2 // speed for correct note fill animation
+const USER_GLOW_FILL_SPEED = 1.5 // speed for correct note fill animation
 const NOTE_MERGE_CONFIG = {
   // Semitone tolerance for considering the user's pitch "in range" of the target.
   pitchToleranceSemis: Number(DEFAULT_CONFIG.pitchToleranceSemis) || 1.5,
@@ -820,43 +820,72 @@ function MelodyGuideCanvas({
               })
             }
             if (!noteBeats.length || !state.userGlow) continue
-            const noteShowAt = note.t1Sec + RESULT_DELAY_SEC
-            if (songTimeSec < noteShowAt) continue
-            const noteDur = Math.max(0.001, note.t1Sec - note.t0Sec)
-            // Speed up the fill animation (3x faster than real-time) per user request
-            const fillDuration = noteDur / USER_GLOW_FILL_SPEED
-            const progress = Math.max(0, Math.min(1, (songTimeSec - noteShowAt) / fillDuration))
-            const revealEnd = note.t0Sec + noteDur * progress
 
-            const allBeatsCorrectShown = noteBeats.every(
-              (seg) => seg.correct && songTimeSec >= seg.showAt,
-            )
-            if (allBeatsCorrectShown) {
-              const segStart = Math.max(noteT0, visibleStart)
-              const segEnd = Math.min(noteT1, revealEnd, visibleEnd)
-              if (segEnd > segStart) {
-                const x0 = playheadX + (segStart - songTimeSec) * pixelsPerSec
-                const x1 = playheadX + (segEnd - songTimeSec) * pixelsPerSec
-                const barW = Math.max(1, x1 - x0)
-                if (barW > 0) {
-                  state.userGlow.roundRect(x0, y - userBarH / 2, barW, userBarH, userRadius)
+            // Gather correct beats
+            const spansToDraw = []
+            noteBeats.forEach(seg => {
+              if (seg.correct && songTimeSec >= seg.showAt) {
+                spansToDraw.push({ t0: seg.t0, t1: seg.t1 })
+              }
+            })
+
+            if (!spansToDraw.length) continue
+
+            // 1. Merge contiguous spans
+            spansToDraw.sort((a, b) => a.t0 - b.t0)
+            const merged = []
+            let curr = { t0: spansToDraw[0].t0, t1: spansToDraw[0].t1 }
+            for (let i = 1; i < spansToDraw.length; i++) {
+              const next = spansToDraw[i]
+              if (next.t0 <= curr.t1 + 0.001) {
+                curr.t1 = Math.max(curr.t1, next.t1)
+              } else {
+                merged.push(curr)
+                curr = { t0: next.t0, t1: next.t1 }
+              }
+            }
+            merged.push(curr)
+
+            // 2. Calculate Global Wipe Position
+            // The wipe conceptually starts at the beginning of the note (or delay adjusted start)
+            // and sweeps to the right at the configured speed.
+
+            // To make the animation visible (chasing the verified beats), we need to delay the start
+            // of the wipe so it "lags" behind the instant reveal of confirmed beats initially,
+            // then catches up due to being faster (1.2x).
+            // Tuned constant for visual fluidity:
+            const ANIMATION_LAG = 0.6 // Seconds to delay the wiper start relative to note T0
+
+            const wipeStartTime = note.t0Sec + RESULT_DELAY_SEC + ANIMATION_LAG
+            const timeSinceStart = Math.max(0, songTimeSec - wipeStartTime)
+            const wipeDistance = timeSinceStart * USER_GLOW_FILL_SPEED // distance in seconds
+            const wipeCursor = note.t0Sec + wipeDistance
+
+            // 3. Draw merged spans clipped by wipe cursor
+            merged.forEach(m => {
+              // The segment is valid to draw up to m.t1.
+              // But visually, the "Gold Fill" only reaches `wipeCursor`.
+              // So we clip the right edge.
+
+              const drawT0 = m.t0
+              // If the wipe hasn't reached this block yet, don't draw
+              if (wipeCursor <= drawT0) return
+
+              const drawT1 = Math.min(m.t1, wipeCursor)
+
+              if (drawT1 > drawT0) {
+                const d0 = Math.max(drawT0, visibleStart)
+                const d1 = Math.min(drawT1, visibleEnd)
+                if (d1 > d0) {
+                  const x0 = playheadX + (d0 - songTimeSec) * pixelsPerSec
+                  const x1 = playheadX + (d1 - songTimeSec) * pixelsPerSec
+                  const barW = Math.max(1, x1 - x0)
+                  if (barW > 0) {
+                    state.userGlow.roundRect(x0, y - userBarH / 2, barW, userBarH, userRadius)
+                  }
                 }
               }
-              continue
-            }
-
-            for (const seg of noteBeats) {
-              if (!seg.correct || songTimeSec < seg.showAt) continue
-              const segStart = Math.max(seg.t0, visibleStart)
-              const segEnd = Math.min(seg.t1, revealEnd, visibleEnd)
-              if (segEnd <= segStart) continue
-              const x0 = playheadX + (segStart - songTimeSec) * pixelsPerSec
-              const x1 = playheadX + (segEnd - songTimeSec) * pixelsPerSec
-              const barW = Math.max(1, x1 - x0)
-              if (barW > 0) {
-                state.userGlow.roundRect(x0, y - userBarH / 2, barW, userBarH, userRadius)
-              }
-            }
+            })
           }
         }
         state.userGlow?.fill()
