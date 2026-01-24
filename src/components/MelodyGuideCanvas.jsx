@@ -99,7 +99,7 @@ const STROKE_WIDTH = {
   playheadInner: 2,
 }
 
-const PLAYHEAD_DOT_RADIUS = 5
+const PLAYHEAD_DOT_RADIUS = 6
 const TECHNIQUE_ICON_OFFSET_PX = 20
 const RESULT_DELAY_SEC = 0.2
 const NOTE_MERGE_CONFIG = {
