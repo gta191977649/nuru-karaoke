@@ -4,7 +4,7 @@ import useAlertStore from '../state/alertStore.js'
 import { bumpQueueNext, clearQueue, removeFromQueue } from '../engine/playerController.js'
 import { selectHistory, selectReservedQueue } from '../engine/playerSelectors.js'
 
-function ViewSelectedSong({ onBack, onOpenKaraoke }) {
+function ViewSelectedSong({ onBack }) {
   const state = useKaraokeStore()
 
   const reserved = selectReservedQueue(state)

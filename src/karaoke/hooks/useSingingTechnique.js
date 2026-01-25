@@ -1,6 +1,6 @@
 import { useRef, useEffect, useState } from 'react'
 
-export function useSingingTechnique(pitchEngine, currentTimeRef) {
+export function useSingingTechnique(pitchEngine, currentTimeRef, micActive) {
     const workerRef = useRef(null)
 
     // Accumulated counts for the session
@@ -17,14 +17,16 @@ export function useSingingTechnique(pitchEngine, currentTimeRef) {
     // Trace history for debug graph (Circular buffers)
     const historySize = 300
     const techniqueEventsRef = useRef([])
-    const historyRef = useRef({
+
+    // Use state to hold stable mutable arrays - safe to access in render
+    const [techniqueHistory] = useState(() => ({
         vibrato: new Array(historySize).fill(0),
         kobushi: new Array(historySize).fill(0),
         glissando: new Array(historySize).fill(0)
-    })
+    }))
 
     useEffect(() => {
-        if (!pitchEngine) return
+        if (!pitchEngine || !micActive) return
 
         // Initialize Worker
         const worker = new Worker(
@@ -75,7 +77,7 @@ export function useSingingTechnique(pitchEngine, currentTimeRef) {
                 // 2. Update Active State
                 if (activeState) {
                     const active = activeState
-                    const hist = historyRef.current
+                    const hist = techniqueHistory
 
                     hist.vibrato.push(active.vibrato ? 1.0 : 0.0)
                     if (hist.vibrato.length > historySize) hist.vibrato.shift()
@@ -90,7 +92,7 @@ export function useSingingTechnique(pitchEngine, currentTimeRef) {
                     hist.glissando.push(gVal)
                     if (hist.glissando.length > historySize) hist.glissando.shift()
 
-                    setActiveTechniques(prev => ({ ...active }))
+                    setActiveTechniques({ ...active })
                 }
             }
         }
@@ -111,14 +113,14 @@ export function useSingingTechnique(pitchEngine, currentTimeRef) {
             workerRef.current?.postMessage({ type: 'stop' }) // Use ref specific check
             workerRef.current?.terminate()
         }
-    }, [pitchEngine])
+    }, [pitchEngine, micActive, techniqueHistory, currentTimeRef])
 
     const resetCounts = () => {
         setCounts({ vibrato: 0, kobushi: 0, glissup: 0, glissdown: 0 })
         if (workerRef.current) {
             workerRef.current.postMessage({ type: 'reset' })
         }
-        const hist = historyRef.current
+        const hist = techniqueHistory
         hist.vibrato.fill(0)
         hist.kobushi.fill(0)
         hist.glissando.fill(0)
@@ -127,11 +129,7 @@ export function useSingingTechnique(pitchEngine, currentTimeRef) {
     return {
         counts,
         activeTechniques,
-        techniqueHistory: {
-            vibrato: [...historyRef.current.vibrato],
-            kobushi: [...historyRef.current.kobushi],
-            glissando: [...historyRef.current.glissando]
-        },
+        techniqueHistory,
         techniqueEventsRef,
         resetCounts
     }

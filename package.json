@@ -12,6 +12,7 @@
   },
   "dependencies": {
     "@tensorflow/tfjs": "^4.22.0",
+    "aubiojs": "^0.2.1",
     "bootstrap": "^5.3.8",
     "essentia.js": "^0.1.3",
     "pitchfinder": "^2.3.4",

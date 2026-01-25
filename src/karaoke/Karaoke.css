@@ -86,7 +86,7 @@
 }
 
 .top-section {
-  flex: 1;
+  flex: 6;
   display: flex;
   flex-direction: column;
   padding: 20px;
@@ -94,12 +94,10 @@
 
 .pitch-monitor-bar {
   height: 80px;
-  background: linear-gradient(
-    to bottom,
-    rgba(0, 0, 0, 0.3),
-    rgba(0, 0, 0, 0.3)
-  );  
-  
+  background: linear-gradient(to bottom,
+      rgba(0, 0, 0, 0.3),
+      rgba(0, 0, 0, 0.3));
+
   /* border: 2px solid #665544; */
   border-radius: 8px;
   display: flex;
@@ -184,10 +182,12 @@
 }
 
 @keyframes karaokeBadgePulse {
+
   0%,
   100% {
     filter: saturate(1);
   }
+
   50% {
     filter: saturate(1.35);
   }
@@ -197,6 +197,7 @@
   0% {
     transform: translateX(-140%);
   }
+
   100% {
     transform: translateX(140%);
   }
@@ -224,9 +225,11 @@
 .tech-item.blue {
   border-bottom: 3px solid #00a8ff;
 }
+
 .tech-item.red {
   border-bottom: 3px solid #ff4757;
 }
+
 .tech-item.yellow {
   border-bottom: 3px solid #ffa502;
 }
@@ -237,13 +240,48 @@
   font-family: monospace;
 }
 
+.info-container {
+  display: flex;
+  justify-content: flex-end;
+  align-items: center;
+  height: 30px;
+  pointer-events: none;
+  padding-right: 10px;
+}
+
+.scoring-badge {
+  background: linear-gradient(#ff33cc, #ff00ff);
+  color: white;
+  padding: 5px 20px;
+  border-radius: 8px;
+  font-weight: bold;
+  font-size: 1 rem;
+  display: flex;
+  align-items: center;
+  box-shadow: 0 0 15px rgba(255, 0, 255, 0.6);
+  /* border: 2px solid rgba(174, 0, 116, 0.8); */
+  animation: scoringPulse 1s infinite alternate;
+}
+
+@keyframes scoringPulse {
+  0% {
+    transform: scale(1);
+    box-shadow: 0 0 15px rgba(255, 0, 255, 0.6);
+  }
+
+  100% {
+    transform: scale(1.05);
+    box-shadow: 0 0 25px rgba(255, 0, 255, 0.9);
+  }
+}
+
 .melody-guide {
   flex: 2;
   position: relative;
   margin-top: 10px;
   margin-bottom: 100px;
   overflow: hidden;
-  
+
 }
 
 .melodyGuideCanvas {
@@ -323,11 +361,13 @@
 }
 
 @keyframes karaokeSparkle {
+
   0%,
   100% {
     transform: translateX(-50%) scale(0.9);
     opacity: 0.75;
   }
+
   50% {
     transform: translateX(-50%) scale(1.08);
     opacity: 1;
@@ -335,12 +375,15 @@
 }
 
 .bottom-section {
-  /* height: 35%; */
+  flex: 4;
+  /* height: 280px; Removed fixed height for proportional scaling */
   display: flex;
   flex-direction: column;
   justify-content: center;
   padding: 0 50px 40px 50px;
   background: linear-gradient(to top, rgba(0, 0, 0, 0.8) 0%, transparent 100%);
+  min-height: 0;
+  /* Allow shrinking if needed */
 }
 
 .lyrics-container {
@@ -358,7 +401,9 @@
 .text {
   font-size: 3.5rem;
   color: #ffffff;
-  -webkit-text-stroke: 2px #000000;
+  -webkit-text-stroke: 6px #000000;
+  paint-order: stroke fill;
+
   /* text-shadow: 3px 3px 0px #000; */
   white-space: nowrap;
   position: relative;
@@ -373,7 +418,9 @@
 
 .karaokeTextBase {
   color: #ffffff;
-  -webkit-text-stroke: 2px #000000;
+  -webkit-text-stroke: 6px #000000;
+  paint-order: stroke fill;
+
 }
 
 .karaokeTextFill {
@@ -383,7 +430,8 @@
   width: var(--karaoke-progress);
   overflow: hidden;
   color: #e60000;
-  -webkit-text-stroke: 2px #ffffff;
+  -webkit-text-stroke: 6px #ffffff;
+  paint-order: stroke fill;
   white-space: nowrap;
   pointer-events: none;
 }
@@ -404,9 +452,11 @@
   .top-section {
     padding: 14px;
   }
+
   .bottom-section {
     padding: 0 24px 24px;
   }
+
   .text {
     font-size: 3rem;
   }
@@ -419,18 +469,1095 @@
     gap: 10px;
     align-items: stretch;
   }
+
   .pitch-graph {
     height: 60px;
     margin-right: 0;
   }
+
   .scoring-panel {
     min-width: 0;
   }
+
   .technique-counters {
     flex-wrap: wrap;
   }
+
   .text {
     font-size: 2.4rem;
     white-space: normal;
   }
+}
+
+/* Results Page Styles */
+.resultsPage {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  /* Dark Blue Gradient bg */
+  background: radial-gradient(circle at 50% 30%, #04aefd 0%, #057dee 70%);
+  z-index: 2000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: white;
+}
+
+.results-overlay {
+  width: 90%;
+  height: 90%;
+  display: flex;
+  flex-direction: column;
+  position: relative;
+}
+
+.results-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-end;
+  border-bottom: 2px solid #005f7f;
+  padding-bottom: 20px;
+  margin-bottom: 30px;
+}
+
+.results-title-group {
+  text-align: left;
+}
+
+.results-song-title {
+  font-size: 3rem;
+  margin: 0;
+  text-shadow: 0 0 10px #00a8ff;
+}
+
+.results-artist-name {
+  font-size: 1.5rem;
+  margin: 5px 0 0;
+  color: #ccc;
+}
+
+.results-timestamp {
+  font-size: 1.2rem;
+  font-family: monospace;
+}
+
+.results-body {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: space-around;
+}
+
+.results-score-section {
+  flex: 1;
+  display: flex;
+  justify-content: center;
+}
+
+.score-circle-container {
+  width: 500px;
+  height: 500px;
+  border-radius: 50%;
+  border: 10px solid #005f7f;
+  box-shadow: 0 0 30px #00a8ff, inset 0 0 50px rgba(0, 80, 255, 0.3);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  background: radial-gradient(circle, #001f5f 0%, black 100%);
+  position: relative;
+}
+
+.score-circle-label {
+  font-size: 1.5rem;
+  color: #00a8ff;
+  letter-spacing: 0.1em;
+  margin-bottom: 10px;
+}
+
+.score-number {
+  font-family: 'Impact', 'BIZUDPMincho-Bold', sans-serif;
+  color: #ff9f43;
+  text-shadow: 0 0 20px #ff9f43;
+  line-height: 1;
+  display: flex;
+  align-items: baseline;
+}
+
+.score-int {
+  font-size: 10rem;
+}
+
+.score-dot {
+  font-size: 5rem;
+}
+
+.score-dec {
+  font-size: 5rem;
+}
+
+.results-stats-section {
+  flex: 0 0 350px;
+  background: rgba(0, 0, 0, 0.6);
+  border: 1px solid #333;
+  border-radius: 10px;
+  padding: 20px;
+}
+
+.stats-box {
+  display: flex;
+  flex-direction: column;
+  gap: 15px;
+}
+
+.stats-title {
+  font-size: 1.4rem;
+  border-bottom: 1px solid #555;
+  padding-bottom: 10px;
+  margin-bottom: 10px;
+}
+
+.stat-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  font-size: 1.2rem;
+  background: rgba(255, 255, 255, 0.05);
+  padding: 10px;
+  border-radius: 5px;
+}
+
+.stat-name {
+  font-weight: bold;
+}
+
+.stat-val {
+  font-family: monospace;
+  font-size: 1.4rem;
+}
+
+.color-shakuri {
+  color: #FF13F0;
+}
+
+.color-kobushi {
+  color: #00FFF0;
+}
+
+.color-fall {
+  color: #FFBF00;
+}
+
+.color-vibrato {
+  color: #2CFF05;
+}
+
+.results-footer {
+  height: 80px;
+  display: flex;
+  justify-content: flex-end;
+  align-items: center;
+  padding: 0 50px;
+}
+
+.results-btn {
+  background: #00a8ff;
+  border: none;
+  padding: 15px 40px;
+  font-size: 1.5rem;
+  color: white;
+  border-radius: 5px;
+  cursor: pointer;
+  box-shadow: 0 0 15px #00a8ff;
+  transition: transform 0.2s, background 0.2s;
+}
+
+.results-btn:hover {
+  transform: scale(1.05);
+  background: #00befc;
+}
+
+/* High Fidelity Results Page Styles */
+.results-container {
+  width: 95%;
+  height: 95%;
+  display: flex;
+  flex-direction: column;
+  position: relative;
+  font-family: 'Hiragino Sans', 'Meiryo', sans-serif;
+  max-height: 100vh;
+}
+
+.results-header-row {
+  flex: 0 0 auto;
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  padding-bottom: 5px;
+  margin-bottom: 1vh;
+}
+
+.analysis-logo {
+  font-size: 2rem;
+  font-weight: 900;
+  display: flex;
+  align-items: baseline;
+}
+
+.analysis-logo-text {
+  color: #fff;
+  font-style: italic;
+  margin-right: 10px;
+  background: linear-gradient(to bottom, #fff, #bbb);
+  background-clip: text;
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+}
+
+.analysis-logo-sub {
+  color: #00befc;
+  font-size: 1.2rem;
+}
+
+.results-time-info {
+  text-align: right;
+  font-size: 1.2rem;
+  color: #ddd;
+}
+
+.guest-name {
+  display: block;
+  font-size: 1.5rem;
+  font-weight: bold;
+  margin-top: 5px;
+}
+
+/* Main Body: Three Columns */
+/* Allow growing but cap height */
+.results-main-body {
+  flex: 2;
+  display: flex;
+  min-height: 0;
+  margin-bottom: 2vh;
+  align-items: center;
+  /* Center vertically */
+}
+
+.analysis-bars-section {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  gap: 1.5vh;
+  padding-right: 20px;
+}
+
+.analysis-bar-row {
+  display: flex;
+  align-items: center;
+}
+
+/* Old Analysis Bar Styles Removed */
+
+
+/* Center Score */
+.center-score-section {
+  flex: 1.2;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  position: relative;
+}
+
+.total-score-circle {
+  width: 45vh;
+  /* Responsive size */
+  height: 45vh;
+  min-width: 300px;
+  min-height: 300px;
+  border-radius: 50%;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  align-items: center;
+  position: relative;
+  /* Final style: no border/bg, SVG handles it */
+  border: none;
+  background: none;
+  box-shadow: none;
+}
+
+.score-ring-svg {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
+  z-index: 1;
+}
+
+.score-ring-bg {
+  stroke-width: 2;
+
+}
+
+.score-ring-progress {
+  stroke: #ff9f43;
+  stroke-width: 2;
+  stroke-linecap: round;
+  transition: stroke-dashoffset 1s ease-out;
+
+
+}
+
+.total-score-content {
+  position: relative;
+  z-index: 2;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  height: 100%;
+  text-shadow: 0 0 10px rgb(255, 47, 0);
+
+}
+
+.total-score-label {
+  color: #ff9f43;
+  text-align: center;
+  font-size: 1.2rem;
+  line-height: 1.2;
+  margin-bottom: 2vh;
+  letter-spacing: 0.1em;
+  font-weight: bold;
+}
+
+.total-score-value {
+  color: #ff9f43;
+  font-family: 'Impact', sans-serif;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  margin-top: -1vh;
+  /* Slight lift */
+}
+
+.ts-int-row {
+  font-size: 24vh;
+  line-height: 0.9;
+}
+
+.ts-dec-row {
+  display: flex;
+  align-items: baseline;
+  margin-top: -10px;
+}
+
+.ts-dec {
+  font-size: 7vh;
+  color: #ff9f43;
+}
+
+.ts-unit {
+  font-size: 4vh;
+  color: #ff9f43;
+  margin-left: 5px;
+  font-weight: bold;
+}
+
+
+/* Right Song Info - Superseded by Figure 2 styles below */
+.right-song-section {
+  flex: 1;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  flex-direction: column;
+}
+
+
+/* Comment Section */
+.comment-section {
+  flex: 0 0 auto;
+  background: linear-gradient(90deg, #001f5f, #003366);
+  border: 1px solid #005f7f;
+  border-radius: 10px;
+  padding: 15px;
+  margin-bottom: 2vh;
+  display: flex;
+  align-items: flex-start;
+  gap: 15px;
+}
+
+.comment-badge {
+  background: linear-gradient(to bottom, #f1c40f, #b7950b);
+  color: #000;
+  font-weight: bold;
+  padding: 5px 10px;
+  border-radius: 5px;
+  border: 2px solid #fff;
+  writing-mode: vertical-rl;
+  text-orientation: upright;
+  font-size: 1.2rem;
+  box-shadow: 0 0 10px #f1c40f;
+}
+
+.comment-text {
+  font-size: 1.2rem;
+  line-height: 1.5;
+}
+
+/* Details Section */
+/* Details Section - Footer Panel */
+.details-section {
+  flex: 0 0 auto;
+  display: flex;
+  gap: 15px;
+  min-height: 0;
+  margin-bottom: 2vh;
+  background: rgba(10, 15, 20, 0.4);
+  /* Transparent Dark */
+  padding: 12px 20px;
+  border-radius: 12px;
+  border: none;
+  box-shadow: 0 10px 20px rgba(0, 0, 0, 0.5);
+}
+
+.detail-box {
+  flex: 1;
+  background: rgba(0, 0, 0, 0.4);
+  border-radius: 6px;
+  padding: 8px;
+  display: flex;
+  flex-direction: column;
+  position: relative;
+  overflow: hidden;
+}
+
+/* Tech Detail specific */
+.tech-detail {
+  flex: 1.8;
+  /* Increase width to prevent overflow */
+  flex-direction: row;
+  align-items: stretch;
+  background-color: transparent;
+  /* Pure Black */
+  border: none;
+}
+
+.detail-circle-badge {
+  width: 75px;
+  height: 75px;
+  flex: 0 0 75px;
+  align-self: center;
+  border-radius: 50%;
+  border: 2px solid #ccc;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: radial-gradient(circle at 30% 30%, #444, #000);
+  margin-right: 15px;
+  box-shadow: 0 0 5px rgba(255, 255, 255, 0.2);
+}
+
+.badge-content {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  line-height: 1.1;
+  color: #fff;
+}
+
+.badge-small {
+  font-size: 0.7rem;
+  color: #aaa;
+}
+
+.badge-large {
+  font-size: 1.2rem;
+  font-weight: 900;
+  letter-spacing: 0.1em;
+}
+
+
+/* Vibrato Type */
+.vibrato-type {
+  background: rgba(62, 39, 35, 0.6);
+  /* Brownish like image */
+  border: none;
+}
+
+/* Rhythm Box */
+.rhythm-box {
+  background: rgba(0, 77, 64, 0.6);
+  /* Dark Teal */
+  border: none;
+}
+
+.detail-header {
+  color: #ddd;
+  /* border-bottom: 1px solid rgba(255, 255, 255, 0.1); */
+  margin-bottom: 5px;
+  font-size: 0.9rem;
+  padding-left: 5px;
+}
+
+.vibrato-grid {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-evenly;
+}
+
+.v-row {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+}
+
+.v-label {
+  width: 40px;
+  font-size: 0.8rem;
+}
+
+.v-cell {
+  flex: 1;
+  height: 2.5vh;
+  min-height: 20px;
+  border: 1px solid #888;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(0, 0, 0, 0.3);
+  font-size: 1rem;
+  color: #aaa;
+}
+
+.v-cell.selected {
+  background: #ffb74d;
+  /* highlighted */
+  color: #000;
+  box-shadow: 0 0 10px #ff9800;
+  border: 1px solid #fff;
+}
+
+.v-footer {
+  display: flex;
+  justify-content: space-between;
+  padding-left: 45px;
+  font-size: 0.8rem;
+  color: #ccc;
+}
+
+/* Rhythm Box */
+.rhythm-box {
+  background: #002244;
+}
+
+.rhythm-meter {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  position: relative;
+  margin: 10px 0;
+}
+
+.rhythm-bar {
+  width: 100%;
+  height: 3vh;
+  min-height: 20px;
+  background: repeating-linear-gradient(90deg, #001122, #001122 5px, #003366 5px, #003366 10px);
+  position: relative;
+  border: 1px solid #005f7f;
+}
+
+.rhythm-center-line {
+  position: absolute;
+  left: 50%;
+  top: 0;
+  bottom: 0;
+  width: 4px;
+  background: #00befc;
+  box-shadow: 0 0 10px #00befc;
+  transform: translateX(-50%);
+  z-index: 10;
+}
+
+.rhythm-labels {
+  display: flex;
+  justify-content: space-between;
+  font-size: 0.9rem;
+}
+
+/* Footer Bar */
+.results-footer-bar {
+  flex: 0 0 50px;
+  display: flex;
+  gap: 10px;
+  align-items: center;
+}
+
+.footer-btn {
+  border: 2px solid #fff;
+  color: #fff;
+  font-weight: bold;
+  padding: 0 20px;
+  height: 100%;
+  border-radius: 4px;
+  font-size: 1rem;
+  box-shadow: 0 2px 5px #000;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.footer-btn:hover {
+  transform: translateY(-2px);
+}
+
+.footer-btn.red {
+  background: #d63031;
+}
+
+.footer-btn.blue {
+  background: #0984e3;
+}
+
+.footer-btn.cyan {
+  background: #00cec9;
+  color: #000;
+}
+
+.spacer {
+  flex: 1;
+}
+
+/* Updated Score Layout */
+
+
+
+
+/* Calorie Section */
+.calorie-box {
+  margin-top: 2vh;
+  background: linear-gradient(135deg, rgba(255, 69, 0, 0.2) 0%, rgba(0, 0, 0, 0.4) 100%);
+  border: 1px solid #ff4500;
+  border-radius: 10px;
+  padding: 1.5vh;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  box-shadow: 0 0 10px rgba(255, 69, 0, 0.3);
+}
+
+.calorie-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 5px;
+}
+
+.calorie-icon {
+  font-size: 1.5rem;
+  filter: drop-shadow(0 0 5px #ff4500);
+}
+
+.calorie-label {
+  font-size: 1.2rem;
+  font-weight: bold;
+  color: #ffccbc;
+}
+
+.calorie-value-row {
+  display: flex;
+  align-items: baseline;
+  gap: 5px;
+}
+
+.cal-num {
+  font-family: 'Impact', sans-serif;
+  font-size: 3rem;
+  color: #ff5722;
+  text-shadow: 0 0 10px #ff5722;
+}
+
+.cal-unit {
+  font-size: 1.2rem;
+  color: #aaa;
+}
+
+/* Updated Song Info Row Gradient */
+
+
+/* Brighter Global Background */
+.resultsPage {
+  background: radial-gradient(circle at 50% 30%, #013fc4 0%, #00143c 50%);
+}
+
+.right-song-section {
+  flex-direction: column;
+  justify-content: center;
+}
+
+
+/* --- Figure 2 Style Sidebar --- */
+
+.song-info-list {
+  display: flex;
+  flex-direction: column;
+  gap: 1.5vh;
+  width: 100%;
+}
+
+.song-info-row {
+  /* Dark Blue Bar background */
+  background: linear-gradient(to right, #162447, #1f4068, #162447);
+  border-radius: 30px;
+  /* Fully rounded capsule */
+  height: 5vh;
+  min-height: 40px;
+  display: flex;
+  align-items: center;
+  position: relative;
+  padding: 0;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  box-shadow: 0 4px 6px rgba(0, 0, 0, 0.3);
+  overflow: visible;
+  margin-bottom: 0;
+  /* managed by gap */
+}
+
+.song-info-badge {
+  /* Orange/Pink Gradient Pill */
+  background: linear-gradient(180deg, #ffcc80 0%, #ff6b6b 100%);
+  color: #fff;
+  /* or dark text? Image looks like white with shadow */
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.5);
+  font-weight: 900;
+  font-size: 1rem;
+
+  border-radius: 30px;
+  padding: 0 15px;
+
+  height: 100%;
+  /* Match row height */
+  display: flex;
+  align-items: center;
+  justify-content: center;
+
+  /* Fixed width config */
+  width: 110px;
+  min-width: 110px;
+  max-width: 110px;
+  box-sizing: border-box;
+
+  position: absolute;
+  /* Lock to left */
+  left: 0;
+  top: 0;
+  z-index: 2;
+}
+
+.song-info-val {
+  /* Content text */
+  margin-left: 120px;
+  /* Badge width (110) + gap */
+  padding-right: 15px;
+  /* Padding from right edge */
+  flex: 1;
+
+  /* Force Right Alignment */
+  text-align: right !important;
+  justify-content: flex-end;
+  width: 100%;
+
+  color: #fff;
+  font-size: 1.3rem;
+  font-weight: bold;
+  text-shadow: 0 2px 4px rgba(0, 0, 0, 0.5);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* Calorie specific styling (optional tweaks) */
+
+
+.calorie-badge {
+  /* Redder gradient for calories? */
+  background: linear-gradient(180deg, #ff8a65 0%, #d84315 100%);
+}
+
+.calorie-val {
+  font-family: 'Impact', sans-serif;
+  font-size: 1.5rem;
+  color: #ffab91;
+}
+
+.fire-icon {
+  margin-left: 5px;
+  font-size: 1.2rem;
+}
+
+/* Clear out old styles conflicting */
+.song-info-box {
+  background: none;
+  padding: 0;
+  border-radius: 0;
+}
+
+.calorie-box {
+  display: none;
+}
+
+/* Old box hidden just in case style exists */
+
+
+/* Merged into song-info styles above */
+
+
+/* --- Figure 3/Reference Style Analysis Bars --- */
+
+.analysis-bar-new {
+  width: 100%;
+  height: 50px;
+  background: #2a2a2a;
+  /* Dark background for unfilled part */
+  border-radius: 25px;
+  position: relative;
+  overflow: hidden;
+  /* Crop the fill */
+  box-shadow: 0 4px 6px rgba(0, 0, 0, 0.5);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  display: flex;
+  align-items: center;
+}
+
+.bar-fill-layer {
+  position: absolute;
+  top: 0;
+  left: 0;
+  bottom: 0;
+  z-index: 1;
+  border-radius: 25px 0 0 25px;
+  /* Rounded left only inside */
+  /* Stripes */
+  background-image: repeating-linear-gradient(90deg,
+      rgba(255, 255, 255, 0.15),
+      rgba(255, 255, 255, 0.15) 2px,
+      transparent 2px,
+      transparent 4px);
+  box-shadow: 2px 0 10px rgba(0, 0, 0, 0.3);
+}
+
+.bar-content-layer {
+  position: relative;
+  z-index: 2;
+  /* Text on top */
+  width: 100%;
+  height: 100%;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 0 20px;
+}
+
+.bar-label-new {
+  /* Text with strong outline */
+  font-size: 1.3rem;
+  font-weight: 900;
+  color: #fff;
+  text-shadow:
+    -1px -1px 0 #000,
+    1px -1px 0 #000,
+    -1px 1px 0 #000,
+    1px 1px 0 #000,
+    0 0 5px rgba(0, 0, 0, 0.5);
+  /* Use font that supports Japanese clearly */
+  font-family: 'Hiragino Sans', 'Meiryo', sans-serif;
+}
+
+.bar-value-new {
+  display: flex;
+  align-items: baseline;
+  color: #fff;
+  text-shadow:
+    -1px -1px 0 #000,
+    1px -1px 0 #000,
+    -1px 1px 0 #000,
+    1px 1px 0 #000;
+}
+
+.val-big {
+  font-size: 2rem;
+  font-family: 'Impact', sans-serif;
+  letter-spacing: 1px;
+}
+
+.val-small {
+  font-size: 1.2rem;
+  margin-left: 5px;
+  color: #eee;
+}
+
+/* Specific Colors per type */
+/* Pitch: Cyan */
+.bar-type-pitch .bar-fill-layer {
+  background-color: #00befc;
+}
+
+
+
+/* Stability: Yellow */
+.bar-type-stability .bar-fill-layer {
+  background-color: #f1c40f;
+}
+
+/* Intonation: Pink/Magenta */
+.bar-type-intonation .bar-fill-layer {
+  background-color: #e040fb;
+}
+
+/* Long Tone: Green */
+.bar-type-longTone .bar-fill-layer {
+  background-color: #00b894;
+}
+
+/* Technique: Light Blue/Cyan */
+.bar-type-technique .bar-fill-layer {
+  background-color: #00cec9;
+}
+
+/* Add striped pattern on top of background color */
+.bar-fill-layer::after {
+  content: "";
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background-image: repeating-linear-gradient(90deg,
+      rgba(0, 0, 0, 0.1),
+      rgba(0, 0, 0, 0.1) 2px,
+      transparent 2px,
+      transparent 6px);
+  pointer-events: none;
+}
+
+
+/* --- Figure 4/Reference Style Technique Details --- */
+
+/* --- Figure 4/Reference Style Technique Details --- */
+
+.tech-list {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  grid-template-rows: 1fr 1fr;
+  width: 100%;
+  height: 100%;
+}
+
+.tech-row {
+  display: flex;
+  flex-direction: row;
+  justify-content: flex-start;
+  align-items: center;
+  padding: 5px 10px;
+  height: 100%;
+  /* height variable with grid */
+  color: #fff;
+  font-family: 'Hiragino Sans', 'Meiryo', sans-serif;
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.5);
+  font-weight: bold;
+}
+
+.tech-name {
+  flex: 1;
+  font-size: 0.9rem;
+  letter-spacing: 1px;
+  text-align: left;
+  white-space: nowrap;
+  overflow: hidden;
+  margin-bottom: 0px;
+  margin-left: 5px;
+}
+
+/* Specific Gradient Colors */
+.color-kobushi {
+  background: linear-gradient(to bottom, #006064, #00363a);
+}
+
+.color-fall {
+  background: linear-gradient(to bottom, #827717, #524c09);
+}
+
+.color-shakuri {
+  background: linear-gradient(to bottom, #4a148c, #12005e);
+}
+
+.color-vibrato {
+  background: linear-gradient(to bottom, #3e2723, #1b0000);
+}
+
+.tech-icon-circle {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  border: 2px solid #fff;
+  background: transparent;
+  margin-right: 0;
+  margin-bottom: 0;
+  font-size: 0.9rem;
+  line-height: 1;
+  padding-bottom: 2px;
+  /* Visual adjustment for text icons */
+}
+
+.tech-count {
+  font-size: 1.4rem;
+  font-family: monospace;
+  margin-right: 2px;
+  text-align: right;
+  line-height: 1;
+}
+
+.tech-unit {
+  font-size: 0.8rem;
+  color: #fff;
+  height: auto;
+  line-height: 1;
+  display: inline-block;
+  font-weight: normal;
+}
+
+.badge-content {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+}
+
+.badge-small {
+  font-size: 0.7rem;
+  color: #fff;
+  line-height: 1;
+  /* text-shadow: 0 0 5px #00befc; */
+}
+
+.badge-large {
+  font-size: 1.8rem;
+  font-weight: 900;
+  color: #fff;
+  line-height: 1;
+  /* text-shadow: 0 0 10px #00befc; */
+  margin-top: 2px;
 }

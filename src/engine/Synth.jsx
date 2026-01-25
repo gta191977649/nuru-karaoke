@@ -5,6 +5,7 @@ import { sharedPitchEngine, startSharedMic, stopSharedMic } from './audio/pitch/
 import { DEFAULT_CONFIG } from './audioEngine.js'
 import { centsError } from './audio/pitch/utils/dspUtils.js'
 import { synthEngine } from './SynthEngine.js'
+import SynthPlaybackControls from './SynthPlaybackControls.jsx'
 import { useKaraokeStore } from '../state/karaokeStore.js'
 import MelodyGuideCanvas from '../components/MelodyGuideCanvas.jsx'
 import ParticlePreview from '../components/particles/ParticlePreview.jsx'
@@ -132,6 +133,7 @@ function Synth({ onNavigateHome }) {
     Math.max(1, Number(DEFAULT_CONFIG.debugPipelineStride) || 4),
   )
   const [showMelodyGuide, setShowMelodyGuide] = useState(false)
+  const [showPitchDebug, setShowPitchDebug] = useState(false)
   const [showFullPitchTrace, setShowFullPitchTrace] = useState(false)
   const [particlePreviewEmit, setParticlePreviewEmit] = useState(true)
   const [particleConfig, setParticleConfig] = useState(() =>
@@ -166,29 +168,25 @@ function Synth({ onNavigateHome }) {
   const pipelineStages = pipelineDebug.stages || {}
   const pipelineMetrics = pipelineDebug.metrics || {}
 
+  /* eslint-disable react-hooks/exhaustive-deps */
+  const noteNames = ['C', 'C#', 'D', 'D#', 'E', 'F', 'F#', 'G', 'G#', 'A', 'A#', 'B']
+  const formatNumber = (value, digits = 2) => (Number.isFinite(value) ? value.toFixed(digits) : 'n/a')
+  const midiToPitchClass = (midi) => {
+    const m = Number(midi)
+    if (!Number.isFinite(m)) return null
+    return ((Math.round(m) % 12) + 12) % 12
+  }
+  const formatPitchClass = (midi) => {
+    const pc = midiToPitchClass(midi)
+    if (pc == null) return 'n/a'
+    return `${noteNames[pc]} (pc ${pc})`
+  }
+
   const getCssVar = (el, name, fallback) => {
     if (!el) return fallback
     const value = getComputedStyle(el).getPropertyValue(name)
     return value ? value.trim() : fallback
   }
-
-  const normalizeMidiToTarget = (userMidi, targetMidi, minMidi, maxMidi) => {
-    const u = Number(userMidi)
-    if (!Number.isFinite(u)) return null
-    const t = Number(targetMidi)
-    let next = u
-    if (Number.isFinite(t)) {
-      const shift = Math.round((t - u) / 12)
-      next = u + shift * 12
-    } else {
-      while (next < minMidi) next += 12
-      while (next > maxMidi) next -= 12
-    }
-    if (!Number.isFinite(next)) return null
-    return Math.max(minMidi, Math.min(maxMidi, next))
-  }
-
-  const canPlay = useMemo(() => Boolean(state.midiName) && state.ready, [state.midiName, state.ready])
 
   useEffect(() => {
     const unsubscribe = pitchEngine.onPitch((result) => {
@@ -210,7 +208,6 @@ function Synth({ onNavigateHome }) {
   useEffect(() => {
     pitchEngine.configureDetector({
       windowSize,
-      hopSize,
       hopSize,
       rmsGate,
       enableDoubleExponentialSmoothing,
@@ -328,6 +325,7 @@ function Synth({ onNavigateHome }) {
   }, [pitchEngine, algoId])
 
   useEffect(() => {
+    if (!micActive) return
     const unsubscribe = pitchEngine.onDebug((msg) => {
       const rawValue = Number.isFinite(msg?.metrics?.rawF0Hz) ? msg.metrics.rawF0Hz : 0
       const postValue = Number.isFinite(msg?.metrics?.result?.f0Hz) ? msg.metrics.result.f0Hz : 0
@@ -354,9 +352,10 @@ function Synth({ onNavigateHome }) {
     return () => {
       unsubscribe()
     }
-  }, [pitchEngine])
+  }, [pitchEngine, micActive])
 
   useEffect(() => {
+    if (!state.isPlaying || !micActive) return
     const interval = window.setInterval(() => {
       const songTimeSec = Math.max(0, currentTimeRef.current + latencyCompMs / 1000)
       const rawTargetMidi = reference ? getTargetMidiAtTime(reference, songTimeSec) : null
@@ -394,14 +393,15 @@ function Synth({ onNavigateHome }) {
         targetMidi: transposedTargetMidi,
         rms: last?.rms ?? null,
       })
-      const maxLen = 240
+      const maxLen = 2000
       if (fullHistory.length > maxLen) fullHistory.splice(0, fullHistory.length - maxLen)
-    }, 150)
+    }, 16)
 
     return () => window.clearInterval(interval)
-  }, [reference, latencyCompMs, detectorOptions, algoId])
+  }, [reference, latencyCompMs, detectorOptions, algoId, micActive, state.isPlaying])
 
   useEffect(() => {
+    if (!state.isPlaying) return
     let raf = 0
     const minMidi = 36
     const maxMidi = 96
@@ -520,7 +520,7 @@ function Synth({ onNavigateHome }) {
 
     raf = window.requestAnimationFrame(draw)
     return () => window.cancelAnimationFrame(raf)
-  }, [])
+  }, [state.isPlaying])
 
   useEffect(() => {
     return () => stopSharedMic()
@@ -547,18 +547,6 @@ function Synth({ onNavigateHome }) {
     }
   }, [state.ready, state.midiName, state.midiUrl, state.queueIndex])
 
-  const noteNames = ['C', 'C#', 'D', 'D#', 'E', 'F', 'F#', 'G', 'G#', 'A', 'A#', 'B']
-  const formatNumber = (value, digits = 2) => (Number.isFinite(value) ? value.toFixed(digits) : 'n/a')
-  const midiToPitchClass = (midi) => {
-    const m = Number(midi)
-    if (!Number.isFinite(m)) return null
-    return ((Math.round(m) % 12) + 12) % 12
-  }
-  const formatPitchClass = (midi) => {
-    const pc = midiToPitchClass(midi)
-    if (pc == null) return 'n/a'
-    return `${noteNames[pc]} (pc ${pc})`
-  }
   const formatChannelList = (channels) => {
     if (!Array.isArray(channels)) return '—'
     const list = []
@@ -583,7 +571,9 @@ function Synth({ onNavigateHome }) {
     })
   }, [state.channelActivityTime, state.channelActivityVelocity, state.currentTime])
 
-  const { activeTechniques, techniqueHistory } = useSingingTechnique(sharedPitchEngine, currentTimeRef)
+  const { activeTechniques, techniqueHistory } = useSingingTechnique(sharedPitchEngine, currentTimeRef, micActive)
+  const [activeTab, setActiveTab] = useState('pitch-debug')
+  const hasLcdActivity = state.isPlaying && Array.isArray(lcdLevels) && lcdLevels.some((level) => level > 0)
 
   return (
     <Container className="py-3 synthDebug" style={{ maxWidth: 860 }}>
@@ -714,89 +704,41 @@ function Synth({ onNavigateHome }) {
 
         <Col xs={12}>
           <div className="p-3 border rounded-3">
-            <div className="fw-semibold mb-2">XG -&gt; GS Drum Mapping</div>
+            <div className="fw-semibold mb-2">MIDI Standard Mapping</div>
             <Row className="g-2 align-items-center">
-              <Col xs={12} md={6}>
+              <Col xs={12} md={12}>
                 <Form.Check
                   type="switch"
-                  id="xg-drum-map-enabled"
-                  label="Enable mapping"
-                  checked={Boolean(state.xgDrumMapEnabled)}
-                  onChange={(e) => synthEngine.setXgDrumMapEnabled(e.currentTarget.checked)}
-                />
-              </Col>
-              <Col xs={12} md={6}>
-                <Form.Check
-                  type="switch"
-                  id="xg-drum-map-prefer-gs"
-                  label="Prefer GS playback"
-                  checked={Boolean(state.xgPreferGsPlayback)}
-                  onChange={(e) => synthEngine.setXgPreferGsPlayback(e.currentTarget.checked)}
+                  id="midi-map-enabled"
+                  label="Enable auto-mapping"
+                  checked={Boolean(state.enableMIDIStandardMapping)}
+                  onChange={(e) => synthEngine.setEnableMIDIStandardMapping(e.currentTarget.checked)}
                 />
               </Col>
             </Row>
             <div className="small text-muted mt-2">
-              Mode: {state.xgDrumMapState?.globalMode || 'unknown'}
+              Detected Standard: {state.midiMapState?.detectedStandard || 'unknown'}
             </div>
             <div className="small text-muted">
-              Detected by: {state.xgDrumMapState?.detectedBy || '—'}
+              Active Config: {state.midiMapState?.configName || 'None'}
             </div>
             <div className="small text-muted">
-              XG bank pairs: {state.xgDrumMapState?.xgBankSelectPairs ?? 0}
+              Current Mode: {state.midiMapState?.globalMode || 'unknown'}
             </div>
             <div className="small text-muted">
-              Drum channels: {formatChannelList(state.xgDrumMapState?.drumChannels)}
+              Detected by: {state.midiMapState?.detectedBy || '—'}
             </div>
             <div className="small text-muted">
-              Brush channels: {formatChannelList(state.xgDrumMapState?.brushChannels)}
+              Drum channels: {formatChannelList(state.midiMapState?.drumChannels)}
+            </div>
+            <div className="small text-muted">
+              Brush channels: {formatChannelList(state.midiMapState?.brushChannels)}
             </div>
           </div>
         </Col>
 
         <Col xs={12}>
-          <div className="p-3 border rounded-3">
-            <div className="fw-semibold mb-2">Playback</div>
-            <div className="d-flex flex-wrap gap-2 mb-2">
-              <Button
-                onClick={() => {
-                  synthEngine.play()
-                }}
-                disabled={!canPlay || state.isPlaying}
-                type="button"
-              >
-                Play
-              </Button>
-              <Button
-                onClick={() => synthEngine.pause()}
-                disabled={!canPlay || !state.isPlaying}
-                variant="secondary"
-                type="button"
-              >
-                Pause
-              </Button>
-              <Button
-                onClick={() => {
-                  synthEngine.stop()
-                }}
-                disabled={!canPlay}
-                variant="outline-danger"
-                type="button"
-              >
-                Stop
-              </Button>
-            </div>
-            <Form.Range
-              min={0}
-              max={Math.max(0, state.duration)}
-              step={0.01}
-              value={Math.min(state.currentTime, Math.max(0, state.duration))}
-              disabled={!canPlay || state.duration <= 0}
-              onChange={(e) => synthEngine.seek(Number(e.currentTarget.value))}
-            />
-            <div className="small text-muted">
-              {state.currentTime.toFixed(2)} / {state.duration.toFixed(2)} s
-            </div>
-          </div>
+          <SynthPlaybackControls />
         </Col>
 
         <Col xs={12}>
@@ -813,6 +755,8 @@ function Synth({ onNavigateHome }) {
                 levels={lcdLevels}
                 enabledChannels={state.enabledChannels}
                 height={64}
+                isPlaying={state.isPlaying}
+                hasActivity={hasLcdActivity}
               />
             </div>
 
@@ -822,20 +766,22 @@ function Synth({ onNavigateHome }) {
         <Col xs={12} md={6}>
           <div className="p-3 border rounded-3">
             <div className="fw-semibold mb-2">Effects</div>
+
             <Form.Label className="small">Reverb ({state.reverbGain.toFixed(2)})</Form.Label>
             <Form.Range
               min={0}
-              max={2}
-              step={0.01}
+              max={5.0}
+              step={0.05}
               value={state.reverbGain}
               disabled={!state.ready}
               onChange={(e) => synthEngine.setReverbGain(Number(e.currentTarget.value))}
             />
+
             <Form.Label className="small">Chorus ({state.chorusGain.toFixed(2)})</Form.Label>
             <Form.Range
               min={0}
-              max={2}
-              step={0.01}
+              max={5.0}
+              step={0.05}
               value={state.chorusGain}
               disabled={!state.ready}
               onChange={(e) => synthEngine.setChorusGain(Number(e.currentTarget.value))}
@@ -906,7 +852,15 @@ function Synth({ onNavigateHome }) {
 
         <Col xs={12}>
           <div className="p-3 border rounded-3">
-            <Tabs defaultActiveKey="pitch-debug" className="mb-3">
+            <Tabs
+              activeKey={activeTab}
+              onSelect={(key) => {
+                if (key) setActiveTab(key)
+              }}
+              mountOnEnter
+              unmountOnExit
+              className="mb-3"
+            >
               <Tab eventKey="pitch-debug" title="Pitch Debug">
                 <div className="fw-semibold mb-2">Karaoke Pitch Debug</div>
                 <Row className="g-2 align-items-center mb-3">
@@ -1029,30 +983,43 @@ function Synth({ onNavigateHome }) {
                 </Row>
 
                 <div className="d-flex align-items-center justify-content-between mt-3">
-                  <div className="small text-muted">Melody Guide (target vs mic)</div>
-                  <Button
-                    size="sm"
-                    variant="outline-secondary"
-                    onClick={() => setShowMelodyGuide((prev) => !prev)}
-                  >
-                    {showMelodyGuide ? 'Hide' : 'Show'}
-                  </Button>
-                </div>
-                {showMelodyGuide ? (
-                  <MelodyGuideCanvas
-                    className="melodyGuideCanvas"
-                    reference={reference}
-                    historyRef={fullPitchHistoryRef}
-                    lastPitchRef={lastPitchRef}
-                    currentTimeRef={currentTimeRef}
-                    transpositionRef={transpositionRef}
-                    rmsGate={rmsGate}
-                    gateUserByTarget
-                    userOffsetSec={userPitchOffsetMs / 1000}
-                    width={760}
-                    height={180}
-                    style={{ width: '100%', height: 180, borderRadius: 8 }}
+                  <div className="small text-muted">Melody Guide                    <Form.Check
+                    type="switch"
+                    id="debug-pitch-guide"
+                    label="Melody Guide"
+                    checked={showMelodyGuide}
+                    onChange={(e) => setShowMelodyGuide(e.currentTarget.checked)}
+                    className="text-nowrap"
                   />
+                    <Form.Check
+                      type="switch"
+                      id="debug-pitch-raw"
+                      label="Show Raw F0"
+                      checked={showPitchDebug}
+                      onChange={(e) => setShowPitchDebug(e.currentTarget.checked)}
+                      className="text-nowrap"
+                    />
+                  </div>
+                </div>
+
+                {showMelodyGuide && state.isPlaying ? (
+                  <div className="mt-2" style={{ backgroundColor: 'black', borderRadius: 8, overflow: 'hidden' }}>
+                    <MelodyGuideCanvas
+                      className="melodyGuideCanvas"
+                      reference={reference}
+                      historyRef={fullPitchHistoryRef}
+                      lastPitchRef={lastPitchRef}
+                      currentTimeRef={currentTimeRef}
+                      transpositionRef={transpositionRef}
+                      rmsGate={rmsGate}
+                      gateUserByTarget={false}
+                      windowSec={8}
+                      showPitchDebug={showPitchDebug}
+                      width={830}
+                      height={220}
+                      style={{ width: '100%', height: 220 }}
+                    />
+                  </div>
                 ) : null}
                 <div className="d-flex align-items-center justify-content-between mt-3">
                   <div className="small text-muted">Full Pitch Trace (target vs mic)</div>
@@ -1087,7 +1054,7 @@ function Synth({ onNavigateHome }) {
                   <div>micSampleRate: {formatNumber(debugInfo.micSampleRate, 0)}</div>
                 </div>
               </Tab>
-              <Tab eventKey="pipeline-debug" title="Pipeline Debug">
+              <Tab eventKey="pipeline-debug" title="DSP Pipeline Debug">
                 <div className="fw-semibold mb-2">Signal Pipeline</div>
                 <Row className="g-3">
                   <Col xs={12} md={5}>
@@ -1208,15 +1175,15 @@ function Synth({ onNavigateHome }) {
                     <Row>
                       <Col xs={4}>
                         <div className="small text-muted mb-1">Vibrato</div>
-                        <WaveformPixi data={techniqueHistory.vibrato} height={40} color="#2ecc71" />
+                        <WaveformPixi data={techniqueHistory.vibrato.slice()} height={40} color="#2ecc71" />
                       </Col>
                       <Col xs={4}>
                         <div className="small text-muted mb-1">Kobushi</div>
-                        <WaveformPixi data={techniqueHistory.kobushi} height={40} color="#4fc3f7" />
+                        <WaveformPixi data={techniqueHistory.kobushi.slice()} height={40} color="#4fc3f7" />
                       </Col>
                       <Col xs={4}>
                         <div className="small text-muted mb-1">Glissando</div>
-                        <WaveformPixi data={techniqueHistory.glissando} height={40} color="#9c27b0" />
+                        <WaveformPixi data={techniqueHistory.glissando.slice()} height={40} color="#9c27b0" />
                       </Col>
                     </Row>
                     <div className="d-flex gap-2 mt-3">
@@ -1581,33 +1548,41 @@ function Synth({ onNavigateHome }) {
                   />
                 </div>
                 <div className="mt-2">
-                  <ParticlePreview
-                    particleConfig={particleConfig}
-                    emit={particlePreviewEmit}
-                    width={760}
-                    height={160}
-                    style={{ width: '100%', height: 160, borderRadius: 8 }}
-                  />
+                  {activeTab === 'particle-debug' && state.isPlaying ? (
+                    <ParticlePreview
+                      particleConfig={particleConfig}
+                      emit={particlePreviewEmit}
+                      width={760}
+                      height={160}
+                      style={{ width: '100%', height: 160, borderRadius: 8 }}
+                    />
+                  ) : (
+                    <div style={{ width: '100%', height: 160, borderRadius: 8, background: '#0f1115' }} />
+                  )}
                 </div>
                 <div className="small text-muted mt-3">
                   Hit the correct note to emit particles on the melody guide (mic required).
                 </div>
                 <div className="mt-2" style={{ backgroundColor: 'grey' }}>
-                  <MelodyGuideCanvas
-                    className="melodyGuideCanvas"
-                    reference={reference}
-                    historyRef={fullPitchHistoryRef}
-                    lastPitchRef={lastPitchRef}
-                    currentTimeRef={currentTimeRef}
-                    transpositionRef={transpositionRef}
-                    rmsGate={rmsGate}
-                    gateUserByTarget
-                    userOffsetSec={userPitchOffsetMs / 1000}
-                    width={760}
-                    height={180}
-                    particleConfig={particleConfig}
-                    style={{ width: '100%', height: 180, borderRadius: 8 }}
-                  />
+                  {activeTab === 'particle-debug' && state.isPlaying ? (
+                    <MelodyGuideCanvas
+                      className="melodyGuideCanvas"
+                      reference={reference}
+                      historyRef={fullPitchHistoryRef}
+                      lastPitchRef={lastPitchRef}
+                      currentTimeRef={currentTimeRef}
+                      transpositionRef={transpositionRef}
+                      rmsGate={rmsGate}
+                      gateUserByTarget
+                      userOffsetSec={userPitchOffsetMs / 1000}
+                      width={760}
+                      height={180}
+                      particleConfig={particleConfig}
+                      style={{ width: '100%', height: 180, borderRadius: 8 }}
+                    />
+                  ) : (
+                    <div style={{ width: '100%', height: 180, borderRadius: 8, background: '#0f1115' }} />
+                  )}
                 </div>
               </Tab>
             </Tabs>

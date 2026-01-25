@@ -122,6 +122,30 @@ const SONG_LIBRARY = [
     lrc: assetUrl(lrcAssetMap, 'earth_song.lrc'),
     lrc_offset: 0,
   },
+  {
+    id: 'presentendr',
+    title: 'Pretender',
+    artist: 'Offcial髭男dism',
+    url: assetUrl(midiAssetMap, 'pretender.MID'),
+    lrc: assetUrl(lrcAssetMap, 'pretender.lrc'),
+    lrc_offset: 1100,
+  },
+  {
+    id: 'kumoninote',
+    title: '雲に乗って',
+    artist: '三枝夕夏 IN db',
+    url: assetUrl(midiAssetMap, 'kumoninote.MID'),
+    lrc: assetUrl(lrcAssetMap, 'kumoninote.lrc'),
+    lrc_offset: 1100,
+  },
+  {
+    id: 'marigold',
+    title: 'マリーゴールド',
+    artist: 'あいみょん',
+    url: assetUrl(midiAssetMap, 'marigold.MID'),
+    lrc: assetUrl(lrcAssetMap, 'marigold.lrc'),
+    lrc_offset: 1200,
+  },
 ]
 
 export { SONG_LIBRARY }

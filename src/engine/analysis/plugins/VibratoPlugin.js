@@ -81,7 +81,7 @@ class VibratoPlugin extends TechniquePlugin {
         // Rate: 5Hz - 8Hz (relaxed to 4-9Hz for real-world)
         // Extent: > 30 cents
 
-        const isVibrato = (rate >= 4 && rate <= 9) && (extent >= 25)
+        const isVibrato = (rate > 5 && rate < 8) && (extent > 30)
 
         if (isVibrato) {
             this.isActive = true

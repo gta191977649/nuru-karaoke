@@ -18,7 +18,7 @@ function normalize(text) {
 }
 
 function FindSongs({ onBack, onSelectSong }) {
-  const [term, setTerm] = useState('ばか')
+  const [term, setTerm] = useState('Pretender')
   const [isComposing, setIsComposing] = useState(false)
   const [mode, setMode] = useState('title') // 'title' | 'artist'
 
@@ -149,7 +149,7 @@ function FindSongs({ onBack, onSelectSong }) {
             Main Menu
           </Button>
         </div>
-       
+
       </div>
     </div>
   )
