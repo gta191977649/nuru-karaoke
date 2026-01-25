@@ -994,7 +994,7 @@ function Synth({ onNavigateHome }) {
                     <Form.Check
                       type="switch"
                       id="debug-pitch-raw"
-                      label="Show Raw F0"
+                      label="Debug"
                       checked={showPitchDebug}
                       onChange={(e) => setShowPitchDebug(e.currentTarget.checked)}
                       className="text-nowrap"
@@ -1014,7 +1014,7 @@ function Synth({ onNavigateHome }) {
                       rmsGate={rmsGate}
                       gateUserByTarget={false}
                       windowSec={8}
-                      showPitchDebug={showPitchDebug}
+                      debug={showPitchDebug}
                       width={830}
                       height={220}
                       style={{ width: '100%', height: 220 }}
