@@ -62,7 +62,7 @@ function Spectrogram({
 }) {
   const containerRef = useRef(null)
   const canvasRef = useRef(null)
-  const offscreenRef = useRef(null) // To act as backbuffer if needed, but we can drawImage self
+
 
   const analyserRef = useRef(analyser)
   const f0Ref = useRef(f0Hz)

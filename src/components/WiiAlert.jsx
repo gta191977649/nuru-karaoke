@@ -25,6 +25,7 @@ function WiiAlert() {
 
   useEffect(() => {
     if (!alert || !visible) return
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     setRemainingMs(timeoutMs)
   }, [alert, visible, timeoutMs])
 

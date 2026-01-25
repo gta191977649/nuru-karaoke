@@ -225,7 +225,7 @@ const createComboSystem = () => {
     let vx = 0
     let vy = 0
     let scale = 1.0
-    let decay = 1.0 // alpha decay
+
 
     if (type === 'trail') {
       life = randRange(0.3, 0.6)

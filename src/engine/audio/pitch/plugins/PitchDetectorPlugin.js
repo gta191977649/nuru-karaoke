@@ -4,13 +4,13 @@ class PitchDetectorPlugin {
     this.name = ''
   }
 
-  configure(_cfg) {}
+  configure() { }
 
-  detect(_frame) {
+  detect() {
     return null
   }
 
-  reset() {}
+  reset() { }
 }
 
 export { PitchDetectorPlugin }

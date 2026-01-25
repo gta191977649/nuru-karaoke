@@ -1,27 +1,54 @@
 import { useEffect, useState } from 'react'
 import { useKaraokeStore } from '../../state/karaokeStore.js'
 
-function useKaraokeSongIntro({ midiUrl, midiName, queue, queueIndex, transposition, showKeyChangeAlert }) {
+function useKaraokeSongIntro({
+  midiUrl,
+  midiName,
+  queue,
+  queueIndex,
+  transposition,
+  showKeyChangeAlert,
+  reference,
+  currentTime = 0
+}) {
   const [showSongInfo, setShowSongInfo] = useState(false)
   const [songInfo, setSongInfo] = useState({ title: '', artist: '' })
   const lastIntroMidiUrl = useKaraokeStore((state) => state.lastIntroMidiUrl)
   const setLastIntroMidiUrl = useKaraokeStore((state) => state.setLastIntroMidiUrl)
 
+  // Force hide if melody is visible (approaching within 3 seconds)
+  useEffect(() => {
+    if (!showSongInfo || !reference?.notes?.length) return
+    const firstNoteTime = reference.notes[0].t0Sec
+    // If first note is within 3 seconds (visible window roughly), hide intro
+    if (firstNoteTime < currentTime + 3.0) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect
+      if (showSongInfo) setShowSongInfo(false)
+    }
+  }, [showSongInfo, reference, currentTime])
+
   useEffect(() => {
     if (!midiUrl) return
-    if (midiUrl === lastIntroMidiUrl) return
 
     const currentSong = queueIndex >= 0 ? queue?.[queueIndex] : null
     const title = currentSong?.title || midiName || ''
+
+    // Always update song info so it's available for ResultsPage
+    if (title && (songInfo.title !== title || songInfo.artist !== (currentSong?.artist || ''))) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect
+      setSongInfo({ title, artist: currentSong?.artist || '' })
+    }
+
+    // Only trigger the intro animation if it's a new song load
+    if (midiUrl === lastIntroMidiUrl) return
     if (!title) return
 
     setLastIntroMidiUrl(midiUrl)
-    setSongInfo({ title, artist: currentSong?.artist || '' })
     if (showKeyChangeAlert) showKeyChangeAlert(transposition ?? 0, 5000)
     setShowSongInfo(true)
 
     const timer = setTimeout(() => setShowSongInfo(false), 5000)
-    // return () => clearTimeout(timer)
+    return () => clearTimeout(timer)
   }, [
     midiUrl,
     midiName,
@@ -31,6 +58,8 @@ function useKaraokeSongIntro({ midiUrl, midiName, queue, queueIndex, transpositi
     showKeyChangeAlert,
     lastIntroMidiUrl,
     setLastIntroMidiUrl,
+    songInfo.artist,
+    songInfo.title
   ])
 
   return { showSongInfo, songInfo }

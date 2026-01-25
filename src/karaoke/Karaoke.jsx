@@ -1,229 +1,33 @@
-import './Karaoke.css'
-import { useEffect, useMemo, useRef } from 'react'
-import { useKaraokeStore } from '../state/karaokeStore.js'
-import { synthEngine } from '../engine/SynthEngine.js'
-import { sharedPitchEngine, startSharedMic, stopSharedMic } from '../engine/audio/pitch/sharedPitchEngine.js'
-import MelodyGuideCanvas from '../components/MelodyGuideCanvas.jsx'
-import KeyChangeAlert from '../components/KeyChangeAlert.jsx'
-import useKeyChangeAlertStore from '../state/keyChangeAlertStore.js'
-import { useKaraokeReference } from './hooks/useKaraokeReference.js'
-import { useKaraokePitchHistory } from './hooks/useKaraokePitchHistory.js'
-import { useKaraokeSongIntro } from './hooks/useKaraokeSongIntro.js'
-import { useSingingTechnique } from './hooks/useSingingTechnique.js'
-
-function splitRubySegments(text) {
-  const raw = String(text ?? '')
-  if (!raw.includes('<')) return { segments: [{ text: raw, ruby: '' }], hasRuby: false }
-
-  const segments = []
-  let cursor = 0
-  while (cursor < raw.length) {
-    const open = raw.indexOf('<', cursor)
-    if (open === -1) {
-      segments.push({ text: raw.slice(cursor), ruby: '' })
-      break
-    }
-    const close = raw.indexOf('>', open + 1)
-    if (close === -1) {
-      segments.push({ text: raw.slice(cursor), ruby: '' })
-      break
-    }
-    const base = raw.slice(cursor, open)
-    const ruby = raw.slice(open + 1, close)
-    if (base) {
-      const wordMatch = base.match(/[A-Za-z][A-Za-z0-9'-]*$/)
-      if (wordMatch) {
-        const word = wordMatch[0]
-        const prefix = base.slice(0, base.length - word.length)
-        if (prefix) segments.push({ text: prefix, ruby: '' })
-        segments.push({ text: word, ruby })
-      } else {
-        const prefix = base.slice(0, -1)
-        const lastChar = base.slice(-1)
-        if (prefix) segments.push({ text: prefix, ruby: '' })
-        segments.push({ text: lastChar, ruby })
-      }
-    }
-    cursor = close + 1
-  }
-  const hasRuby = segments.some((seg) => seg.ruby)
-  return { segments, hasRuby }
-}
-
-function renderRubySegments(segments) {
-  return segments.map((seg, idx) =>
-    seg.ruby ? (
-      <ruby key={`${seg.text}-${idx}`}>
-        {seg.text}
-        <rt>{seg.ruby}</rt>
-      </ruby>
-    ) : (
-      <span key={`${seg.text}-${idx}`}>{seg.text}</span>
-    ),
-  )
-}
+import { useState, useCallback } from 'react'
+import SingingPage from './pages/SingingPage.jsx'
+import ResultsPage from './pages/ResultsPage.jsx'
 
 function Karaoke() {
-  const state = useKaraokeStore()
-  const pitchEngine = sharedPitchEngine
-  const currentTimeRef = useRef(0)
-  const transpositionRef = useRef(0)
-  const micRmsGate = 0.01
-  const showKeyChangeAlert = useKeyChangeAlertStore((store) => store.showKeyChangeAlert)
-  const reference = useKaraokeReference({
-    ready: state.ready,
-    midiName: state.midiName,
-    midiUrl: state.midiUrl,
-    queueIndex: state.queueIndex,
-  })
-  const { showSongInfo, songInfo } = useKaraokeSongIntro({
-    midiUrl: state.midiUrl,
-    midiName: state.midiName,
-    queue: state.queue,
-    queueIndex: state.queueIndex,
-    transposition: state.transposition,
-    showKeyChangeAlert,
-  })
-  const { pitchHistoryRef, lastPitchRef } = useKaraokePitchHistory({
-    pitchEngine,
-    reference,
-    currentTimeRef,
-    transpositionRef,
-    rmsGate: micRmsGate,
-    resetKey: `${state.midiName || ''}-${state.queueIndex ?? -1}`,
-  })
+  const [view, setView] = useState('singing') // 'singing' | 'results'
+  const [resultsData, setResultsData] = useState(null)
 
-  // Technique Detection
-  const { techniqueEventsRef } = useSingingTechnique(pitchEngine, currentTimeRef)
+  const handleFinish = useCallback((data) => {
+    setResultsData(data)
+    setView('results')
+  }, [])
 
-  const lines = useMemo(() => {
+  const handleNext = useCallback(() => {
+    setView('singing')
+    setResultsData(null)
+  }, [])
 
-    const entries = state.lrcEntries || []
-    const i = state.activeLyricIndex ?? -1
-    const pairStart = i >= 0 ? i - (i % 2) : -1
-    const current =
-      pairStart >= 0 ? splitRubySegments(entries[pairStart]?.text) : { segments: [{ text: '…', ruby: '' }], hasRuby: false }
-    const next =
-      pairStart + 1 < entries.length
-        ? splitRubySegments(entries[pairStart + 1]?.text)
-        : { segments: [{ text: '…', ruby: '' }], hasRuby: false }
-    const activeInPair = i >= 0 ? i % 2 : 0
-    return {
-      current,
-      next,
-      currentAlign: 'text-left',
-      nextAlign: 'text-right lyric-row--indent',
-      activeInPair,
-    }
-  }, [state.activeLyricIndex, state.lrcEntries])
+  if (view === 'results' && resultsData) {
+    return (
+      <ResultsPage
+        score={resultsData.score}
+        techniques={resultsData.techniques}
+        songInfo={resultsData.songInfo}
+        onNext={handleNext}
+      />
+    )
+  }
 
-  const progressPercent = Math.round((state.karaokeProgress ?? 0) * 1000) / 10
-  const scorePercent =
-    state.duration > 0 ? Math.max(0, Math.min(100, Math.round((state.currentTime / state.duration) * 100))) : 0
-
-  useEffect(() => {
-    if (!state.ready) return
-    synthEngine.playQueueIfIdle().catch(() => {
-      // ignore
-    })
-  }, [state.ready])
-
-  useEffect(() => {
-    currentTimeRef.current = state.currentTime ?? 0
-  }, [state.currentTime])
-
-  useEffect(() => {
-    transpositionRef.current = Number(state.transposition) || 0
-  }, [state.transposition])
-
-  useEffect(() => {
-    let cancelled = false
-    const start = async () => {
-      try {
-        await startSharedMic()
-      } catch (err) {
-        if (!cancelled) console.error(err)
-      }
-    }
-    start()
-    return () => {
-      cancelled = true
-      stopSharedMic()
-    }
-  }, [pitchEngine])
-
-  return (
-    <div className={`karaokePage${showSongInfo ? ' karaokePage--intro' : ''}`}>
-      <KeyChangeAlert />
-      {showSongInfo ? (
-        <div className="karaokeSongIntro">
-          <div className="karaokeSongIntro__title">{songInfo.title}</div>
-          {songInfo.artist ? <div className="karaokeSongIntro__artist">♪{songInfo.artist}</div> : null}
-        </div>
-      ) : null}
-      <div className="karaoke-stage">
-        <div className="karaoke-screen">
-          <div className="top-section">
-            <div className="melody-guide">
-              <MelodyGuideCanvas
-                className="melodyGuideCanvas"
-                reference={reference}
-                historyRef={pitchHistoryRef}
-                lastPitchRef={lastPitchRef}
-                currentTimeRef={currentTimeRef}
-                transpositionRef={transpositionRef}
-                rmsGate={micRmsGate}
-                gateUserByTarget
-                width={800}
-                height={220}
-                techniqueEventsRef={techniqueEventsRef}
-                totalSections={6}
-                currentSection={state.duration > 0
-                  ? Math.min(6, Math.floor((state.currentTime / state.duration) * 6) + 1)
-                  : 1}
-              />
-            </div>
-          </div>
-
-          <div className="bottom-section">
-            <div className="lyrics-container">
-              <div className={`lyric-row ${lines.currentAlign}`}>
-                <span className="text">
-                  <span
-                    className="karaokeTextWrap"
-                    style={{
-                      '--karaoke-progress': `${lines.activeInPair === 0 ? progressPercent : 100}%`,
-                    }}
-                  >
-                    <span className="karaokeTextBase">{renderRubySegments(lines.current.segments)}</span>
-                    <span className="karaokeTextFill" aria-hidden="true">
-                      {renderRubySegments(lines.current.segments)}
-                    </span>
-                  </span>
-                </span>
-              </div>
-
-              <div className={`lyric-row ${lines.nextAlign}`}>
-                <span className="text">
-                  <span
-                    className="karaokeTextWrap"
-                    style={{
-                      '--karaoke-progress': `${lines.activeInPair === 1 ? progressPercent : 0}%`,
-                    }}
-                  >
-                    <span className="karaokeTextBase">{renderRubySegments(lines.next.segments)}</span>
-                    <span className="karaokeTextFill" aria-hidden="true">
-                      {renderRubySegments(lines.next.segments)}
-                    </span>
-                  </span>
-                </span>
-              </div>
-            </div>
-          </div>
-        </div>
-      </div>
-    </div>
-  )
+  return <SingingPage onFinish={handleFinish} />
 }
 
 export default Karaoke

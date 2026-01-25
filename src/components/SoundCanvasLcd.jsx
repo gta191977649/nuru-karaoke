@@ -25,7 +25,7 @@ const COLOR_MUTED_INACTIVE = 'rgba(110, 58, 0, 0.1)' // 0.18 * 0.55
 // Assume we want to fit 100% width.
 // But fixed aspect ratio bars are better.
 
-function SoundCanvasLcd({ levels, enabledChannels, height = 64, className, style }) {
+function SoundCanvasLcd({ levels, enabledChannels, height = 64, isPlaying = false, hasActivity = false, className, style }) {
     const canvasRef = useRef(null)
     const containerRef = useRef(null)
 
@@ -119,7 +119,7 @@ function SoundCanvasLcd({ levels, enabledChannels, height = 64, className, style
                 }
             }
 
-            if (active) reqId = requestAnimationFrame(draw)
+            if (active && isPlaying && hasActivity) reqId = requestAnimationFrame(draw)
         }
 
         draw()
@@ -127,7 +127,7 @@ function SoundCanvasLcd({ levels, enabledChannels, height = 64, className, style
             active = false
             cancelAnimationFrame(reqId)
         }
-    }, [height])
+    }, [height, isPlaying, hasActivity])
 
     return (
         <div ref={containerRef} className={className} style={{ ...style, width: '100%', height }}>

@@ -1,4 +1,5 @@
 import { PitchyPlugin } from './plugins/pitchyPlugin.js'
+import { AubioPlugin } from './plugins/aubioPlugin.js'
 import { EssentiaYinPlugin } from './plugins/essentiaYinPlugin.js'
 import { EssentiaProbabilisticYinPlugin } from './plugins/essentiaProbabilisticYinPlugin.js'
 import { PyinPlugin } from './plugins/pyinPlugin.js'
@@ -27,6 +28,7 @@ function createDefaultPitchRegistry(options = {}) {
   const includeCrepe = options.includeCrepe !== false
   const registry = new PitchDetectorRegistry()
   registry.register(new PitchyPlugin())
+  registry.register(new AubioPlugin())
   registry.register(new PyinPlugin())
   registry.register(new EssentiaYinPlugin())
   registry.register(new EssentiaProbabilisticYinPlugin())
