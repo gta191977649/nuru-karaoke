@@ -222,7 +222,7 @@ function MelodyGuideCanvas({
   style,
   onTechniqueCountsChange,
   showSolfeges = true,
-  showPitchDebug = true,
+  debug = false,
 }) {
   const containerRef = useRef(null)
 
@@ -289,7 +289,7 @@ function MelodyGuideCanvas({
     glissandoDownCount,
     vibratoCount,
     showSolfeges,
-    showPitchDebug
+    debug
   })
 
   const triggerComboHit = (ref, color) => {
@@ -325,7 +325,7 @@ function MelodyGuideCanvas({
       vibratoCount,
       techniqueEventsRef,
       showSolfeges,
-      showPitchDebug
+      debug
     }
   }, [
     reference,
@@ -348,7 +348,7 @@ function MelodyGuideCanvas({
     techniqueEventsRef,
     onTechniqueCountsChange,
     showSolfeges,
-    showPitchDebug
+    debug
   ])
 
   useEffect(() => {
@@ -863,14 +863,6 @@ function MelodyGuideCanvas({
         state.miss.clear()
         state.user.clear()
         if (state.userGlow) state.userGlow.clear()
-        state.user.setStrokeStyle({
-          width: STROKE_WIDTH.f0,
-          color: COLORS.userMiss,
-          alpha: Math.max(0.2, ALPHAS.userMiss),
-          cap: 'round',
-          join: 'round',
-        })
-        state.user.beginPath()
         state.userGlow?.setFillStyle({ color: COLORS.userGlowFill, alpha: ALPHAS.userGlowFill })
         state.userGlow?.beginPath()
 
@@ -1043,60 +1035,13 @@ function MelodyGuideCanvas({
         }
         state.trail.stroke()
 
-        // Draw incorrect f0 only after beat is over + delay
-        if (beatStates.length) {
-          const wrongBeats = beatStates.filter((b) => !b.correct && songTimeSec >= b.showAt)
-          if (wrongBeats.length) {
-            let started = false
-            for (let i = 0; i < history.length; i += 1) {
-              const point = history[i]
-              if (point.t < visibleStart || point.t > visibleEnd) {
-                started = false
-                continue
-              }
-              const window = wrongBeats.find((b) => point.t >= b.t0 && point.t < b.t1)
-              if (!window) {
-                started = false
-                continue
-              }
-              const userMidi = Number.isFinite(point.userMidi) ? Number(point.userMidi) : null
-              const targetMidiPoint = Number.isFinite(point.targetMidi) ? Number(point.targetMidi) : null
-              if (!Number.isFinite(userMidi) || !Number.isFinite(targetMidiPoint)) {
-                started = false
-                continue
-              }
-              const pointRms = Number.isFinite(point.rms) ? Number(point.rms) : null
-              if (Number.isFinite(pointRms) && pointRms < snap.rmsGate) {
-                started = false
-                continue
-              }
-              const userQuant = Math.round(userMidi)
-              const targetQuant = Math.round(targetMidiPoint)
-              const distance = mod12Distance(userQuant, targetQuant)
-              if (!Number.isFinite(distance) || Math.abs(distance) <= NOTE_MERGE_CONFIG.pitchToleranceSemis) {
-                started = false
-                continue
-              }
-              const x = playheadX + (point.t - songTimeSec) * pixelsPerSec
-              const { y } = midiToY(userMidi)
-              const drawY = Math.max(staffTopPx, Math.min(staffBottomPx, y))
-              if (!started) {
-                state.user.moveTo(x, drawY)
-                started = true
-              } else {
-                state.user.lineTo(x, drawY)
-              }
-            }
-          }
-        }
-
-        state.user.stroke()
+        // user miss trail intentionally disabled
         // state.userGlow?.fill() // Moved up
 
         // --- DEBUG PITCH TRACE ---
         if (state.debugTrace) {
           state.debugTrace.clear()
-          if (snap.showPitchDebug) {
+          if (snap.debug) {
             const debugColor = 0x00FFFF // Cyan
             state.debugTrace.setStrokeStyle({ width: 2, color: debugColor, alpha: 0.8 })
             state.debugTrace.beginPath()
