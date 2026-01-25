@@ -1,8 +1,8 @@
 /* 3D Realtime Score Counter */
 .score-cube-scene {
     position: absolute;
-    top: 60px;
-    left: 60px;
+    top: 30px;
+    left: 50px;
     /* Define Cube Size Here */
     --cube-size: 100px;
 

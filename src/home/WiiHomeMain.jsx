@@ -166,7 +166,7 @@ function WiiHomeMain({ screen, onNavigate, onOpenKaraoke, karaokeTargetRef, main
         </Col>
         <Col xs={12} lg={4}>
           <div className="joyInfo">
-            <div className="joyInfo__label">LIVE!</div>
+            <div className="joyInfo__label">演奏画面</div>
             <div className="joyInfo__media" ref={karaokeTargetRef}>
               <div className="joyInfo__overlay">ARENA SOUND</div>
             </div>

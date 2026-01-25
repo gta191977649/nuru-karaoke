@@ -125,7 +125,18 @@ export function useKaraokeScoring({
                     lastScoreRef.current = score
                     if (typeof onScoreChange === 'function') onScoreChange(score)
                 }
-                if (debug) console.log('[KaraokeScoreDebug]', score)
+                if (debug) {
+                    const info = calculatorRef.current.getDebugInfo()
+                    const ratio = info.totalWeightedBeats > 0 ? info.correctWeightedBeats / info.totalWeightedBeats : 0
+                    console.log('[KaraokeScoreDebug]', {
+                        score,
+                        ratio,
+                        correctWeightedBeats: info.correctWeightedBeats,
+                        totalWeightedBeats: info.totalWeightedBeats,
+                        pendingNotes: info.pendingNotes,
+                        last: info.last,
+                    })
+                }
             }
 
             if (debug || debugRef || onDebug) {
@@ -135,8 +146,15 @@ export function useKaraokeScoring({
                     if (debugRef) debugRef.current = info
                     if (typeof onDebug === 'function') onDebug(info)
                     if (debug) {
-                        // fallback periodic log
-                        console.log('[KaraokeScoreDebug]', Number(info.score) || 0)
+                        const ratio = info.totalWeightedBeats > 0 ? info.correctWeightedBeats / info.totalWeightedBeats : 0
+                        console.log('[KaraokeScoreDebug]', {
+                            score: Number(info.score) || 0,
+                            ratio,
+                            correctWeightedBeats: info.correctWeightedBeats,
+                            totalWeightedBeats: info.totalWeightedBeats,
+                            pendingNotes: info.pendingNotes,
+                            last: info.last,
+                        })
                     }
                     lastDebugTimeRef.current = now
                 }

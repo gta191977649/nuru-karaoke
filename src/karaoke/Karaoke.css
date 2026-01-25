@@ -18,7 +18,7 @@
   --karaoke-visual-opacity: 0.5;
 
   /* background-color: var(--bg-color); */
-  background-image: url("../assets/bg/bg.jpg");
+  background-image: url("../assets/bg/bg2.jpg");
   background-size: cover;
   font-family: 'Hiragino Sans', 'Meiryo', sans-serif;
   color: white;
@@ -250,23 +250,25 @@
 }
 
 .scoring-badge {
-  background: linear-gradient(#ff33cc, #ff00ff);
+  background: linear-gradient(#fb52d1, #fb36fb);
   color: white;
   padding: 5px 20px;
   border-radius: 8px;
   font-weight: bold;
   font-size: 1 rem;
   display: flex;
+  text-shadow: 1px 1px 0 #000;
   align-items: center;
-  box-shadow: 0 0 15px rgba(255, 0, 255, 0.6);
-  /* border: 2px solid rgba(174, 0, 116, 0.8); */
+  /* box-shadow: 0 0 15px rgba(174, 0, 116, 0.8); */
+  border: 2px solid rgb(255, 155, 255);
+
   animation: scoringPulse 1s infinite alternate;
 }
 
 @keyframes scoringPulse {
   0% {
     transform: scale(1);
-    box-shadow: 0 0 15px rgba(255, 0, 255, 0.6);
+    box-shadow: 0 0 15px rgba(255, 73, 255, 0.6);
   }
 
   100% {
