@@ -156,8 +156,16 @@ export class SimpleScoreCalculator {
 
         for (let i = 0; i < history.length; i += 1) {
             const point = history[i]
-            if (point.t < t0 || point.t >= t1) continue
-            const next = i + 1 < history.length ? history[i + 1].t : point.t
+            // Determine the end of this sample's validity window
+            const next = i + 1 < history.length
+                ? history[i + 1].t
+                : point.t + (this.defaultSampleSec || 0.05)
+
+            // Skip if this segment ends before the note starts
+            if (next <= t0) continue
+            // Stop if this segment starts after the note ends (assuming sorted history)
+            if (point.t >= t1) break
+
             const sliceStart = Math.max(point.t, t0)
             const sliceEnd = Math.min(next, t1)
             if (sliceEnd <= sliceStart) continue

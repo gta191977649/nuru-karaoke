@@ -696,7 +696,11 @@ function MelodyGuideCanvas({
         const beatStates = []
         if (snap.reference && typeof snap.reference.getBeatAtTime === 'function') {
           const beatStart = Math.floor(snap.reference.getBeatAtTime(visibleStart))
-          const beatEnd = Math.ceil(snap.reference.getBeatAtTime(visibleEnd))
+          let beatEnd = Math.ceil(snap.reference.getBeatAtTime(visibleEnd))
+          // Safety clamp to prevent infinite or massive loops if timing calculation goes wrong
+          if (beatEnd - beatStart > 500) {
+            beatEnd = beatStart + 500
+          }
           for (let b = beatStart; b < beatEnd; b += 1) {
             const t0 = typeof snap.reference.beatsToSeconds === 'function'
               ? snap.reference.beatsToSeconds(b)
@@ -1025,6 +1029,30 @@ function MelodyGuideCanvas({
             state.debugTrace.beginPath()
 
             let started = false
+
+            // Draw Beat Alignment Regions
+            beatStates.forEach(beat => {
+              const x0 = playheadX + (beat.t0 - songTimeSec) * pixelsPerSec
+              const x1 = playheadX + (beat.t1 - songTimeSec) * pixelsPerSec
+              const w = x1 - x0
+              if (w > 0) {
+                // Greenish for correct, reddish for incorrect? Or just neutral
+                // Let's use a subtle white box to show the "window"
+                state.debugTrace.roundRect(x0, 10, w, h - 20, 0)
+                state.debugTrace.setStrokeStyle({ width: 1, color: 0xFFFFFF, alpha: 0.2 })
+                state.debugTrace.stroke()
+                // Fill based on correctness?
+                if (beat.correct) {
+                  state.debugTrace.setFillStyle({ color: 0x00FF00, alpha: 0.1 })
+                } else {
+                  state.debugTrace.setFillStyle({ color: 0xFF0000, alpha: 0.05 })
+                }
+                state.debugTrace.fill()
+              }
+            })
+
+            state.debugTrace.setStrokeStyle({ width: 2, color: debugColor, alpha: 0.8 })
+            state.debugTrace.beginPath()
             history.forEach((point) => {
               if (point.t < visibleStart || point.t > visibleEnd) return
               const userMidi = Number.isFinite(point.userMidi) ? Number(point.userMidi) : null

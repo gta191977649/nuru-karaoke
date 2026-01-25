@@ -138,6 +138,14 @@ const SONG_LIBRARY = [
     lrc: assetUrl(lrcAssetMap, 'kumoninote.lrc'),
     lrc_offset: 1100,
   },
+  {
+    id: 'marigold',
+    title: 'マリーゴールド',
+    artist: 'あいみょん',
+    url: assetUrl(midiAssetMap, 'marigold.MID'),
+    lrc: assetUrl(lrcAssetMap, 'marigold.lrc'),
+    lrc_offset: 1200,
+  },
 ]
 
 export { SONG_LIBRARY }
