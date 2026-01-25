@@ -1,5 +1,5 @@
 import { useEffect, useRef, forwardRef, useState } from 'react'
-import { Application, Container, Graphics, Sprite, Texture, Assets } from 'pixi.js'
+import { Application, Container, Graphics, Sprite, Texture, Assets, Text, TextStyle } from 'pixi.js'
 import { BloomFilter } from 'pixi-filters'
 import { getTargetNoteAtBeat, mergeAdjacentNotesByPitch } from '../engine/audio/midi/referenceMelody.js'
 import { DEFAULT_CONFIG } from '../engine/audioEngine.js'
@@ -101,6 +101,9 @@ const STROKE_WIDTH = {
 
 const PLAYHEAD_DOT_RADIUS = 6
 const TECHNIQUE_ICON_OFFSET_PX = 20
+const SOLFEGE_LABEL_OFFSET_PX = 3
+const SOLFEGE_FONT_FAMILY = 'MS PGothic'
+const SOLFEGE_FONT_SIZE = 12
 const RESULT_DELAY_SEC = 0.2
 const USER_GLOW_FILL_SPEED = 1.5 // speed for correct note fill animation
 const NOTE_MERGE_CONFIG = {
@@ -114,6 +117,22 @@ const NOTE_MERGE_CONFIG = {
 
 // Visual in-tune tolerance for trail + particles
 const VISUAL_TOLERANCE_SEMIS = 1.0
+
+const SOLFEGE_NAMES = ['ﾄﾞ', 'ﾄﾞ#', 'ﾚ', 'ﾚ#', 'ﾐ', 'ﾌｧ', 'ﾌｧ#', 'ｿ', 'ｿ#', 'ﾗ', 'ﾗ#', 'ｼ']
+const SOLFEGE_TEXT_STYLE = new TextStyle({
+  fontFamily: SOLFEGE_FONT_FAMILY,
+  fontSize: SOLFEGE_FONT_SIZE,
+  fill: 0xffffff,
+  stroke: 0x000000,
+  strokeThickness: 4,
+})
+
+function getSolfegeLabel(midi) {
+  const m = Number(midi)
+  if (!Number.isFinite(m)) return null
+  const pc = mod12(Math.round(m))
+  return SOLFEGE_NAMES[pc] || null
+}
 
 function getNotesBounds(notes, transposition, fallbackMin, fallbackMax) {
   if (!notes?.length) {
@@ -202,6 +221,7 @@ function MelodyGuideCanvas({
   className,
   style,
   onTechniqueCountsChange,
+  showSolfeges = true,
   showPitchDebug = true,
 }) {
   const containerRef = useRef(null)
@@ -246,7 +266,9 @@ function MelodyGuideCanvas({
       vibrato: 0
     },
     techniqueSprites: [], // For tracking active sprites
-    techniqueTextureCache: new Map()
+    techniqueTextureCache: new Map(),
+    solfegeLabels: null,
+    solfegeLabelPool: []
   })
   const stateRef = useRef({
     reference,
@@ -266,6 +288,7 @@ function MelodyGuideCanvas({
     kobushiCount,
     glissandoDownCount,
     vibratoCount,
+    showSolfeges,
     showPitchDebug
   })
 
@@ -301,6 +324,7 @@ function MelodyGuideCanvas({
       glissandoDownCount,
       vibratoCount,
       techniqueEventsRef,
+      showSolfeges,
       showPitchDebug
     }
   }, [
@@ -323,6 +347,7 @@ function MelodyGuideCanvas({
     vibratoCount,
     techniqueEventsRef,
     onTechniqueCountsChange,
+    showSolfeges,
     showPitchDebug
   ])
 
@@ -367,6 +392,7 @@ function MelodyGuideCanvas({
       const userGlow = new Graphics()
       const trail = new Graphics() // F0 Trail
       const techniqueIcons = new Container() // Technique Icons
+      const solfegeLabels = new Container()
       const techniqueSpritePool = [] // Pool of sprites
       const particleSystem = createParticleSystem(particleConfig)
       const comboSystem = createComboSystem()
@@ -395,7 +421,7 @@ function MelodyGuideCanvas({
           threshold: 0.2,
         }),
       ]
-      app.stage.addChild(bg, grid, notes, miss, user, userGlowContainer, playhead, techniqueIcons, debugTrace)
+      app.stage.addChild(bg, grid, notes, miss, solfegeLabels, user, userGlowContainer, playhead, techniqueIcons, debugTrace)
 
       pixiRef.current = {
         app,
@@ -409,6 +435,8 @@ function MelodyGuideCanvas({
         trail,
         techniqueIcons,
         techniqueSpritePool,
+        solfegeLabels,
+        solfegeLabelPool: [],
         particleSystem,
         comboSystem,
         playhead,
@@ -656,6 +684,51 @@ function MelodyGuideCanvas({
 
         drawMelodyNotes(COLORS.melodyFill, ALPHAS.melodyFill, true)
         drawMelodyNotes(COLORS.melodyOutFill, ALPHAS.melodyOutFill, false)
+
+        if (state.solfegeLabels) {
+          const labelPool = state.solfegeLabelPool || []
+          let labelCount = 0
+          if (snap.showSolfeges) {
+            let lastMidiKey = null
+            let lastNote = null
+            for (const note of notesData) {
+              const midiKey = Number(note.midi)
+              if (!Number.isFinite(midiKey)) {
+                lastMidiKey = null
+                lastNote = null
+                continue
+              }
+              if (lastNote && note.t0Sec - lastNote.t1Sec > breakToleranceSec) {
+                lastMidiKey = null
+              }
+              const isDistinct = lastMidiKey == null || midiKey !== lastMidiKey
+              lastMidiKey = midiKey
+              lastNote = note
+              if (!isDistinct) continue
+              if (note.t1Sec < visibleStart || note.t0Sec > visibleEnd) continue
+              const labelText = getSolfegeLabel(midiKey + transposition)
+              if (!labelText) continue
+              const x0 = playheadX + (note.t0Sec - songTimeSec) * pixelsPerSec
+              const { y } = midiToY(midiKey + transposition)
+              let label = labelPool[labelCount]
+              if (!label) {
+                label = new Text({ text: labelText, style: SOLFEGE_TEXT_STYLE })
+                label.anchor.set(0, 1)
+                state.solfegeLabels.addChild(label)
+                labelPool.push(label)
+              }
+              label.text = labelText
+              label.x = x0
+              label.y = y - barH / 2 - SOLFEGE_LABEL_OFFSET_PX
+              label.visible = true
+              labelCount += 1
+            }
+          }
+          for (let i = labelCount; i < labelPool.length; i += 1) {
+            labelPool[i].visible = false
+          }
+          state.solfegeLabelPool = labelPool
+        }
 
         const history = snap.historyRef?.current || []
         const historyStep = history.length > 1
