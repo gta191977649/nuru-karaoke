@@ -4,12 +4,18 @@ import WiiHomeMain, { SCREENS } from './home/WiiHomeMain.jsx'
 import Karaoke from './karaoke/Karaoke.jsx'
 import { synthEngine } from './engine/SynthEngine.js'
 import { useKaraokeStore } from './state/karaokeStore.js'
+import { usePlayerScoreStore } from './state/playerScoreStore.js'
 import useUiStore from './state/uiStore.js'
 import WiiAlert from './components/WiiAlert.jsx'
 import KeyChangeAlert from './components/KeyChangeAlert.jsx'
 import useKeyChangeAlertStore from './state/keyChangeAlertStore.js'
 import useAlertStore from './state/alertStore.js'
+import { UI_CONFIG } from './config.js'
 import './App.css'
+
+const TRANSITION_MS = UI_CONFIG.karaokeTransitionMs
+
+const wait = (ms) => new Promise((resolve) => setTimeout(resolve, ms))
 
 function App({ onNavigate }) {
   const screen = useUiStore((state) => state.screen)
@@ -29,6 +35,10 @@ function App({ onNavigate }) {
   const karaokeTargetRef = useRef(null)
   const [karaokeBase, setKaraokeBase] = useState({ left: 0, top: 0, width: 0, height: 0 })
   const synth = useKaraokeStore()
+  const resetPlayerScore = usePlayerScoreStore((state) => state.resetPlayerScore)
+  const [transitionPhase, setTransitionPhase] = useState('idle')
+  const transitionLockRef = useRef(false)
+  const [karaokeResetKey, setKaraokeResetKey] = useState(0)
   const showKeyChangeAlert = useKeyChangeAlertStore((state) => state.showKeyChangeAlert)
   const showAlert = useAlertStore((state) => state.showAlert)
 
@@ -107,6 +117,33 @@ function App({ onNavigate }) {
     }
   }, [karaokeActive, karaokeMini, screen])
 
+  const runTransition = useCallback(async (action) => {
+    if (transitionLockRef.current) return
+    transitionLockRef.current = true
+    setTransitionPhase('in')
+    await wait(TRANSITION_MS)
+    if (action) await action()
+    setTransitionPhase('out')
+    await wait(TRANSITION_MS)
+    setTransitionPhase('idle')
+    transitionLockRef.current = false
+  }, [])
+
+  const handleStop = useCallback(async () => {
+    const hasQueued = Array.isArray(synth.queue) && synth.queue.length > 0
+    if (!synth.midiName && !hasQueued) return
+    showAlert({
+      message: '演奏を停止しました',
+      variant: 'warning',
+      timeoutMs: 3000,
+    })
+    await runTransition(async () => {
+      resetPlayerScore()
+      setKaraokeResetKey((prev) => prev + 1)
+      await synthEngine.stopAndAdvance({ fadeMs: TRANSITION_MS })
+    })
+  }, [resetPlayerScore, runTransition, showAlert, synth.midiName, synth.queue])
+
   return (
     <div className="wiiHome">
       <WiiAlert />
@@ -182,8 +219,11 @@ function App({ onNavigate }) {
             aria-label="Karaoke view"
           >
             <div className="karaokeDock__move">
-              <div className="karaokeDock__scale">
-                <Karaoke />
+              <div
+                className="karaokeDock__scale"
+                style={{ '--karaoke-transition-ms': `${TRANSITION_MS}ms` }}
+              >
+                <Karaoke onStop={handleStop} resetKey={karaokeResetKey} transitionPhase={transitionPhase} />
               </div>
             </div>
           </div>
@@ -234,15 +274,7 @@ function App({ onNavigate }) {
               <Button
                 className="wiiFooterBtn wiiFooterBtn--red"
                 type="button"
-                onClick={async () => {
-                  if (!synth.midiName) return
-                  showAlert({
-                    message: '演奏を停止しました',
-                    variant: 'warning',
-                    timeoutMs: 3000,
-                  })
-                  await synthEngine.stopAndAdvance()
-                }}
+                onClick={handleStop}
               >
                 演奏停止
               </Button>

@@ -1,26 +1,44 @@
-import { useState, useCallback } from 'react'
+import { useCallback, useEffect } from 'react'
 import SingingPage from './pages/SingingPage.jsx'
 import ResultsPage from './pages/ResultsPage.jsx'
-import { usePlayerScoreStore } from '../state/playerScoreStore.js'
+import { useKaraokeStore } from '../state/karaokeStore.js'
 
-function Karaoke() {
-  const [view, setView] = useState('singing') // 'singing' | 'results'
-  const resetPlayerScore = usePlayerScoreStore((store) => store.resetPlayerScore)
+function Karaoke({ onStop, resetKey, transitionPhase = 'idle' }) {
+  const view = useKaraokeStore((state) => state.karaokeView)
+  const setView = useKaraokeStore((state) => state.setKaraokeView)
+  const midiName = useKaraokeStore((state) => state.midiName)
+  const queueIndex = useKaraokeStore((state) => state.queueIndex)
 
-  const handleFinish = useCallback((data) => {
+  const handleFinish = useCallback(() => {
     setView('results')
-  }, [])
+  }, [setView])
 
-  const handleNext = useCallback(() => {
+  useEffect(() => {
+    if (resetKey == null) return
     setView('singing')
-    resetPlayerScore()
-  }, [resetPlayerScore])
+  }, [resetKey, setView])
 
-  if (view === 'results') {
-    return <ResultsPage onNext={handleNext} />
-  }
+  useEffect(() => {
+    if (!midiName && !Number.isInteger(queueIndex)) return
+    setView('singing')
+  }, [midiName, queueIndex, setView])
 
-  return <SingingPage onFinish={handleFinish} />
+  return (
+    <div className="karaokeTransitionRoot">
+      <div
+        className={[
+          'karaokeTransition',
+          transitionPhase === 'in' ? 'karaokeTransition--in' : '',
+          transitionPhase === 'out' ? 'karaokeTransition--out' : '',
+        ].join(' ')}
+      />
+      {view === 'results' ? (
+        <ResultsPage onNext={onStop} />
+      ) : (
+        <SingingPage onFinish={handleFinish} />
+      )}
+    </div>
+  )
 }
 
 export default Karaoke
