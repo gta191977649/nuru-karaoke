@@ -136,10 +136,10 @@ export const CenterScore = ({ score }) => {
 
             {/* Content Container */}
             <div className="cs-score-text-container">
-                <div style={{ color: '#facc15', fontWeight: 'bold', letterSpacing: '0.1em', textTransform: 'uppercase', textShadow: '0 0 5px rgba(234,179,8,0.8)', fontSize: '1rem', marginBottom: '1%' }}>
+                <div style={{ color: '#facc15', fontWeight: 'bold', letterSpacing: '0.1em', textTransform: 'uppercase', textShadow: '0 0 5px rgba(234,179,8,0.8)', fontSize: '1em', marginBottom: '1%' }}>
                     TOTAL
                 </div>
-                <div style={{ color: 'white', fontWeight: 'bold', letterSpacing: '0.05em', marginTop: '-2%', marginBottom: '2%', opacity: 0.9, fontSize: '1rem', backgroundColor: 'rgba(124, 45, 18, 0.5)', padding: '0 10%', borderRadius: '9999px', border: '1px solid rgba(249, 115, 22, 0.5)' }}>
+                <div style={{ color: 'white', fontWeight: 'bold', letterSpacing: '0.05em', marginTop: '-2%', marginBottom: '2%', opacity: 0.9, fontSize: '1em', backgroundColor: 'rgba(124, 45, 18, 0.5)', padding: '0 10%', borderRadius: '9999px', border: '1px solid rgba(249, 115, 22, 0.5)' }}>
                     総合得点
                 </div>
 
@@ -147,7 +147,7 @@ export const CenterScore = ({ score }) => {
                     {Number(score || 0).toFixed(2)}
                 </div>
 
-                <div style={{ color: '#eab308', fontWeight: 'bold', marginTop: '2%', textShadow: '2px 2px 4px rgba(0,0,0,0.5)', fontSize: '2rem' }}>
+                <div style={{ color: '#eab308', fontWeight: 'bold', marginTop: '2%', textShadow: '2px 2px 4px rgba(0,0,0,0.5)', fontSize: '2em' }}>
                     点
                 </div>
             </div>

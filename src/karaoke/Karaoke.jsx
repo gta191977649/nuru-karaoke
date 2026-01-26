@@ -1,30 +1,23 @@
 import { useState, useCallback } from 'react'
 import SingingPage from './pages/SingingPage.jsx'
 import ResultsPage from './pages/ResultsPage.jsx'
+import { usePlayerScoreStore } from '../state/playerScoreStore.js'
 
 function Karaoke() {
   const [view, setView] = useState('singing') // 'singing' | 'results'
-  const [resultsData, setResultsData] = useState(null)
+  const resetPlayerScore = usePlayerScoreStore((store) => store.resetPlayerScore)
 
   const handleFinish = useCallback((data) => {
-    setResultsData(data)
     setView('results')
   }, [])
 
   const handleNext = useCallback(() => {
     setView('singing')
-    setResultsData(null)
-  }, [])
+    resetPlayerScore()
+  }, [resetPlayerScore])
 
-  if (view === 'results' && resultsData) {
-    return (
-      <ResultsPage
-        score={resultsData.score}
-        techniques={resultsData.techniques}
-        songInfo={resultsData.songInfo}
-        onNext={handleNext}
-      />
-    )
+  if (view === 'results') {
+    return <ResultsPage onNext={handleNext} />
   }
 
   return <SingingPage onFinish={handleFinish} />
