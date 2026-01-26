@@ -4,11 +4,15 @@ import { LiquidTube } from './components/LiquidTube'
 import { CenterScore } from './components/CenterScore'
 import { SongInfo } from './components/SongInfo'
 import { BottomPanel } from './components/BottomPanel'
+import { usePlayerScoreStore } from '../../state/playerScoreStore.js'
 
 // Importing icons for components if needed, but components likely handle their own or use text/emoji for now.
 import { Play, Pause } from 'lucide-react'
 
 function ResultsPage({ score, techniques, songInfo, onNext }) {
+    const finalScore = usePlayerScoreStore((store) => store.finalScore)
+    const techniqueCounts = usePlayerScoreStore((store) => store.techniqueCounts)
+    const storedSongInfo = usePlayerScoreStore((store) => store.songInfo)
 
     // Mock Analysis Data (since we don't have real analytics for these yet)
     // In the future this should come from the backend/analysis engine
@@ -23,7 +27,10 @@ function ResultsPage({ score, techniques, songInfo, onNext }) {
     // While we don't have detailed breakdown, we can simulate "filled" tubes based on the total score ratio
     // or just leave them empty/random for now if that's preferred.
     // Let's approximate based on the total score percentage to make it look alive.
-    const scoreRatio = (Number(score) || 0) / 100;
+    const resolvedScore = Number.isFinite(score) ? score : finalScore
+    const resolvedTechniques = techniques || techniqueCounts
+    const resolvedSongInfo = songInfo || storedSongInfo
+    const scoreRatio = (Number(resolvedScore) || 0) / 100;
 
     return (
         <div className="resultsPageNew">
@@ -64,14 +71,14 @@ function ResultsPage({ score, techniques, songInfo, onNext }) {
 
                     {/* Center: Score */}
                     <div style={{ width: '34%', display: 'flex', justifyContent: 'center', alignItems: 'center', height: '100%', position: 'relative' }}>
-                        <CenterScore score={Number(score) || 0} />
+                        <CenterScore score={Number(resolvedScore) || 0} />
                     </div>
 
                     {/* Right: Song Info */}
                     <div style={{ width: '33%', display: 'flex', flexDirection: 'column', justifyContent: 'center', alignItems: 'flex-end', height: '100%', padding: '2% 0' }}>
                         <SongInfo data={{
-                            title: songInfo?.title || 'Unknown Title',
-                            artist: songInfo?.artist || 'Unknown Artist',
+                            title: resolvedSongInfo?.title || 'Unknown Title',
+                            artist: resolvedSongInfo?.artist || 'Unknown Artist',
                             avgScore: 74.123,
                             rank: 0,
                             calories: 12.5 // Mock for now or calculate from song length
@@ -82,10 +89,10 @@ function ResultsPage({ score, techniques, songInfo, onNext }) {
                 {/* Bottom Panel */}
                 <div style={{ height: '22%', width: '100%', flexShrink: 0 }}>
                     <BottomPanel counts={{
-                        kobushi: techniques?.kobushi || 0,
-                        fall: techniques?.glissdown || 0,
-                        shakuri: techniques?.glissup || 0,
-                        vibrato: techniques?.vibrato || 0
+                        kobushi: resolvedTechniques?.kobushi || 0,
+                        fall: resolvedTechniques?.glissdown || 0,
+                        shakuri: resolvedTechniques?.glissup || 0,
+                        vibrato: resolvedTechniques?.vibrato || 0
                     }} />
                 </div>
 
