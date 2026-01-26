@@ -1,5 +1,10 @@
 const PLAYER_CONFIG = {
   stopFadeMs: 3000,
+  autoAdvanceOnFinish: false,
 }
 
-export { PLAYER_CONFIG }
+const UI_CONFIG = {
+  karaokeTransitionMs: 1000,
+}
+
+export { PLAYER_CONFIG, UI_CONFIG }

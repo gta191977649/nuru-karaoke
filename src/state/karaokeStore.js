@@ -41,6 +41,7 @@ const initialUiState = {
   activeLyricIndex: -1,
   karaokeProgress: 0,
   lastIntroMidiUrl: '',
+  karaokeView: 'singing',
 }
 
 const useKaraokeStore = create((set) => ({
@@ -60,6 +61,7 @@ const useKaraokeStore = create((set) => ({
       karaokeProgress: Number.isFinite(patch?.karaokeProgress) ? patch.karaokeProgress : 0,
     }),
   setLastIntroMidiUrl: (value) => set({ lastIntroMidiUrl: value || '' }),
+  setKaraokeView: (view) => set({ karaokeView: view === 'results' ? 'results' : 'singing' }),
   resetLyrics: () =>
     set({
       lrcName: '',

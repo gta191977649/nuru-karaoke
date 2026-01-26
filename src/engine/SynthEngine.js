@@ -418,9 +418,11 @@ class SynthEngine {
 
         if (seq.isFinished && !this._prevFinished) {
           this._prevFinished = true
-          this._advanceQueueIfNeeded().catch(() => {
-            // ignore
-          })
+          if (PLAYER_CONFIG.autoAdvanceOnFinish) {
+            this._advanceQueueIfNeeded().catch(() => {
+              // ignore
+            })
+          }
         }
         if (!seq.isFinished) this._prevFinished = false
       }
