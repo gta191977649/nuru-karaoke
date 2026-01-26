@@ -12,7 +12,8 @@
  */
 
 // Signatures inside SMF SysEx payload (SMF F0 event data bytes typically exclude leading F0)
-const XG_ON_PAYLOAD = [0x43, 0x10, 0x4C, 0x00, 0x00, 0x7E, 0x00]
+// XG device ID is 0x1n (0x10..0x1F), so accept any device id.
+const XG_ON_PAYLOAD = [0x43, null, 0x4C, 0x00, 0x00, 0x7E, 0x00]
 const GM2_RESET_PAYLOAD = [0x7E, 0x7F, 0x09, 0x03]
 const GM_RESET_PAYLOAD = [0x7E, 0x7F, 0x09, 0x01]
 
@@ -38,6 +39,14 @@ function matchPattern(data, pattern) {
 
 function pushOnce(arr, s) {
     if (!arr.includes(s)) arr.push(s)
+}
+
+function normalizeSysexPayload(data) {
+    if (!data || data.length === 0) return data
+    let payload = data
+    if (payload[0] === 0xF0) payload = payload.slice(1)
+    if (payload[payload.length - 1] === 0xF7) payload = payload.slice(0, -1)
+    return payload
 }
 
 function scanMidiForSysex(buffer) {
@@ -129,29 +138,30 @@ function scanMidiForSysex(buffer) {
                 // SysEx: F0 or F7 continuation
                 const len = readVarInt()
                 const sysexData = new Uint8Array(buffer, offset, Math.min(len, end - offset))
+                const payload = normalizeSysexPayload(sysexData)
 
                 // Core standard checks
-                if (matchPattern(sysexData, XG_ON_PAYLOAD)) {
+                if (matchPattern(payload, XG_ON_PAYLOAD)) {
                     result.xg = true
                     pushOnce(result.reasons, 'XG: System On SysEx')
-                } else if (matchPattern(sysexData, GM2_RESET_PAYLOAD)) {
+                } else if (matchPattern(payload, GM2_RESET_PAYLOAD)) {
                     result.gm2 = true
                     pushOnce(result.reasons, 'GM2: Reset SysEx')
-                } else if (matchPattern(sysexData, GM_RESET_PAYLOAD)) {
+                } else if (matchPattern(payload, GM_RESET_PAYLOAD)) {
                     result.gm = true
                     pushOnce(result.reasons, 'GM: Reset SysEx')
-                } else if (matchPattern(sysexData, GS_RESET_PREFIX)) {
+                } else if (matchPattern(payload, GS_RESET_PREFIX)) {
                     result.gs = true
                     pushOnce(result.reasons, 'GS: Reset SysEx')
                 }
 
                 // GS/SC family deeper parse: Roland DT1 messages
-                if (isRolandDT1(sysexData)) {
+                if (isRolandDT1(payload)) {
                     result.sawRolandDT1 = true
                     result.gs = true // DT1 strongly implies GS-family intent
                     // bytes: [41 dev 42 12 addr1 addr2 addr3 ...]
-                    const addr1 = sysexData[4] ?? 0x00
-                    const addr2 = sysexData[5] ?? 0x00
+                    const addr1 = payload[4] ?? 0x00
+                    const addr2 = payload[5] ?? 0x00
 
 
                     // Strong SC-88-ish signal #1: 0x50 bank addresses (2nd module / extra parts)
@@ -169,7 +179,7 @@ function scanMidiForSysex(buffer) {
                     // "Any Roland DT1 with addr1 == 0x29 and dataLength >= 64 bytes"
                     // "OR total bytes written in DT1 packets with addr1 == 0x29 across the file >= 256"
                     if (addr1 === 0x29) {
-                        const dataLength = sysexData.length - 8 // approx data part
+                        const dataLength = payload.length - 8 // approx data part
                         result.total29 += dataLength
                         if (dataLength >= 64) {
                             result.sawLarge29 = true
