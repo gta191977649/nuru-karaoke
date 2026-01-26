@@ -253,7 +253,8 @@
     filter: drop-shadow(0 0 20px rgba(234, 179, 8, 1));
     letter-spacing: -0.05em;
     line-height: 1;
-    font-size: 5.5em;
+    /* font-size: 6rem; */
+    font-size: calc(4rem + 2cqw);
 }
 
 /* Song Info Component */
