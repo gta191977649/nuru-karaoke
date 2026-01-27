@@ -72,13 +72,14 @@ function SoundCanvasLcd({ levels, enabledChannels, height = 64, isPlaying = fals
             // Calculate layout
             // We have 16 channels. Each channel has a label at bottom, and bars above.
             // Width per channel
-            const chWidth = (width - (numChannels - 1) * 2) / numChannels // minimal gap
-            const barWidth = Math.max(4, chWidth - 4)
-            const xStart = (width - (chWidth * numChannels)) / 2
+            const channelGap = 2
+            const chWidth = (width - (numChannels - 1) * channelGap) / numChannels
+            const barWidth = Math.max(4, chWidth - 2)
+            const xStart = 0
 
             // Vertical layout
             const labelHeight = 12
-            const barsAreaHeight = visibleHeight - labelHeight - 4
+            const barsAreaHeight = visibleHeight - labelHeight
             const segHeight = (barsAreaHeight - (LCD_SEGMENTS - 1) * SEGMENT_GAP) / LCD_SEGMENTS
 
             ctx.font = 'bold 10px "VCR OSD Mono", "Courier New", monospace'
@@ -86,7 +87,7 @@ function SoundCanvasLcd({ levels, enabledChannels, height = 64, isPlaying = fals
             ctx.textBaseline = 'bottom'
 
             for (let i = 0; i < numChannels; i++) {
-                const cx = xStart + i * chWidth + chWidth / 2
+                const cx = xStart + i * (chWidth + channelGap) + chWidth / 2
                 const x = cx - barWidth / 2
 
                 const level = levels && levels[i] != null ? levels[i] : 0
@@ -112,7 +113,7 @@ function SoundCanvasLcd({ levels, enabledChannels, height = 64, isPlaying = fals
                     // y position:
                     // bottom segment starts at (visibleHeight - labelHeight - 4 - segHeight)
                     // s-th segment from bottom:
-                    const y = (visibleHeight - labelHeight - 4) - (s + 1) * segHeight - s * SEGMENT_GAP
+                    const y = (visibleHeight - labelHeight) - (s + 1) * segHeight - s * SEGMENT_GAP
 
                     ctx.fillStyle = s < activeCount ? cActive : cInactive
                     ctx.fillRect(x, y, barWidth, segHeight)

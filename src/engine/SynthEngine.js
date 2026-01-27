@@ -307,6 +307,8 @@ class SynthEngine {
     this._prevFinished = false
     this._isAdvancing = false
     this._isStopping = false
+    this._sequencerEventsBound = false
+    this._autoPlayOnNextSong = false
 
     this._midiMapper.setEnabled(DEFAULT_CONFIG.enableMIDIStandardMapping)
     this._midiMapper.onStateChange = (state) => {
@@ -352,6 +354,7 @@ class SynthEngine {
       this._context = context
       this._synth = synth
       this._seq = seq
+      this._bindSequencerEvents()
       this._setupMidiMapper()
 
       this._applyDefaultEffects()
@@ -481,6 +484,19 @@ class SynthEngine {
       send: (data) => {
         this._handleMidiOutputMessage(data)
       },
+    })
+  }
+
+  _bindSequencerEvents() {
+    if (!this._seq || this._sequencerEventsBound) return
+    this._sequencerEventsBound = true
+    this._seq.eventHandler.addEvent('songChange', 'sync-playback-state', () => {
+      const duration = this._seq?.duration || 0
+      this._setState({ currentTime: 0, duration })
+      if (this._autoPlayOnNextSong) {
+        this._autoPlayOnNextSong = false
+        this.play()
+      }
     })
   }
 
@@ -730,11 +746,13 @@ class SynthEngine {
   async loadMidiFromUrl(url, options = {}) {
     await this.ensureInitialized()
     this.panic()
+    this._autoPlayOnNextSong = true
     // Buffer loading is needed for detection. Url load gets buffer later.
     // Ideally we should move buffer fetch earlier if we want early mapper creation?
     // Wait, loadFromUrl fetches buffer. We can update mapper AFTER fetch.
     this._resetChannelActivity()
     this._resetPolyphony()
+    this._setState({ isPlaying: false, currentTime: 0, duration: 0 })
     this._setState({ status: `Loading MIDI: ${url}` })
     const response = await fetch(url)
     if (!response.ok) throw new Error(`MIDI HTTP ${response.status}`)
@@ -761,8 +779,7 @@ class SynthEngine {
     })
     this._applyDefaultEffects()
 
-    const autoPlay = options.autoPlay !== false
-    if (autoPlay) this.play()
+    this._startClock()
 
     return buffer
   }
@@ -776,6 +793,8 @@ class SynthEngine {
 
     this._resetChannelActivity()
     this._resetPolyphony()
+    this._autoPlayOnNextSong = true
+    this._setState({ isPlaying: false, currentTime: 0, duration: 0 })
     const midiName = file.name
     this._seq.pause()
     this._seq.currentTime = 0
@@ -788,8 +807,7 @@ class SynthEngine {
     })
     this._applyDefaultEffects()
 
-    const autoPlay = options.autoPlay !== false
-    if (autoPlay) this.play()
+    this._startClock()
 
     return buffer
   }
