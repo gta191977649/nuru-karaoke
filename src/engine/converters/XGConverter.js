@@ -159,8 +159,8 @@ export function createXGConverter() {
                 state.bankMSB[ch] = val
 
                 // Dynamic Drum Switching
-                // XG: MSB 127 or 126 means Drum Mode
-                const isDrum = (val === 127 || val === 126)
+                // XG/GM2: MSB 127/126 (XG drums/SFX) or 120 (GM2 drums)
+                const isDrum = (val === 127 || val === 126 || val === 120)
                 if (state.drumChannels[ch] !== (isDrum ? 1 : 0)) {
                     state.drumChannels[ch] = isDrum ? 1 : 0
                     if (process.onStateChange) process.onStateChange(process.getState())

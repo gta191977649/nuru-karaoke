@@ -1,7 +1,7 @@
 import { Sequencer, WorkletSynthesizer } from 'spessasynth_lib'
 import processorUrl from 'spessasynth_lib/dist/spessasynth_processor.min.js?url'
-import defaultSoundFontUrl from '../soundfont/sc55.sf2'
-//import defaultSoundFontUrl from '../soundfont/gm.sf2' //Default, Save Memory
+//import defaultSoundFontUrl from '../soundfont/sc55.sf2'
+import defaultSoundFontUrl from '../soundfont/gm.sf2' //Default, Save Memory
 import { createMidiMapper } from './MidiMapper.js'
 import { findActiveLyricIndex, parseLrc } from './lrc.js'
 import { getKaraokeAudioEngine } from './audioEngine.js'
@@ -301,6 +301,14 @@ class SynthEngine {
     this._channelInstrumentNames = Array.from({ length: 16 }, () => '—')
     this._channelPrograms = Array.from({ length: 16 }, () => ({ program: 0, bankMSB: 0, bankLSB: 0 }))
     this._drumChannelsApplied = new Uint8Array(16)
+    this._midiChannelState = Array.from({ length: 16 }, (_, i) => ({
+      channel: i,
+      isDrum: i === 9,
+      program: 0,
+      bankMSB: 0,
+      bankLSB: 0,
+      name: i === 9 ? 'Drums' : '—',
+    }))
     this._instrumentDirty = false
 
     this._raf = 0
@@ -323,11 +331,31 @@ class SynthEngine {
       smfKnifeConfigName: '',
       smfKnifeSource: '',
       smfKnifeDestination: '',
+      midiChannels: this._cloneMidiChannelState(),
     })
   }
 
   _setState(patch) {
     setKaraokeStoreState(patch)
+  }
+
+  _cloneMidiChannelState() {
+    return this._midiChannelState.map((entry) => ({ ...entry }))
+  }
+
+  _syncMidiChannelState(channel) {
+    if (!Number.isInteger(channel) || channel < 0 || channel > 15) return
+    const base = this._midiChannelState[channel]
+    const programState = this._channelPrograms[channel]
+    const name = this._channelInstrumentNames[channel] || '—'
+    this._midiChannelState[channel] = {
+      ...base,
+      program: programState.program,
+      bankMSB: programState.bankMSB,
+      bankLSB: programState.bankLSB,
+      name,
+    }
+    this._setState({ midiChannels: this._cloneMidiChannelState() })
   }
 
   async ensureInitialized() {
@@ -464,12 +492,18 @@ class SynthEngine {
         const next = isDrum ? 1 : 0
         if (this._drumChannelsApplied[channel] === next) return
         this._drumChannelsApplied[channel] = next
+        const entry = this._midiChannelState[channel]
+        if (entry) {
+          entry.isDrum = Boolean(isDrum)
+          if (entry.isDrum && !entry.name) entry.name = 'Drums'
+        }
         this._synth.setDrums(channel, Boolean(isDrum))
         const program = this._channelPrograms?.[channel]?.program ?? 0
         if (typeof this._synth.programChange === 'function') {
           this._synth.programChange(channel, program)
         }
       })
+      this._setState({ midiChannels: this._cloneMidiChannelState() })
     } catch (e) {
       console.warn('Failed to sync drums', e)
     }
@@ -514,6 +548,7 @@ class SynthEngine {
     }
     this._midiMapper.onStateChange = (state) => {
       this._setState({ midiMapState: state })
+      console.log(state)
       this._bgSyncDrums(state.drumChannels)
     }
     const newState = this._midiMapper.getState()
@@ -588,6 +623,7 @@ class SynthEngine {
         this._channelInstrumentNames[channel] = name
         this._instrumentDirty = true
       }
+      this._syncMidiChannelState(channel)
     }
   }
 
@@ -606,11 +642,20 @@ class SynthEngine {
     this._channelInstrumentNames.fill('—')
     this._channelPrograms.forEach(p => { p.program = 0; p.bankMSB = 0; p.bankLSB = 0 })
     this._instrumentDirty = true
+    this._midiChannelState = Array.from({ length: 16 }, (_, i) => ({
+      channel: i,
+      isDrum: i === 9,
+      program: 0,
+      bankMSB: 0,
+      bankLSB: 0,
+      name: i === 9 ? 'Drums' : '—',
+    }))
 
     this._setState({
       channelActivityVelocity: this._channelActivityVelocity.slice(),
       channelActivityTime: this._channelActivityTime.slice(),
-      channelInstrumentNames: this._channelInstrumentNames.slice()
+      channelInstrumentNames: this._channelInstrumentNames.slice(),
+      midiChannels: this._cloneMidiChannelState(),
     })
   }
 
@@ -699,6 +744,32 @@ class SynthEngine {
         if (sendProgram) sendProgram(ch, 0)
       }
     }
+    if (typeof synth.setDrums === 'function') {
+      for (let ch = 0; ch < 16; ch++) {
+        const isDrum = ch === 9
+        synth.setDrums(ch, isDrum)
+        const entry = this._midiChannelState?.[ch]
+        if (entry) {
+          entry.isDrum = isDrum
+          entry.name = isDrum ? 'Drums' : (this._channelInstrumentNames?.[ch] || '—')
+        }
+        this._drumChannelsApplied[ch] = isDrum ? 1 : 0
+      }
+      this._setState({ midiChannels: this._cloneMidiChannelState() })
+    }
+    if (typeof synth.stopAll === 'function') {
+      try {
+        synth.stopAll(true)
+      } catch {
+        // ignore
+      }
+    }
+    if (typeof synth.muteChannel === 'function') {
+      const enabled = getKaraokeStoreState().enabledChannels || []
+      for (let ch = 0; ch < 16; ch++) {
+        synth.muteChannel(ch, !enabled[ch])
+      }
+    }
     // Reset internal instrument tracking to default state
     this._channelPrograms.forEach((state, channel) => {
       state.program = 0
@@ -743,73 +814,46 @@ class SynthEngine {
     }
   }
 
-  async loadMidiFromUrl(url, options = {}) {
+  async loadMIDI({ buffer, midiName, midiUrl = '' }) {
     await this.ensureInitialized()
     this.panic()
     this._autoPlayOnNextSong = true
-    // Buffer loading is needed for detection. Url load gets buffer later.
-    // Ideally we should move buffer fetch earlier if we want early mapper creation?
-    // Wait, loadFromUrl fetches buffer. We can update mapper AFTER fetch.
+
+    this._rebuildMidiMapper(buffer)
+    this._setupMidiMapper()
+
     this._resetChannelActivity()
     this._resetPolyphony()
     this._setState({ isPlaying: false, currentTime: 0, duration: 0 })
-    this._setState({ status: `Loading MIDI: ${url}` })
-    const response = await fetch(url)
-    if (!response.ok) throw new Error(`MIDI HTTP ${response.status}`)
-    const buffer = await response.arrayBuffer()
-
-    // Re-create mapper with new buffer for detection
-    this._rebuildMidiMapper(buffer)
-    this._setupMidiMapper() // Re-attach if needed? Actually _seq.connectMIDIOutput is persistent, but the closure uses this._midiMapper ref?
-    // The loop in _handleMidiOutputMessage uses this._midiMapper, so updating the property is enough if the closure reads "this._midiMapper" dynamically.
-    // Yes: "this._xgMapper ? this._xgMapper(event)"
-
-    // Update State
-    console.log({ status: `Loading MIDI: ${url}` })
 
     this._seq.pause()
     this._seq.currentTime = 0
     this._synth.stopAll(true)
-    this._seq.loadNewSongList([{ binary: buffer, fileName: url.split('/').pop() }])
-    const midiName = url.split('/').pop() || url
-    this._setState({ midiUrl: url, midiName, status: `MIDI loaded: ${midiName}` })
+    this._seq.loadNewSongList([{ binary: buffer, fileName: midiName }])
+    this._setState({ midiUrl, midiName, status: `MIDI loaded: ${midiName}` })
 
     this._updateChannelInstrumentNames().catch(() => {
       // ignore
     })
     this._applyDefaultEffects()
-
     this._startClock()
 
     return buffer
   }
 
+  async loadMidiFromUrl(url, options = {}) {
+    this._setState({ status: `Loading MIDI: ${url}` })
+    const response = await fetch(url)
+    if (!response.ok) throw new Error(`MIDI HTTP ${response.status}`)
+    const buffer = await response.arrayBuffer()
+    const midiName = url.split('/').pop() || url
+    return this.loadMIDI({ buffer, midiName, midiUrl: url })
+  }
+
   async loadMidiFromFile(file, options = {}) {
-    await this.ensureInitialized()
-    this.panic()
     const buffer = await file.arrayBuffer()
-
-    this._rebuildMidiMapper(buffer)
-
-    this._resetChannelActivity()
-    this._resetPolyphony()
-    this._autoPlayOnNextSong = true
-    this._setState({ isPlaying: false, currentTime: 0, duration: 0 })
     const midiName = file.name
-    this._seq.pause()
-    this._seq.currentTime = 0
-    this._synth.stopAll(true)
-    this._seq.loadNewSongList([{ binary: buffer, fileName: midiName }])
-    this._setState({ midiUrl: '', midiName, status: `MIDI loaded: ${midiName}` })
-
-    this._updateChannelInstrumentNames().catch(() => {
-      // ignore
-    })
-    this._applyDefaultEffects()
-
-    this._startClock()
-
-    return buffer
+    return this.loadMIDI({ buffer, midiName, midiUrl: '' })
   }
 
   setPendingSong(song) {
