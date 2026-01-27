@@ -364,6 +364,30 @@ export function detectDrumChannels(buffer) {
                     const sysexData = new Uint8Array(buffer, offset, Math.min(len, end - offset))
                     const payload = normalizeSysexPayload(sysexData)
 
+                    // Yamaha XG Drum Setup (Multi Part / Part Mode)
+                    // Payload: 43 10 4C 08 nn 07 xx
+                    if (payload?.length >= 7 &&
+                        payload[0] === 0x43 &&
+                        payload[1] === 0x10 &&
+                        payload[2] === 0x4C &&
+                        payload[3] === 0x08 &&
+                        payload[5] === 0x07) {
+                        const part = payload[4]
+                        const mode = payload[6]
+                        if (part >= 0x00 && part <= 0x0F) {
+                            const ch = part
+                            const isDrum = mode !== 0x00
+                            drumChannels[ch] = isDrum ? 1 : 0
+                            if (isDrum && ch !== 9) {
+                                console.log('[XG Drum]', {
+                                    channel: ch + 1,
+                                    mode,
+                                    sysex: formatSysexHex(sysexData),
+                                })
+                            }
+                        }
+                    }
+
                     if (payload?.length >= 8 &&
                         payload[0] === 0x41 &&
                         payload[2] === 0x42 &&
@@ -397,7 +421,7 @@ export function detectDrumChannels(buffer) {
                     const val = view.getUint8(offset); offset++
                     if (cc === 0x00) {
                         lastCC0ByChan[channel] = val
-                        if (val === 126 || val === 127) drumChannels[channel] = 1
+                        if (val === 120 || val === 126 || val === 127) drumChannels[channel] = 1
                     }
                     continue
                 }

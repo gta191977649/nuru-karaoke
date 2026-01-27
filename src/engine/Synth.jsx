@@ -753,7 +753,7 @@ function Synth({ onNavigateHome }) {
               Detected by: {state.midiMapState?.detectedBy || '—'}
             </div>
             <div className="small text-muted">
-              Drum channels: {formatChannelList(state.midiMapState?.drumChannels)}
+              Drum channels: {formatChannelList(state.midiChannels?.map((ch) => ch?.isDrum))}
             </div>
             <div className="small text-muted">
               Brush channels: {formatChannelList(state.midiMapState?.brushChannels)}
