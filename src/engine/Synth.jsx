@@ -720,6 +720,9 @@ function Synth({ onNavigateHome }) {
               Detected Standard: {state.midiMapState?.detectedStandard || 'unknown'}
             </div>
             <div className="small text-muted">
+              Detected Module: {state.midiMapState?.detectedModule || '—'}
+            </div>
+            <div className="small text-muted">
               Active Config: {state.midiMapState?.configName || 'None'}
             </div>
             <div className="small text-muted">
