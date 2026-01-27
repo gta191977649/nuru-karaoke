@@ -1598,6 +1598,23 @@
   color: rgba(80, 45, 0, 0.85);
 }
 
+.sc-lcd__metaMarks {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.sc-lcd__metaIcon {
+  width: 28px;
+  height: 18px;
+  filter: brightness(0);
+}
+
+.sc-lcd__metaIcon--sc {
+  width: 150px;
+  height: 18px;
+}
+
 .sc-lcd__metaValue {
   font-variant-numeric: tabular-nums;
   letter-spacing: 0.12em;
