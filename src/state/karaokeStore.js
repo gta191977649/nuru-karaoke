@@ -11,6 +11,7 @@ const initialEngineState = {
   duration: 0,
   reverbGain: 1.5,
   chorusGain: 1.2,
+  enableMIDIStandardMapping: true,
   transposition: 0,
   queue: [],
   queueIndex: -1,
@@ -22,6 +23,9 @@ const initialEngineState = {
   polyphonyCount: 0,
   xgDrumMapEnabled: true,
   xgPreferGsPlayback: true,
+  smfKnifeConfigName: '',
+  smfKnifeSource: '',
+  smfKnifeDestination: '',
   xgDrumMapState: {
     globalMode: 'unknown',
     detectedBy: null,

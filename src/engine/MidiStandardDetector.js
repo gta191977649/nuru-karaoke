@@ -11,6 +11,14 @@
  * 3) Optional/weak: CC32 map select values 2/3/4 when CC0==0 (SC-88 map etc)
  */
 
+export const MIDI_STANDARDS = {
+    XG: 'XG',
+    GS: 'GS',
+    GM: 'GM',
+    GM2: 'GM2',
+    SMF: 'SMF',
+}
+
 // Signatures inside SMF SysEx payload (SMF F0 event data bytes typically exclude leading F0)
 // XG device ID is 0x1n (0x10..0x1F), so accept any device id.
 const XG_ON_PAYLOAD = [0x43, null, 0x4C, 0x00, 0x00, 0x7E, 0x00]
@@ -49,6 +57,23 @@ function normalizeSysexPayload(data) {
     return payload
 }
 
+function mapGsPartToChannel(addr1, addr2) {
+    if (addr1 !== 0x40 && addr1 !== 0x50) return -1
+    if ((addr2 & 0xF0) !== 0x10) return -1
+    let ch = -1
+    if (addr2 === 0x10) ch = 9
+    else if (addr2 >= 0x11 && addr2 <= 0x19) ch = addr2 - 0x11
+    else if (addr2 >= 0x1A && addr2 <= 0x1F) ch = (addr2 - 0x1A) + 10
+    if (ch < 0) return -1
+    if (addr1 === 0x50) ch += 16
+    return ch
+}
+
+function formatSysexHex(bytes) {
+    if (!bytes || !bytes.length) return ''
+    return Array.from(bytes, (b) => b.toString(16).padStart(2, '0').toUpperCase()).join(' ')
+}
+
 function scanMidiForSysex(buffer) {
     const view = new DataView(buffer)
     let offset = 0
@@ -78,6 +103,7 @@ function scanMidiForSysex(buffer) {
         // bank/map heuristic support
         lastCC0ByChan: new Uint8Array(16), // CC0 MSB
         sawMapSelectLike: false,
+        mapSelectValues: new Set(),
 
         // GS/SC analysis
         sawRolandDT1: false,
@@ -228,6 +254,7 @@ function scanMidiForSysex(buffer) {
                         const msb = result.lastCC0ByChan[channel]
                         if (msb === 0x00 && (val === 2 || val === 3 || val === 4)) {
                             result.sawMapSelectLike = true
+                            result.mapSelectValues.add(val)
                         }
                     }
                     break
@@ -272,40 +299,169 @@ function scanMidiForSysex(buffer) {
     return result
 }
 
+export function detectDrumChannels(buffer) {
+    const drumChannels = new Uint8Array(16)
+    drumChannels[9] = 1
+    if (!buffer) return drumChannels
+
+    try {
+        const view = new DataView(buffer)
+        let offset = 0
+        if (view.getUint32(offset) !== 0x4d546864) return drumChannels
+        offset += 4
+        const headerLen = view.getUint32(offset); offset += 4
+        const numTracks = view.getUint16(offset + 2)
+        offset += 6
+        offset += Math.max(0, headerLen - 6)
+
+        const lastCC0ByChan = new Uint8Array(16)
+
+        const readVarInt = () => {
+            let value = 0
+            let byte
+            do {
+                if (offset >= buffer.byteLength) return 0
+                byte = view.getUint8(offset++)
+                value = (value << 7) | (byte & 0x7f)
+            } while (byte & 0x80)
+            return value >>> 0
+        }
+
+        for (let t = 0; t < numTracks; t++) {
+            if (offset + 8 > buffer.byteLength) break
+            if (view.getUint32(offset) !== 0x4d54726b) break
+            offset += 4
+            const trackLen = view.getUint32(offset); offset += 4
+            const end = Math.min(buffer.byteLength, offset + trackLen)
+
+            let runningStatus = 0
+
+            while (offset < end) {
+                readVarInt()
+                if (offset >= end) break
+
+                let status = view.getUint8(offset)
+                if (status & 0x80) {
+                    offset++
+                    runningStatus = status
+                } else {
+                    status = runningStatus
+                }
+
+                const type = status & 0xf0
+                const channel = status & 0x0f
+
+                if (status === 0xff) {
+                    if (offset >= end) break
+                    offset++
+                    const len = readVarInt()
+                    offset = Math.min(end, offset + len)
+                    continue
+                }
+
+                if (status === 0xf0 || status === 0xf7) {
+                    const len = readVarInt()
+                    const sysexData = new Uint8Array(buffer, offset, Math.min(len, end - offset))
+                    const payload = normalizeSysexPayload(sysexData)
+
+                    if (payload?.length >= 8 &&
+                        payload[0] === 0x41 &&
+                        payload[2] === 0x42 &&
+                        payload[3] === 0x12) {
+                        const addr1 = payload[4]
+                        const addr2 = payload[5]
+                        const addr3 = payload[6]
+                        const value = payload[7]
+                        if ((addr1 === 0x40 || addr1 === 0x50) && addr3 === 0x15) {
+                            const ch = mapGsPartToChannel(addr1, addr2)
+                            if (ch >= 0 && ch <= 15) {
+                                const isDrum = value !== 0
+                                drumChannels[ch] = isDrum ? 1 : 0
+                                if (isDrum && ch !== 9) {
+                                    console.log('[GS Drum2]', {
+                                        channel: ch + 1,
+                                        sysex: formatSysexHex(sysexData),
+                                    })
+                                }
+                            }
+                        }
+                    }
+
+                    offset += len
+                    continue
+                }
+
+                if (type === 0xb0) {
+                    if (offset + 2 > end) { offset = end; break }
+                    const cc = view.getUint8(offset); offset++
+                    const val = view.getUint8(offset); offset++
+                    if (cc === 0x00) {
+                        lastCC0ByChan[channel] = val
+                        if (val === 126 || val === 127) drumChannels[channel] = 1
+                    }
+                    continue
+                }
+
+                if (type === 0x80 || type === 0x90 || type === 0xa0 || type === 0xe0) {
+                    offset += 2
+                    continue
+                }
+
+                if (type === 0xc0 || type === 0xd0) {
+                    offset += 1
+                    continue
+                }
+            }
+        }
+    } catch (e) {
+        return drumChannels
+    }
+
+    return drumChannels
+}
+
 export function detectMidiStandard(buffer) {
-    if (!buffer) return { standard: 'GM', gsVariant: null, reasons: ['No buffer'] }
+    if (!buffer) return { standard: MIDI_STANDARDS.SMF, gsVariant: null, reasons: ['No buffer'] }
 
     try {
         const scan = scanMidiForSysex(buffer)
-        if (!scan) return { standard: 'GM', gsVariant: null, reasons: ['Parse failed'] }
+        if (!scan) return { standard: MIDI_STANDARDS.SMF, gsVariant: null, reasons: ['Parse failed'] }
 
-        let standard = 'GM'
+        let standard = MIDI_STANDARDS.SMF
         let gsVariant = null
+        let gsModule = null
 
         if (scan.xg) {
-            standard = 'XG'
+            standard = MIDI_STANDARDS.XG
         } else if (scan.gs) {
-            standard = 'GS'
+            standard = MIDI_STANDARDS.GS
             gsVariant = scan.gs_sc88ish ? 'SC-88-ish' : 'Plain GS'
         } else if (scan.gm2) {
-            standard = 'GM2'
+            standard = MIDI_STANDARDS.GM2
         } else if (scan.gm) {
-            standard = 'GM'
+            standard = MIDI_STANDARDS.GM
         } else {
-            // fallback heuristic
-            if (scan.noteActivity > 0 && (scan.drumActivity / scan.noteActivity) > 0.2) {
-                standard = 'GM'
-                scan.reasons.push('Heuristic: strong Channel 10 activity')
+            standard = MIDI_STANDARDS.SMF
+            scan.reasons.push('No SysEx detected')
+        }
+
+        if (standard === MIDI_STANDARDS.GS) {
+            if (scan.mapSelectValues.has(3)) {
+                gsModule = '88PRO'
+            } else if (scan.mapSelectValues.has(2)) {
+                gsModule = '88'
+            } else if (scan.gs_sc88ish) {
+                gsModule = '88'
             } else {
-                standard = 'GM'
-                scan.reasons.push('Default fallback')
+                gsModule = '55'
             }
         }
 
         return {
             standard,
             gsVariant, // null unless GS
-            convertSC88: standard === 'GS' && gsVariant === 'SC-88-ish',
+            gsModule,
+            convertSC88: standard === MIDI_STANDARDS.GS && (gsModule === '88' || gsModule === '88PRO'),
             reasons: scan.reasons,
             debug: {
                 format: scan.format,
@@ -315,11 +471,12 @@ export function detectMidiStandard(buffer) {
                 sawEFXBlock: scan.sawEFXBlock,
                 sawLarge29: scan.sawLarge29,
                 total29: scan.total29,
-                sawMapSelectLike: scan.sawMapSelectLike
+                sawMapSelectLike: scan.sawMapSelectLike,
+                mapSelectValues: Array.from(scan.mapSelectValues)
             }
         }
     } catch (e) {
         console.warn('MIDI Detection failed', e)
-        return { standard: 'GM', gsVariant: null, reasons: ['Error: ' + e.message] }
+        return { standard: MIDI_STANDARDS.SMF, gsVariant: null, reasons: ['Error: ' + e.message] }
     }
 }
