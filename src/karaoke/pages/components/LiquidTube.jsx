@@ -10,7 +10,6 @@ export const LiquidTube = ({ label, score, maxScoreDisplay }) => {
             { size: 14, left: 18, duration: 3.2, delay: 0.1 + phase },
             { size: 10, left: 48, duration: 2.6, delay: 0.6 + phase },
             { size: 18, left: 70, duration: 3.8, delay: 0.2 + phase },
-            { size: 8, left: 32, duration: 2.2, delay: 1.0 + phase },
         ];
     }, []);
 
