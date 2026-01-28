@@ -32,11 +32,12 @@ function Karaoke({ onStop, resetKey, transitionPhase = 'idle' }) {
           transitionPhase === 'out' ? 'karaokeTransition--out' : '',
         ].join(' ')}
       />
-      {view === 'results' ? (
+      {/* {view === 'results' ? (
         <ResultsPage onNext={onStop} />
       ) : (
         <SingingPage onFinish={handleFinish} />
-      )}
+      )} */}
+      <ResultsPage onNext={onStop} />
     </div>
   )
 }

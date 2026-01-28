@@ -1,166 +1,12 @@
-import React, { useEffect, useRef } from 'react';
+import React, { useMemo } from 'react';
 
 export const CenterScore = ({ score }) => {
-    const canvasRef = useRef(null);
-
-    useEffect(() => {
-        const canvas = canvasRef.current;
-        if (!canvas) return;
-        const ctx = canvas.getContext('2d');
-        if (!ctx) return;
-
-        let animationFrameId;
-        let time = 0;
-        let lastFrameTime = 0;
-        const targetFrameMs = 1000 / 30;
-        const prefersReducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
-        const dpr = Math.min(window.devicePixelRatio || 1, 1.5);
-        const sizeRef = { width: 0, height: 0 };
-
-        const updateCanvasSize = (width, height) => {
-            sizeRef.width = width;
-            sizeRef.height = height;
-
-            const scaledWidth = Math.max(1, Math.floor(width * dpr));
-            const scaledHeight = Math.max(1, Math.floor(height * dpr));
-
-            if (canvas.width !== scaledWidth || canvas.height !== scaledHeight) {
-                canvas.width = scaledWidth;
-                canvas.height = scaledHeight;
-            }
-        };
-
-        const drawFrame = () => {
-            const width = sizeRef.width;
-            const height = sizeRef.height;
-            if (!width || !height) return;
-
-            ctx.clearRect(0, 0, canvas.width, canvas.height);
-            ctx.save();
-            ctx.scale(dpr, dpr);
-
-            // Calculate fill level based on score (0-100)
-            const fillRatio = Math.min(Math.max(score / 100, 0), 1);
-
-            // The surface level moves from bottom (height) to top (0)
-            const level = height - (fillRatio * height);
-
-            // Background Deep Fill
-            const bgGrad = ctx.createLinearGradient(0, level, 0, height);
-            bgGrad.addColorStop(0, 'rgba(10, 20, 60, 0.5)');
-            bgGrad.addColorStop(1, 'rgba(0, 10, 40, 0.8)');
-            ctx.fillStyle = bgGrad;
-            ctx.fillRect(0, level, width, height - level);
-
-            // Wave configurations
-            ctx.globalCompositeOperation = 'screen';
-
-            const waves = [
-                {
-                    // Deep Blue/Purple (Back)
-                    gradient: (ctx, y, h) => {
-                        const g = ctx.createLinearGradient(0, y - 50, 0, h);
-                        g.addColorStop(0, 'rgba(80, 0, 255, 0.4)');
-                        g.addColorStop(1, 'rgba(0, 0, 100, 0.1)');
-                        return g;
-                    },
-                    period: 0.008,
-                    speed: 0.015,
-                    amplitude: height * 0.08,
-                    offset: 0
-                },
-                {
-                    // Cyan/Blue (Middle)
-                    gradient: (ctx, y, h) => {
-                        const g = ctx.createLinearGradient(0, y - 50, 0, h);
-                        g.addColorStop(0, 'rgba(0, 150, 255, 0.4)');
-                        g.addColorStop(1, 'rgba(0, 50, 150, 0.1)');
-                        return g;
-                    },
-                    period: 0.012,
-                    speed: 0.025,
-                    amplitude: height * 0.06,
-                    offset: 2
-                },
-                {
-                    // Bright Cyan/White (Front/Surface)
-                    gradient: (ctx, y, h) => {
-                        const g = ctx.createLinearGradient(0, y - 30, 0, h);
-                        g.addColorStop(0, 'rgba(150, 255, 255, 0.5)');
-                        g.addColorStop(1, 'rgba(0, 200, 255, 0)');
-                        return g;
-                    },
-                    period: 0.015,
-                    speed: 0.035,
-                    amplitude: height * 0.04,
-                    offset: 4
-                }
-            ];
-
-            waves.forEach((wave) => {
-                ctx.beginPath();
-
-                // Draw the wave curve
-                for (let x = 0; x <= width; x += 5) {
-                    const y = level + Math.sin(x * wave.period + time * wave.speed + wave.offset) * wave.amplitude;
-                    if (x === 0) ctx.moveTo(x, y);
-                    else ctx.lineTo(x, y);
-                }
-
-                // Close shape at bottom
-                ctx.lineTo(width, height);
-                ctx.lineTo(0, height);
-                ctx.closePath();
-
-                // Fill with gradient
-                ctx.fillStyle = wave.gradient(ctx, level, height);
-                ctx.fill();
-            });
-
-            ctx.restore();
-
-            time += 1;
-        };
-
-        const container = canvas.parentElement;
-        let resizeObserver;
-        if (container && 'ResizeObserver' in window) {
-            resizeObserver = new ResizeObserver((entries) => {
-                entries.forEach((entry) => {
-                    const { width, height } = entry.contentRect;
-                    updateCanvasSize(width, height);
-                    if (prefersReducedMotion) drawFrame();
-                });
-            });
-            resizeObserver.observe(container);
-        } else {
-            const rect = canvas.getBoundingClientRect();
-            updateCanvasSize(rect.width, rect.height);
-        }
-
-        const render = (timestamp) => {
-            animationFrameId = requestAnimationFrame(render);
-            if (document.hidden) return;
-
-            if (!prefersReducedMotion && timestamp - lastFrameTime < targetFrameMs) {
-                return;
-            }
-
-            lastFrameTime = timestamp;
-            drawFrame();
-        };
-
-        if (prefersReducedMotion) {
-            drawFrame();
-        } else {
-            animationFrameId = requestAnimationFrame(render);
-        }
-
-        return () => {
-            if (animationFrameId) cancelAnimationFrame(animationFrameId);
-            if (resizeObserver) resizeObserver.disconnect();
-        };
+    const clampedScore = useMemo(() => {
+        const numericScore = Number(score) || 0;
+        return Math.min(Math.max(numericScore, 0), 100);
     }, [score]);
+
+    const fillRatio = clampedScore / 100;
 
     return (
         <div className="center-score-wrapper">
@@ -170,7 +16,11 @@ export const CenterScore = ({ score }) => {
 
             {/* Main Container */}
             <div className="cs-main-container">
-                <canvas ref={canvasRef} style={{ position: 'absolute', inset: 0, width: '100%', height: '100%' }} />
+                <div className="cs-liquid" style={{ '--fill': fillRatio }}>
+                    <div className="cs-liquid-level">
+
+                    </div>
+                </div>
 
                 {/* Subtle Grid overlay */}
                 <div style={{ position: 'absolute', inset: 0, backgroundImage: 'linear-gradient(rgba(0,255,255,0.05) 1px, transparent 1px), linear-gradient(90deg, rgba(0,255,255,0.05) 1px, transparent 1px)', backgroundSize: '20px 20px', pointerEvents: 'none', zIndex: 10 }}></div>
