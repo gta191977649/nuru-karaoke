@@ -11,22 +11,33 @@ export const CenterScore = ({ score }) => {
 
         let animationFrameId;
         let time = 0;
+        let lastFrameTime = 0;
+        const targetFrameMs = 1000 / 30;
+        const prefersReducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+        const dpr = Math.min(window.devicePixelRatio || 1, 1.5);
+        const sizeRef = { width: 0, height: 0 };
 
-        const render = () => {
-            const rect = canvas.getBoundingClientRect();
-            const dpr = window.devicePixelRatio || 1;
+        const updateCanvasSize = (width, height) => {
+            sizeRef.width = width;
+            sizeRef.height = height;
 
-            if (canvas.width !== rect.width * dpr || canvas.height !== rect.height * dpr) {
-                canvas.width = rect.width * dpr;
-                canvas.height = rect.height * dpr;
+            const scaledWidth = Math.max(1, Math.floor(width * dpr));
+            const scaledHeight = Math.max(1, Math.floor(height * dpr));
+
+            if (canvas.width !== scaledWidth || canvas.height !== scaledHeight) {
+                canvas.width = scaledWidth;
+                canvas.height = scaledHeight;
             }
+        };
+
+        const drawFrame = () => {
+            const width = sizeRef.width;
+            const height = sizeRef.height;
+            if (!width || !height) return;
 
             ctx.clearRect(0, 0, canvas.width, canvas.height);
             ctx.save();
             ctx.scale(dpr, dpr);
-
-            const width = rect.width;
-            const height = rect.height;
 
             // Calculate fill level based on score (0-100)
             const fillRatio = Math.min(Math.max(score / 100, 0), 1);
@@ -109,12 +120,46 @@ export const CenterScore = ({ score }) => {
             ctx.restore();
 
             time += 1;
-            animationFrameId = requestAnimationFrame(render);
         };
 
-        render();
+        const container = canvas.parentElement;
+        let resizeObserver;
+        if (container && 'ResizeObserver' in window) {
+            resizeObserver = new ResizeObserver((entries) => {
+                entries.forEach((entry) => {
+                    const { width, height } = entry.contentRect;
+                    updateCanvasSize(width, height);
+                    if (prefersReducedMotion) drawFrame();
+                });
+            });
+            resizeObserver.observe(container);
+        } else {
+            const rect = canvas.getBoundingClientRect();
+            updateCanvasSize(rect.width, rect.height);
+        }
 
-        return () => cancelAnimationFrame(animationFrameId);
+        const render = (timestamp) => {
+            animationFrameId = requestAnimationFrame(render);
+            if (document.hidden) return;
+
+            if (!prefersReducedMotion && timestamp - lastFrameTime < targetFrameMs) {
+                return;
+            }
+
+            lastFrameTime = timestamp;
+            drawFrame();
+        };
+
+        if (prefersReducedMotion) {
+            drawFrame();
+        } else {
+            animationFrameId = requestAnimationFrame(render);
+        }
+
+        return () => {
+            if (animationFrameId) cancelAnimationFrame(animationFrameId);
+            if (resizeObserver) resizeObserver.disconnect();
+        };
     }, [score]);
 
     return (

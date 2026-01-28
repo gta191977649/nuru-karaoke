@@ -1,8 +1,19 @@
-import React from 'react';
+import React, { useMemo } from 'react';
 
 export const LiquidTube = ({ label, score, maxScoreDisplay }) => {
     // Calculate the displayed score based on the max possible for this column
-    const displayValue = Math.floor((score / 100) * maxScoreDisplay);
+    const clampedScore = Math.max(0, Math.min(Number(score) || 0, 100));
+    const displayValue = Math.floor((clampedScore / 100) * maxScoreDisplay);
+    const bubbles = useMemo(() => (
+        Array.from({ length: 4 }).map(() => ({
+            size: Math.random() * 24 + 8,
+            left: Math.random() * 80 + 10,
+            duration: Math.random() * 3 + 2,
+            delay: Math.random() * 2,
+            borderOpacity: Math.random() * 0.3 + 0.1,
+            fillOpacity: Math.random() * 0.2 + 0.05,
+        }))
+    ), []);
 
     return (
         <div className="liquid-tube-container">
@@ -28,29 +39,29 @@ export const LiquidTube = ({ label, score, maxScoreDisplay }) => {
                 {/* The Liquid */}
                 <div
                     className="lt-liquid"
-                    style={{ height: `${score}%` }}
+                    style={{ transform: `scaleY(${clampedScore / 100})` }}
                 >
                     {/* Surface Tension/Top of Liquid */}
                     <div style={{ position: 'absolute', top: 0, width: '100%', backgroundColor: 'rgba(255,255,255,0.8)', filter: 'blur(2px)', transform: 'translateY(-50%) scaleX(1.25)', borderRadius: '100%', height: '3%', boxSizing: 'content-box', borderTop: '2px solid white' }}></div>
 
                     {/* Bubbles Animation */}
                     <div style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', overflow: 'hidden' }}>
-                        {[...Array(8)].map((_, i) => (
+                        {bubbles.map((bubble, i) => (
                             <div
                                 key={i}
                                 className="animate-bubble"
                                 style={{
                                     position: 'absolute',
                                     borderRadius: '9999px',
-                                    border: '1px solid rgba(255,255,255,0.4)',
-                                    backgroundColor: 'rgba(255,255,255,0.2)',
-                                    width: `${Math.random() * 30 + 10}%`,
+                                    border: `1px solid rgba(255,255,255,${bubble.borderOpacity})`,
+                                    backgroundColor: `rgba(255,255,255,${bubble.fillOpacity})`,
+                                    width: `${bubble.size}%`,
                                     height: 'auto',
                                     aspectRatio: '1/1',
-                                    left: `${Math.random() * 80 + 10}%`,
+                                    left: `${bubble.left}%`,
                                     bottom: '-20%',
-                                    animationDuration: `${Math.random() * 3 + 2}s`,
-                                    animationDelay: `${Math.random() * 2}s`
+                                    animationDuration: `${bubble.duration}s`,
+                                    animationDelay: `${bubble.delay}s`
                                 }}
                             />
                         ))}

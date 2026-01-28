@@ -165,9 +165,9 @@ const WaveformSVG = () => {
 
     return (
         <div style={{ width: '100%', height: '100%' }}>
-            <svg viewBox={`0 0 ${width} ${height}`} preserveAspectRatio="none" style={{ width: '100%', height: '100%', display: 'block' }}>
+            <svg viewBox={`0 0 ${width} ${height}`} preserveAspectRatio="none" shapeRendering="optimizeSpeed" style={{ width: '100%', height: '100%', display: 'block' }}>
                 <filter id="glow">
-                    <feGaussianBlur stdDeviation="2.5" result="coloredBlur" />
+                    <feGaussianBlur stdDeviation="1.2" result="coloredBlur" />
                     <feMerge>
                         <feMergeNode in="coloredBlur" />
                         <feMergeNode in="SourceGraphic" />
@@ -182,7 +182,7 @@ const WaveformSVG = () => {
                     d={pathD}
                     fill="none"
                     stroke="#22c55e"
-                    strokeWidth="2"
+                    strokeWidth="1.5"
                     filter="url(#glow)"
                 >
                     {/* Animate transform from 0 to -period to create endless left scroll */}
@@ -221,7 +221,7 @@ const RhythmBar = ({ index }) => {
             boxShadow: `0 0 5px ${shadow}`,
             animationDuration: `${duration}s`,
             animationDelay: `${delay}s`,
-            height: '10%' // start height
+            transform: 'scaleY(0.1)'
         };
     }, [index]);
 
@@ -231,8 +231,10 @@ const RhythmBar = ({ index }) => {
                 className="animate-rhythm"
                 style={{
                     width: '100%',
+                    height: '100%',
                     borderTopLeftRadius: '0.125rem',
                     borderTopRightRadius: '0.125rem',
+                    transformOrigin: 'bottom',
                     ...style
                 }}
             />

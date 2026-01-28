@@ -179,10 +179,13 @@
     position: absolute;
     bottom: 0;
     width: 100%;
+    height: 100%;
     background: linear-gradient(to top, #a16207, #facc15, #fef08a);
     /* yellow-700 -> 400 -> 200 */
     box-shadow: 0 0 30px rgba(234, 179, 8, 0.8);
-    transition: height 2s ease-out;
+    transform-origin: bottom;
+    transition: transform 2s ease-out;
+    will-change: transform;
 }
 
 .lt-score-box {
@@ -420,6 +423,7 @@
     animation-name: bubble;
     animation-timing-function: linear;
     animation-iteration-count: infinite;
+    will-change: transform, opacity;
 }
 
 .animate-pulse-flame {
@@ -442,11 +446,11 @@
 
     0%,
     100% {
-        height: 10%;
+        transform: scaleY(0.1);
     }
 
     50% {
-        height: 90%;
+        transform: scaleY(0.9);
     }
 }
 
@@ -454,4 +458,18 @@
     animation-name: rhythmBounce;
     animation-timing-function: ease-in-out;
     animation-iteration-count: infinite;
+    transform-origin: bottom;
+    will-change: transform;
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .animate-bubble,
+    .animate-rhythm,
+    .animate-pulse-flame {
+        animation: none !important;
+    }
+
+    .lt-liquid {
+        transition: none;
+    }
 }
