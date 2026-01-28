@@ -169,9 +169,9 @@
     border-radius: 9999px;
     border: 3px solid #94a3b8;
     /* slate-400 */
-    box-shadow: inset 0 0 15px rgba(0, 0, 0, 0.8);
+    box-shadow: inset 0 0 10px rgba(0, 0, 0, 0.7);
     overflow: hidden;
-    backdrop-filter: blur(4px);
+    backdrop-filter: blur(2px);
     min-height: 0;
 }
 
@@ -190,7 +190,7 @@
     inset: 0;
     background: linear-gradient(to top, #a16207, #facc15, #fef08a);
     /* yellow-700 -> 400 -> 200 */
-    box-shadow: 0 0 30px rgba(234, 179, 8, 0.8);
+    box-shadow: 0 0 16px rgba(234, 179, 8, 0.6);
     transform-origin: bottom;
     transform: scaleY(var(--fill));
     transition: transform 2s ease-out;
@@ -230,7 +230,7 @@
     border-radius: 9999px;
     border: 4px solid #22d3ee;
     /* cyan-400 */
-    box-shadow: 0 0 20px rgba(6, 182, 212, 0.8);
+    box-shadow: 0 0 12px rgba(6, 182, 212, 0.6);
 }
 
 .cs-inner-ring {
@@ -351,11 +351,11 @@
     /* yellow-100 -> 400 -> orange-500 */
     -webkit-background-clip: text;
     background-clip: text;
-    filter: drop-shadow(0 0 20px rgba(234, 179, 8, 1));
+    filter: drop-shadow(0 0 10px rgba(234, 179, 8, 0.8));
     letter-spacing: -0.05em;
     line-height: 1;
     /* Scaled large font */
-    font-size: 6em;
+    font-size: 5.5em;
 }
 
 /* Song Info Component */
@@ -497,9 +497,8 @@
 /* Animations */
 @keyframes bubble {
     0% {
-        transform: translateY(0) scale(1);
+        transform: translateX(-50%) translateY(0) scale(1);
         opacity: 0.2;
-        bottom: 0%;
     }
 
     20% {
@@ -507,9 +506,8 @@
     }
 
     100% {
-        transform: translateY(-10%) scale(1.05);
+        transform: translateX(-50%) translateY(calc(-1 * var(--bubble-top))) scale(1.05);
         opacity: 0.1;
-        bottom: var(--bubble-top);
     }
 }
 
@@ -517,7 +515,7 @@
     animation-name: bubble;
     animation-timing-function: linear;
     animation-iteration-count: infinite;
-    will-change: transform, opacity, bottom;
+    will-change: transform, opacity;
 }
 
 .lt-bubbles {
@@ -532,18 +530,28 @@
 
 .lt-bubble {
     position: absolute;
-    border-radius: 9999px;
-    border: 1.5px solid rgba(255, 255, 255, 0.6);
-    background-color: rgba(255, 255, 255, 0.25);
+    left: var(--bubble-left);
+    bottom: 0%;
+    height: 100%;
+    width: 0;
+    transform: translateX(-50%);
+    z-index: 6;
+    filter: drop-shadow(0 0 2px rgba(255, 255, 255, 0.35));
+    animation-duration: var(--bubble-duration);
+    animation-delay: var(--bubble-delay);
+}
+
+.lt-bubble::before {
+    content: "";
+    position: absolute;
     width: var(--bubble-size);
     height: auto;
     aspect-ratio: 1/1;
-    left: var(--bubble-left);
-    bottom: 0%;
-    z-index: 6;
-    filter: drop-shadow(0 0 4px rgba(255, 255, 255, 0.4));
-    animation-duration: var(--bubble-duration);
-    animation-delay: var(--bubble-delay);
+    left: 0;
+    bottom: 0;
+    border-radius: 9999px;
+    border: 1.5px solid rgba(255, 255, 255, 0.6);
+    background-color: rgba(255, 255, 255, 0.25);
 }
 
 .animate-pulse-flame {
@@ -562,18 +570,6 @@
     }
 }
 
-@keyframes rhythmBounce {
-
-    0%,
-    100% {
-        transform: scaleY(0.1);
-    }
-
-    50% {
-        transform: scaleY(0.9);
-    }
-}
-
 @keyframes cs-water-drift {
     0% {
         background-position: 0 0, 0 0;
@@ -584,18 +580,9 @@
     }
 }
 
-.animate-rhythm {
-    animation-name: rhythmBounce;
-    animation-timing-function: ease-in-out;
-    animation-iteration-count: infinite;
-    transform-origin: bottom;
-    will-change: transform;
-}
-
 @media (prefers-reduced-motion: reduce) {
 
     .animate-bubble,
-    .animate-rhythm,
     .animate-pulse-flame {
         animation: none !important;
     }
