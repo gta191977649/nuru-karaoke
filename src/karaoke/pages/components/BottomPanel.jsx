@@ -1,6 +1,6 @@
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useEffect, useRef, useState, useMemo } from 'react';
 
-export const BottomPanel = ({ counts }) => {
+export const BottomPanel = React.memo(({ counts }) => {
     return (
         // Silver Metallic Container
         <div className="bp-container">
@@ -131,7 +131,7 @@ export const BottomPanel = ({ counts }) => {
             </div>
         </div>
     );
-};
+});
 
 const getScrewStyle = (pos) => {
     switch (pos) {
@@ -186,17 +186,20 @@ const WaveformSVG = () => {
 
     // We need to generate enough points to cover width + one period
     // so that when we translate by -period, the end matches the original start visual.
-    let pathD = `M 0 ${centerY}`;
+    const pathD = useMemo(() => {
+        let path = `M 0 ${centerY}`;
 
-    // Generate extra length for the loop
-    for (let x = 0; x <= width + period; x += 1) {
-        const y = centerY +
-            Math.sin(x * 0.05) * amplitude +
-            Math.sin(x * 0.2) * (amplitude * 0.2); // Harmonic must also align with period. 
-        // 0.2 is 4 * 0.05, so harmonic period is 1/4 of main period. It aligns perfectly.
+        // Generate extra length for the loop
+        for (let x = 0; x <= width + period; x += 1) {
+            const y = centerY +
+                Math.sin(x * 0.05) * amplitude +
+                Math.sin(x * 0.2) * (amplitude * 0.2); // Harmonic must also align with period.
+            // 0.2 is 4 * 0.05, so harmonic period is 1/4 of main period. It aligns perfectly.
 
-        pathD += ` L ${x} ${y}`;
-    }
+            path += ` L ${x} ${y}`;
+        }
+        return path;
+    }, [width, period, centerY, amplitude]);
 
     return (
         <div style={{ width: '100%', height: '100%' }}>
