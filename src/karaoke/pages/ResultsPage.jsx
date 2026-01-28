@@ -52,7 +52,7 @@ function ResultsPage({ score, techniques, songInfo, onNext }) {
                             <span style={{ fontSize: '1.5em', fontStyle: 'italic', color: 'white' }}>D</span>
                         </div> */}
                         <h1 className="rp-header-logo-text font-digital">
-                            周波採点 <span className="font-digital" style={{ color: '#ee9c22ff', fontStyle: 'normal', fontSize: '0.5em', marginLeft: '5px' }}>DX</span>
+                            周波採点<span className="font-digital" style={{ color: '#ee9c22ff', fontStyle: 'normal', fontSize: '0.5em', marginLeft: '5px' }}>DX</span>
                         </h1>
                     </div>
                     <div style={{ textAlign: 'right', display: 'flex', flexDirection: 'column', alignItems: 'flex-end', justifyContent: 'center', height: '100%' }}>
