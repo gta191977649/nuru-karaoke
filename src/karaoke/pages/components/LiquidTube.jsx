@@ -4,16 +4,15 @@ export const LiquidTube = ({ label, score, maxScoreDisplay }) => {
     // Calculate the displayed score based on the max possible for this column
     const clampedScore = Math.max(0, Math.min(Number(score) || 0, 100));
     const displayValue = Math.floor((clampedScore / 100) * maxScoreDisplay);
-    const bubbles = useMemo(() => (
-        Array.from({ length: 4 }).map(() => ({
-            size: Math.random() * 24 + 8,
-            left: Math.random() * 80 + 10,
-            duration: Math.random() * 3 + 2,
-            delay: Math.random() * 2,
-            borderOpacity: Math.random() * 0.3 + 0.1,
-            fillOpacity: Math.random() * 0.2 + 0.05,
-        }))
-    ), []);
+    const bubbles = useMemo(() => {
+        const phase = Math.random() * 2.5;
+        return [
+            { size: 14, left: 18, duration: 3.2, delay: 0.1 + phase },
+            { size: 10, left: 48, duration: 2.6, delay: 0.6 + phase },
+            { size: 18, left: 70, duration: 3.8, delay: 0.2 + phase },
+            { size: 8, left: 32, duration: 2.2, delay: 1.0 + phase },
+        ];
+    }, []);
 
     return (
         <div className="liquid-tube-container">
@@ -39,33 +38,28 @@ export const LiquidTube = ({ label, score, maxScoreDisplay }) => {
                 {/* The Liquid */}
                 <div
                     className="lt-liquid"
-                    style={{ transform: `scaleY(${clampedScore / 100})` }}
+                    style={{ '--fill': clampedScore / 100 }}
                 >
+                    <div className="lt-liquid-fill" />
                     {/* Surface Tension/Top of Liquid */}
                     <div style={{ position: 'absolute', top: 0, width: '100%', backgroundColor: 'rgba(255,255,255,0.8)', filter: 'blur(2px)', transform: 'translateY(-50%) scaleX(1.25)', borderRadius: '100%', height: '3%', boxSizing: 'content-box', borderTop: '2px solid white' }}></div>
 
-                    {/* Bubbles Animation */}
-                    <div style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', overflow: 'hidden' }}>
+                    {/* Bubbles rising inside the liquid */}
+                    <div className="lt-bubbles">
                         {bubbles.map((bubble, i) => (
                             <div
                                 key={i}
-                                className="animate-bubble"
+                                className="lt-bubble animate-bubble"
                                 style={{
-                                    position: 'absolute',
-                                    borderRadius: '9999px',
-                                    border: `1px solid rgba(255,255,255,${bubble.borderOpacity})`,
-                                    backgroundColor: `rgba(255,255,255,${bubble.fillOpacity})`,
-                                    width: `${bubble.size}%`,
-                                    height: 'auto',
-                                    aspectRatio: '1/1',
-                                    left: `${bubble.left}%`,
-                                    bottom: '-20%',
-                                    animationDuration: `${bubble.duration}s`,
-                                    animationDelay: `${bubble.delay}s`
+                                    '--bubble-size': `${bubble.size}%`,
+                                    '--bubble-left': `${bubble.left}%`,
+                                    '--bubble-duration': `${bubble.duration}s`,
+                                    '--bubble-delay': `${bubble.delay}s`,
                                 }}
                             />
                         ))}
                     </div>
+
                 </div>
 
                 {/* Mechanical Bottom Base */}

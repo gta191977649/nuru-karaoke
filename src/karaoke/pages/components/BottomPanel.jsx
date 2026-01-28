@@ -79,20 +79,55 @@ export const BottomPanel = ({ counts }) => {
                         <span style={{ color: '#cbd5e1', fontWeight: 'bold', letterSpacing: '0.05em', fontSize: '0.9em' }}>リズム</span>
                     </div>
 
-                    {/* Spectrum Container */}
-                    <div style={{ flex: 1, display: 'flex', alignItems: 'flex-end', justifyContent: 'space-between', gap: '1px', padding: '0 3%', paddingBottom: '1%' }}>
-                        {Array.from({ length: 24 }).map((_, i) => (
-                            <RhythmBar key={i} index={i} />
-                        ))}
+                    {/* Spectrum Container - Histogram */}
+                    <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'space-evenly', padding: '0 5%', paddingBottom: '1%' }}>
+                        {[40, 65, 80, 100, 80, 65, 40].map((h, i) => {
+                            // Mock result: Highlight 2nd bar (index 1) for demonstration as per user image
+                            // In real app, this would be computed from counts/timing data
+                            const isSelected = i === 1;
+
+                            return (
+                                <div key={i} style={{
+                                    height: '80%',
+                                    width: '10%',
+                                    display: 'flex',
+                                    alignItems: 'center', // Center vertically relative to container? No, bottoms aligned or center? Image looks center aligned vertically but bars have different heights? No, they look like a distribution.
+                                    // Actually looking at the image, they are aligned to the vertical center of the area.
+                                    justifyContent: 'center'
+                                }}>
+                                    <div style={{
+                                        width: '100%',
+                                        height: `${h}%`,
+                                        backgroundColor: '#14b8a6', // Teal-500
+                                        borderRadius: '0.2em',
+                                        position: 'relative',
+                                        opacity: isSelected ? 1 : 0.6,
+                                        boxShadow: isSelected ? '0 0 10px rgba(45, 212, 191, 0.5)' : 'none'
+                                    }}>
+                                        {isSelected && (
+                                            <div style={{
+                                                position: 'absolute',
+                                                top: '-10%', bottom: '-10%', left: '-20%', right: '-20%',
+                                                border: '2px solid #ccfbf1', // Teal-100
+                                                borderRadius: '0.3em',
+                                                boxShadow: '0 0 8px rgba(20, 184, 166, 0.8)',
+                                                zIndex: 10
+                                            }} />
+                                        )}
+                                        {/* Inner gloss */}
+                                        <div style={{ width: '100%', height: '100%', background: 'linear-gradient(90deg, transparent 0%, rgba(255,255,255,0.2) 50%, transparent 100%)' }}></div>
+                                    </div>
+                                </div>
+                            )
+                        })}
                     </div>
 
                     {/* Bottom Labels */}
-                    <div style={{ display: 'flex', justifyContent: 'space-between', backgroundColor: 'rgba(15, 23, 42, 0.8)', borderTop: '1px solid #334155', padding: '1% 2%' }}>
-                        <span style={{ color: '#cbd5e1', fontWeight: 'bold', fontSize: '0.7em' }}>後ろノリ</span>
-                        <span style={{ color: '#cbd5e1', fontWeight: 'bold', fontSize: '0.7em' }}>前ノリ</span>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', padding: '1% 2%' }}>
+                        <span style={{ color: '#cbd5e1', fontWeight: 'bold', fontSize: '0.8em' }}>後ろノリ</span>
+                        <span style={{ color: '#cbd5e1', fontWeight: 'bold', fontSize: '0.8em' }}>前ノリ</span>
                     </div>
                 </div>
-
             </div>
         </div>
     );
@@ -196,48 +231,6 @@ const WaveformSVG = () => {
                     />
                 </path>
             </svg>
-        </div>
-    );
-};
-
-const RhythmBar = ({ index }) => {
-    // Generate random animation parameters once
-    const style = React.useMemo(() => {
-        const duration = 0.5 + Math.random() * 1.5; // Random duration between 0.5s and 2s
-        const delay = Math.random() * -2; // Random negative delay to start at different points
-
-        // Gradient Color Logic
-        let hue = 0;
-        if (index < 6) hue = 0 + (index * 5); // Red to Orange
-        else if (index < 12) hue = 60 + ((index - 6) * 10); // Yellow to Green
-        else if (index < 18) hue = 180 + ((index - 12) * 10); // Cyan to Blue
-        else hue = 280 + ((index - 18) * 10); // Purple to Pink
-
-        const color = `hsla(${hue}, 100%, 50%, 0.8)`;
-        const shadow = `hsla(${hue}, 100%, 50%, 0.5)`;
-
-        return {
-            backgroundColor: color,
-            boxShadow: `0 0 5px ${shadow}`,
-            animationDuration: `${duration}s`,
-            animationDelay: `${delay}s`,
-            transform: 'scaleY(0.1)'
-        };
-    }, [index]);
-
-    return (
-        <div style={{ width: '100%', display: 'flex', flexDirection: 'column', justifyContent: 'flex-end', height: '100%' }}>
-            <div
-                className="animate-rhythm"
-                style={{
-                    width: '100%',
-                    height: '100%',
-                    borderTopLeftRadius: '0.125rem',
-                    borderTopRightRadius: '0.125rem',
-                    transformOrigin: 'bottom',
-                    ...style
-                }}
-            />
         </div>
     );
 };
