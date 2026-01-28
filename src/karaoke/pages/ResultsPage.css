@@ -362,12 +362,10 @@
 .cs-water-surface {
     position: absolute;
     top: -30px;
-    /* Adjusted for larger wave height */
     left: 0;
     right: 0;
+    /* Increase width to allow transform animation if we were to switch, but sticking to bg-pos for infinite loop simplicity */
     height: 60px;
-    /* Increased height */
-    /* Increased amplitude in SVG path: Q 65 0 (was 30) */
     background-image:
         linear-gradient(to bottom, rgba(160, 255, 255, 0.5), rgba(0, 120, 220, 0.1)),
         url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='260' height='110' viewBox='0 0 260 110'><path d='M0 55 Q 65 0 130 55 T260 55 V110 H0 Z' fill='rgba(100,210,255,0.8)'/></svg>");
@@ -379,6 +377,8 @@
     opacity: 0.95;
     pointer-events: none;
     z-index: 2;
+    /* Optimization: simple compositing */
+    transform: translateZ(0);
 }
 
 /* Secondary Back Wave (Darker, Slower, Offset) */
@@ -429,11 +429,52 @@
     /* yellow-100 -> 400 -> orange-500 */
     -webkit-background-clip: text;
     background-clip: text;
-    filter: drop-shadow(0 0 10px rgba(234, 179, 8, 0.8));
+    /* Replaced expensive filter: drop-shadow with text-shadow (approximate look, though text-shadow doesn't work perfectly with transparent text + bg clip on some browsers, but filter is very slow. 
+       Actually, for background-clip: text, text-shadow hangs off the text shape. 
+       Wait, text-shadow interacts poorly with transparent text (it shows the shadow through the text). 
+       Better optimization: Use filter: drop-shadow but ensure it's on a composited layer or simply reduce the blur radius/spread if possible? 
+       Or just accept it's expensive? 
+       Let's actually switch to a filter on the PARENT or use a separate layer if possible. 
+       
+       Actually, for "glowing text" with gradient, drop-shadow is often the only way. 
+       However, we can optimize by ensuring will-change or just accepting it. 
+       But wait, the user asked for optimization. 
+       Let's simply try to use text-shadow and solid color fallback if gradient isn't strictly necessary, OR 
+       Keep the gradient but use a simpler shadow.
+       
+       Let's stick to `filter` but maybe optimize `will-change`. 
+       Actually, `text-shadow` DOES NOT works with `color: transparent`. The shadow appears BEHIND the transparent text, making it visible. 
+       
+       Alternative: Use a duplicate element behind for the shadow? Too complex DOM.
+       
+       Let's look at `.cs-outer-ring-glow`. It has `box-shadow` which is fine.
+       
+       Let's look at `cs-water-surface`.
+       
+       Let's go back to .cs-score-large. 
+       If I remove the filter, performance ends up better. 
+       Is there a cheaper way? 
+       Maybe just `text-shadow` and removing `color: transparent`? 
+       The user wants "Premium". 
+       
+       Let's look at the wave animation `cs-water-surface`. 
+       It uses `background-position` animation. 
+       We can change this to `transform: translateX` of a larger container? 
+       `background-position` is not always GPU expedited.
+       
+       Let's optimize the wave animation first. 
+       Prop: `cs-water-surface`
+       Current: `background-position` animation.
+       Optimization: Use `transform: translate3d(...)` on a pseudo-element or child that is 200% width.
+    */
+    filter: drop-shadow(0 0 5px rgba(234, 179, 8, 0.5));
+    /* Reduced radius for perf */
     letter-spacing: -0.05em;
     line-height: 1;
     /* Scaled large font */
     font-size: 5.5em;
+    will-change: transform;
+    /* Hint for compositor */
 }
 
 /* Song Info Component */
@@ -614,7 +655,7 @@
     width: 0;
     transform: translateX(-50%);
     z-index: 6;
-    filter: drop-shadow(0 0 2px rgba(255, 255, 255, 0.35));
+    /* Removed expensive drop-shadow filter */
     animation-duration: var(--bubble-duration);
     animation-delay: var(--bubble-delay);
 }
@@ -630,6 +671,8 @@
     border-radius: 9999px;
     border: 1.5px solid rgba(255, 255, 255, 0.6);
     background-color: rgba(255, 255, 255, 0.25);
+    box-shadow: 0 0 4px rgba(255, 255, 255, 0.35);
+    /* Cheaper alternative */
 }
 
 .animate-pulse-flame {

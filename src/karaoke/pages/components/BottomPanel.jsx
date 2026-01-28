@@ -201,25 +201,10 @@ const WaveformSVG = () => {
     return (
         <div style={{ width: '100%', height: '100%' }}>
             <svg viewBox={`0 0 ${width} ${height}`} preserveAspectRatio="none" shapeRendering="optimizeSpeed" style={{ width: '100%', height: '100%', display: 'block' }}>
-                <filter id="glow">
-                    <feGaussianBlur stdDeviation="1.2" result="coloredBlur" />
-                    <feMerge>
-                        <feMergeNode in="coloredBlur" />
-                        <feMergeNode in="SourceGraphic" />
-                    </feMerge>
-                </filter>
-
                 {/* Center Line */}
                 <line x1="0" y1={centerY} x2={width} y2={centerY} stroke="rgba(255, 255, 255, 0.2)" strokeWidth="1" />
 
-                {/* Wave Path */}
-                <path
-                    d={pathD}
-                    fill="none"
-                    stroke="#22c55e"
-                    strokeWidth="1.5"
-                    filter="url(#glow)"
-                >
+                <g>
                     {/* Animate transform from 0 to -period to create endless left scroll */}
                     <animateTransform
                         attributeName="transform"
@@ -229,7 +214,23 @@ const WaveformSVG = () => {
                         dur={animationDuration}
                         repeatCount="indefinite"
                     />
-                </path>
+
+                    {/* Glow Path (Thicker, Transparent) */}
+                    <path
+                        d={pathD}
+                        fill="none"
+                        stroke="rgba(34, 197, 94, 0.4)"
+                        strokeWidth="6"
+                    />
+
+                    {/* Core Path (Sharper, Bright) */}
+                    <path
+                        d={pathD}
+                        fill="none"
+                        stroke="#22c55e"
+                        strokeWidth="1.5"
+                    />
+                </g>
             </svg>
         </div>
     );
