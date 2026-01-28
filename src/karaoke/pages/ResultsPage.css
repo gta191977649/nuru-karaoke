@@ -61,7 +61,7 @@
     }
 
     100% {
-        background-position: 0 40px;
+        background-position: 0 35px;
         /* Must match background-size height */
     }
 }
