@@ -8,12 +8,13 @@
 import { detectMidiStandard, detectDrumChannels, MIDI_STANDARDS } from './MidiStandardDetector.js'
 import { createSmfKnifeConverter, parseSmfKnifeConfig } from './converters/SmfKnifeConverter.js'
 import xg80MkCfgText from './smf/xg/80MK.CFG?raw'
+import sc88pro88CfgText from './smf/88ish/PRO88.CFG?raw'
 import xg100MkCfgText from './smf/xg/10088.CFG?raw'
 import sc88MkCfgText from './smf/88ish/88MK.CFG?raw'
 import sc88ProMkCfgText from './smf/88ish/88PRO.CFG?raw'
 const STANDARD_MAPPINGS = {
     [MIDI_STANDARDS.XG]: { type: 'smfknife', name: '10088.CFG', text: xg100MkCfgText },
-    GS_88: { type: 'smfknife', name: '88MK.CFG', text: sc88MkCfgText },
+    GS_88: { type: 'smfknife', name: 'PRO88.CFG', text: sc88pro88CfgText },
     GS_88PRO: { type: 'smfknife', name: '88PRO.CFG', text: sc88ProMkCfgText },
     // GM/GM2: no mapping by default
 }

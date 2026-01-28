@@ -681,7 +681,7 @@ function Synth({ onNavigateHome }) {
                   disabled={!state.ready}
                   type="button"
                 >
-                  TEST
+                  DEMO
                 </Button>
               </Col>
               <Col xs={12} md="auto">
