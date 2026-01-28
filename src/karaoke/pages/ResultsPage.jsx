@@ -10,8 +10,8 @@ import { usePlayerScoreStore } from '../../state/playerScoreStore.js'
 import { Play, Pause } from 'lucide-react'
 
 function ResultsPage({ score, techniques, songInfo, onNext }) {
-    const finalScore = usePlayerScoreStore((store) => store.finalScore)
-    //const finalScore = 64.6
+    //const finalScore = usePlayerScoreStore((store) => store.finalScore)
+    const finalScore = 64.6
     const techniqueCounts = usePlayerScoreStore((store) => store.techniqueCounts)
     const storedSongInfo = usePlayerScoreStore((store) => store.songInfo)
 
@@ -32,6 +32,13 @@ function ResultsPage({ score, techniques, songInfo, onNext }) {
     const resolvedTechniques = techniques || techniqueCounts
     const resolvedSongInfo = songInfo || storedSongInfo
     const scoreRatio = (Number(resolvedScore) || 0) / 100;
+
+    const bottomPanelCounts = useMemo(() => ({
+        kobushi: resolvedTechniques?.kobushi || 0,
+        fall: resolvedTechniques?.glissdown || 0,
+        shakuri: resolvedTechniques?.glissup || 0,
+        vibrato: resolvedTechniques?.vibrato || 0
+    }), [resolvedTechniques]);
 
     return (
         <div className="resultsPageNew">
@@ -97,12 +104,7 @@ function ResultsPage({ score, techniques, songInfo, onNext }) {
 
                 {/* Bottom Panel */}
                 <div style={{ height: '22%', width: '100%', flexShrink: 0 }}>
-                    <BottomPanel counts={{
-                        kobushi: resolvedTechniques?.kobushi || 0,
-                        fall: resolvedTechniques?.glissdown || 0,
-                        shakuri: resolvedTechniques?.glissup || 0,
-                        vibrato: resolvedTechniques?.vibrato || 0
-                    }} />
+                    <BottomPanel counts={bottomPanelCounts} />
                 </div>
 
                 {/* Footer Controls */}
