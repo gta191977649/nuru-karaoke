@@ -40,7 +40,7 @@
     background-image:
         linear-gradient(rgba(6, 182, 212, 0.3) 1px, transparent 1px),
         linear-gradient(90deg, rgba(6, 182, 212, 0.3) 1px, transparent 1px);
-    background-size: 40px 40px;
+    background-size: 35px 35px;
     background-position: 0 0;
 
     /* 3D Transform */
@@ -61,7 +61,7 @@
     }
 
     100% {
-        background-position: 0 80px;
+        background-position: 0 40px;
         /* Must match background-size height */
     }
 }
@@ -80,6 +80,20 @@
     pointer-events: none;
 }
 
+/* Header gradient overlay for better text legibility */
+.tech-header-overlay {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 150px;
+    /* Adjust height to cover header area properly */
+    background: linear-gradient(to bottom, rgba(0, 0, 0, 0.9) 0%, rgba(0, 0, 0, 0) 100%);
+    z-index: 10;
+    /* Above grid but below content (content is z-index 2000 implied by parent, but let's check) */
+    pointer-events: none;
+}
+
 /* Optional: Subtle Vignette / Overlay to darken edges */
 .tech-vignette {
     position: absolute;
@@ -87,6 +101,7 @@
     background: radial-gradient(circle at 50% 50%, transparent 50%, rgba(0, 0, 0, 0.8) 100%);
     pointer-events: none;
 }
+
 
 /* Typography Utils */
 .font-digital {
@@ -179,7 +194,7 @@
     color: white;
     white-space: nowrap;
     line-height: 1;
-    font-size: 2em;
+    font-size: 3.5em;
     /* Scalling relative to container base */
     /* relative to container font size */
 }

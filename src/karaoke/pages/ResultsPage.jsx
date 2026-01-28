@@ -37,6 +37,7 @@ function ResultsPage({ score, techniques, songInfo, onNext }) {
         <div className="resultsPageNew">
             {/* Background Animation */}
             <div className="tech-grid-wrapper">
+                <div className="tech-header-overlay"></div>
                 <div className="tech-grid-floor"></div>
                 <div className="tech-horizon-glow"></div>
                 <div className="tech-vignette"></div>
