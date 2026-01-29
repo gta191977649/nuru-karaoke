@@ -14,8 +14,8 @@ import sc88MkCfgText from './smf/88ish/88MK.CFG?raw'
 import sc88ProMkCfgText from './smf/88ish/88PRO.CFG?raw'
 const STANDARD_MAPPINGS = {
     [MIDI_STANDARDS.XG]: { type: 'smfknife', name: '10088.CFG', text: xg100MkCfgText },
-    GS_88: { type: 'smfknife', name: 'PRO88.CFG', text: sc88pro88CfgText },
-    GS_88PRO: { type: 'smfknife', name: '88PRO.CFG', text: sc88ProMkCfgText },
+    // GS_88: { type: 'smfknife', name: 'PRO88MK55.CFG', text: sc88MkCfgText },
+    // GS_88PRO: { type: 'smfknife', name: '88PRO.CFG', text: sc88ProMkCfgText },
     // GM/GM2: no mapping by default
 }
 
