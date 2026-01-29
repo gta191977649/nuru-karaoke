@@ -170,7 +170,7 @@ function App({ onNavigate }) {
             >
               <Tab eventKey={SCREENS.home} title="曲を選ぶ" />
               <Tab eventKey={SCREENS.moreModes} title="採点" />
-              <Tab eventKey={SCREENS.ticket} title="🎤 うたスキ" />
+              <Tab eventKey={SCREENS.ticket} title="メンテナンス" />
               <Tab eventKey={SCREENS.singWithGamepad} title="遊ぶ♪" />
             </Tabs>
 
@@ -321,7 +321,7 @@ function App({ onNavigate }) {
               <Button className="wiiFooterAction wiiFooterBtn--blue" type="button">
                 音量/操作
               </Button>
-              
+
               <Button className="wiiFooterAction wiiFooterBtn--green" type="button" onClick={() => navigateScreen(SCREENS.queue)}>
                 予約確認 <span className="wiiFooterAction__count">({synth.queue.length}曲)</span>
               </Button>

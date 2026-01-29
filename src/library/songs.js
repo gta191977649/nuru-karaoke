@@ -146,6 +146,14 @@ const SONG_LIBRARY = [
     lrc: assetUrl(lrcAssetMap, 'marigold.lrc'),
     lrc_offset: 1200,
   },
+  {
+    id: 'guiji',
+    title: '轨迹',
+    artist: '周杰倫',
+    url: assetUrl(midiAssetMap, '轨迹.MID'),
+    lrc: assetUrl(lrcAssetMap, '轨迹.lrc'),
+    lrc_offset: 1400,
+  },
 ]
 
 export { SONG_LIBRARY }
