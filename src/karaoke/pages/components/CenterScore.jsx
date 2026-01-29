@@ -25,15 +25,7 @@ export const CenterScore = ({ score }) => {
                 </div>
 
 
-                <div className="cs-grid-overlay" style={{
-                    position: 'absolute',
-                    inset: 0,
-                    pointerEvents: 'none',
-                    zIndex: 4,
-                    backgroundImage: 'linear-gradient(rgba(255, 255, 255, 0.04) 1px, transparent 1px), linear-gradient(90deg, rgba(255, 255, 255, 0.2) 1px, transparent 1px)',
-                    backgroundSize: '24px 24px',
-                    mixBlendMode: 'screen'
-                }}></div>
+
             </div>
 
             {/* Content Container */}
