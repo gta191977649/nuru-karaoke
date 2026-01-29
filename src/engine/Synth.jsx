@@ -782,16 +782,16 @@ function Synth({ onNavigateHome }) {
                     style={midiMarkStyle(showSoundCanvas)}
                   />
                   <img
-                    src={xgLogo}
-                    alt="XG"
-                    className="sc-lcd__metaIcon"
-                    style={midiMarkStyle(isXgActive)}
-                  />
-                  <img
                     src={gsLogo}
                     alt="GS"
                     className="sc-lcd__metaIcon"
                     style={midiMarkStyle(isGsActive)}
+                  />
+                  <img
+                    src={xgLogo}
+                    alt="XG"
+                    className="sc-lcd__metaIcon"
+                    style={midiMarkStyle(isXgActive)}
                   />
                   <img
                     src={gmLogo}
