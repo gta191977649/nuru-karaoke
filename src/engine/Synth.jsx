@@ -128,7 +128,7 @@ function Synth({ onNavigateHome }) {
   const detectedModule = state.midiMapState?.detectedModule
   const showSoundCanvas = detectedModule === '55' || detectedModule === '88' || detectedModule === '88PRO'
   const midiMarkStyle = (isActive) => ({
-    opacity: isActive ? 0.75 : 0.18,
+    opacity: isActive ? 0.7 : 0.1,
     color: isActive ? MIDI_MARK_ACTIVE : MIDI_MARK_INACTIVE,
   })
   const [midiUrl, setMidiUrl] = useState('')
@@ -775,13 +775,12 @@ function Synth({ onNavigateHome }) {
               <div className="sc-lcd__meta">
                 <div className="sc-lcd__metaLabel">POLY:{state.polyphonyCount ?? 0}</div>
                 <div className="sc-lcd__metaMarks">
-                  {showSoundCanvas ? (
-                    <img
-                      src={scLogo}
-                      alt="Sound Canvas"
-                      className="sc-lcd__metaIcon sc-lcd__metaIcon--sc"
-                    />
-                  ) : null}
+                  <img
+                    src={scLogo}
+                    alt="Sound Canvas"
+                    className="sc-lcd__metaIcon sc-lcd__metaIcon--sc"
+                    style={midiMarkStyle(showSoundCanvas)}
+                  />
                   <img
                     src={xgLogo}
                     alt="XG"
