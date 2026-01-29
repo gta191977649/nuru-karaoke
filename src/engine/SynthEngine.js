@@ -1,7 +1,7 @@
 import { Sequencer, WorkletSynthesizer } from 'spessasynth_lib'
 import processorUrl from 'spessasynth_lib/dist/spessasynth_processor.min.js?url'
-import defaultSoundFontUrl from '../soundfont/sc55.sf2'
-//import defaultSoundFontUrl from '../soundfont/gm.sf2' //Default, Save Memory
+import defaultSoundFontUrl from '../soundfont/gm.sf2'
+//import defaultSoundFontUrl from '../soundfont/a320u.sf2'
 import { createMidiMapper } from './MidiMapper.js'
 import { findActiveLyricIndex, parseLrc } from './lrc.js'
 import { getKaraokeAudioEngine } from './audioEngine.js'
@@ -10,8 +10,8 @@ import { getKaraokeStoreState, setKaraokeStoreState } from '../state/karaokeStor
 
 const DEFAULT_CONFIG = {
   enableMIDIStandardMapping: true,
-  reverb: 1.5,
-  chorus: 1.3,
+  reverb: 1.15,
+  chorus: 1.1,
 }
 
 const MIDI_STATUS = {

@@ -3,6 +3,7 @@ import FindSongs from './FindSongs.jsx'
 import ComfirnSong from './ComfirnSong.jsx'
 import { setPendingSong } from '../engine/playerController.js'
 import ViewSelectedSong from './ViewSelectedSong.jsx'
+import logo from '../assets/logo.png'
 
 const SCREENS = {
   home: 'home',
@@ -99,7 +100,7 @@ function WiiHomeMain({ screen, onNavigate, onOpenKaraoke, karaokeTargetRef, main
             />
           </main>
         )
-        
+
       default:
         return (
           <main className="wiiHome__main" ref={mainRef}>
@@ -113,8 +114,11 @@ function WiiHomeMain({ screen, onNavigate, onOpenKaraoke, karaokeTargetRef, main
     <main className="wiiHome__main joyHome" ref={mainRef}>
       <div className="joyHeader">
         <div className="joyBrand">
-          <span className="joyBrand__main">NURUSOUND WEB GO</span>
-          <span className="joyBrand__sub">v1.231</span>
+          <span className="joyBrand__main" style={{ display: 'inline-flex', alignItems: 'center' }}>
+            <img src={logo} alt="RAKUSONG" style={{ height: '1.8em', marginRight: '0.2em' }} />
+            <span className="joyBrand__sub">v1.231</span>
+
+          </span>
         </div>
       </div>
 
