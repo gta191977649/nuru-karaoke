@@ -7,9 +7,10 @@ export const CenterScore = ({ score }) => {
     }, [score]);
 
     const fillRatio = clampedScore / 100;
+    const stateClass = clampedScore > 80 ? 'danger' : clampedScore > 60 ? 'warning' : '';
 
     return (
-        <div className="center-score-wrapper">
+        <div className={`center-score-wrapper ${stateClass}`}>
             {/* Outer Rings */}
             <div className="cs-outer-ring-glow"></div>
             <div className="cs-inner-ring"></div>
@@ -18,7 +19,8 @@ export const CenterScore = ({ score }) => {
             <div className="cs-main-container">
                 <div className="cs-liquid" style={{ '--fill': fillRatio }}>
                     <div className="cs-liquid-level">
-
+                        <div className="cs-wave"></div>
+                        <div className="cs-wave-mask"></div>
                     </div>
                 </div>
 

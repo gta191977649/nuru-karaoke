@@ -10,8 +10,8 @@ import { usePlayerScoreStore } from '../../state/playerScoreStore.js'
 import { Play, Pause } from 'lucide-react'
 
 function ResultsPage({ score, techniques, songInfo, onNext }) {
-    const finalScore = usePlayerScoreStore((store) => store.finalScore)
-    //const finalScore = 64.6
+    //const finalScore = usePlayerScoreStore((store) => store.finalScore)
+    const finalScore = 64.6
     const techniqueCounts = usePlayerScoreStore((store) => store.techniqueCounts)
     const storedSongInfo = usePlayerScoreStore((store) => store.songInfo)
 
