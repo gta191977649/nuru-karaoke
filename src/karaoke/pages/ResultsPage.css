@@ -249,8 +249,9 @@
     /* slate-400 */
     box-shadow: inset 0 0 10px rgba(0, 0, 0, 0.7);
     overflow: hidden;
-    backdrop-filter: blur(2px);
+    /* Removed backdrop-filter for performance */
     min-height: 0;
+    contain: layout paint;
 }
 
 .lt-liquid {
@@ -268,11 +269,10 @@
     inset: 0;
     background: linear-gradient(to top, #a16207, #facc15, #fef08a);
     /* yellow-700 -> 400 -> 200 */
-    box-shadow: 0 0 16px rgba(234, 179, 8, 0.6);
+    box-shadow: 0 0 8px rgba(234, 179, 8, 0.5);
     transform-origin: bottom;
     transform: scaleY(var(--fill));
     transition: transform 2s ease-out;
-    will-change: transform;
     z-index: 1;
 }
 
@@ -366,19 +366,30 @@
     right: 0;
     /* Increase width to allow transform animation if we were to switch, but sticking to bg-pos for infinite loop simplicity */
     height: 60px;
+    overflow: hidden;
+    animation: cs-water-bob 3s ease-in-out infinite alternate;
+    opacity: 0.95;
+    pointer-events: none;
+    z-index: 2;
+    /* Optimization: simple compositing */
+    transform: translateZ(0);
+}
+
+.cs-water-surface::before {
+    content: "";
+    position: absolute;
+    top: 0;
+    left: 0;
+    height: 100%;
+    width: 200%;
     background-image:
         linear-gradient(to bottom, rgba(160, 255, 255, 0.5), rgba(0, 120, 220, 0.1)),
         url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='260' height='110' viewBox='0 0 260 110'><path d='M0 55 Q 65 0 130 55 T260 55 V110 H0 Z' fill='rgba(100,210,255,0.8)'/></svg>");
     background-repeat: repeat-x;
     background-size: 100% 100%, 260px 100%;
     background-position: 0 0, 0 0;
-    animation: cs-water-drift 7s linear infinite, cs-water-bob 3s ease-in-out infinite alternate;
-    will-change: background-position, transform;
-    opacity: 0.95;
-    pointer-events: none;
-    z-index: 2;
-    /* Optimization: simple compositing */
-    transform: translateZ(0);
+    animation: cs-water-drift-x 7s linear infinite;
+    will-change: transform;
 }
 
 /* Secondary Back Wave (Darker, Slower, Offset) */
@@ -389,16 +400,27 @@
     right: 0;
     height: 60px;
     /* Same wave shape but different color/opacity */
+    overflow: hidden;
+    animation: cs-water-bob 4s ease-in-out infinite alternate-reverse;
+    opacity: 0.8;
+    pointer-events: none;
+    z-index: 1;
+}
+
+.cs-water-surface-back::before {
+    content: "";
+    position: absolute;
+    top: 0;
+    left: 0;
+    height: 100%;
+    width: 200%;
     background-image:
         url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='260' height='110' viewBox='0 0 260 110'><path d='M0 55 Q 65 15 130 55 T260 55 V110 H0 Z' fill='rgba(0,100,200,0.6)'/></svg>");
     background-repeat: repeat-x;
     background-size: 260px 100%;
     background-position: 0 0;
-    animation: cs-water-drift 11s linear infinite reverse, cs-water-bob 4s ease-in-out infinite alternate-reverse;
-    will-change: background-position, transform;
-    opacity: 0.8;
-    pointer-events: none;
-    z-index: 1;
+    animation: cs-water-drift-x 11s linear infinite reverse;
+    will-change: transform;
 }
 
 @keyframes cs-water-bob {
@@ -634,17 +656,18 @@
     animation-name: bubble;
     animation-timing-function: linear;
     animation-iteration-count: infinite;
-    will-change: transform, opacity;
 }
 
 .lt-bubbles {
     position: absolute;
-    inset: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    height: calc(var(--fill) * 100%);
     z-index: 2;
     pointer-events: none;
     overflow: hidden;
-    clip-path: inset(calc((1 - var(--fill)) * 100%) 0 0 0);
-    --bubble-top: calc(var(--fill) * 100%);
+    --bubble-top: 100%;
 }
 
 .lt-bubble {
@@ -671,7 +694,7 @@
     border-radius: 9999px;
     border: 1.5px solid rgba(255, 255, 255, 0.6);
     background-color: rgba(255, 255, 255, 0.25);
-    box-shadow: 0 0 4px rgba(255, 255, 255, 0.35);
+    box-shadow: 0 0 2px rgba(255, 255, 255, 0.3);
     /* Cheaper alternative */
 }
 
@@ -698,6 +721,16 @@
 
     100% {
         background-position: 0 0, -260px 0;
+    }
+}
+
+@keyframes cs-water-drift-x {
+    0% {
+        transform: translateX(0);
+    }
+
+    100% {
+        transform: translateX(-260px);
     }
 }
 
