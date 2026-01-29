@@ -156,8 +156,8 @@ function WiiHomeMain({ screen, onNavigate, onOpenKaraoke, karaokeTargetRef, main
             </Col>
             <Col xs={6} md={6} lg={3}>
               <Button className="joyTile w-100" type="button">
-                りれき
-                <span className="joyTile__sub">HISTORY</span>
+                キーワード
+                <span className="joyTile__sub">KEYWORD</span>
               </Button>
             </Col>
             <Col xs={6} md={6} lg={3}>
