@@ -27,6 +27,25 @@
   overflow: hidden;
 }
 
+.karaokeMessagePage {
+  background: #000000;
+  color: #ffffff;
+  height: 100%;
+  width: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-family: 'Hiragino Sans', 'Meiryo', sans-serif;
+}
+
+.karaokeMessagePage__text {
+  font-size: clamp(1.6rem, 2.6vw, 2.4rem);
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-align: center;
+  padding: 0 8%;
+}
+
 .karaoke-stage {
   height: 100%;
   width: 100%;

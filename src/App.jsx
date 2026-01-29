@@ -3,7 +3,7 @@ import { Button, Col, Container, Row, Tab, Tabs } from 'react-bootstrap'
 import WiiHomeMain, { SCREENS } from './home/WiiHomeMain.jsx'
 import Karaoke from './karaoke/Karaoke.jsx'
 import { synthEngine } from './engine/SynthEngine.js'
-import { useKaraokeStore } from './state/karaokeStore.js'
+import { getKaraokeStoreState, useKaraokeStore } from './state/karaokeStore.js'
 import { usePlayerScoreStore } from './state/playerScoreStore.js'
 import useUiStore from './state/uiStore.js'
 import WiiAlert from './components/WiiAlert.jsx'
@@ -35,6 +35,7 @@ function App({ onNavigate }) {
   const karaokeTargetRef = useRef(null)
   const [karaokeBase, setKaraokeBase] = useState({ left: 0, top: 0, width: 0, height: 0 })
   const synth = useKaraokeStore()
+  const setKaraokeView = useKaraokeStore((state) => state.setKaraokeView)
   const resetPlayerScore = usePlayerScoreStore((state) => state.resetPlayerScore)
   const [transitionPhase, setTransitionPhase] = useState('idle')
   const transitionLockRef = useRef(false)
@@ -141,8 +142,14 @@ function App({ onNavigate }) {
       resetPlayerScore()
       setKaraokeResetKey((prev) => prev + 1)
       await synthEngine.stopAndAdvance({ fadeMs: TRANSITION_MS })
+      const { queue, queueIndex } = getKaraokeStoreState()
+      if (!queue.length && queueIndex < 0) {
+        setKaraokeView('message')
+      } else {
+        setKaraokeView('singing')
+      }
     })
-  }, [resetPlayerScore, runTransition, showAlert, synth.midiName, synth.queue])
+  }, [resetPlayerScore, runTransition, setKaraokeView, showAlert, synth.midiName, synth.queue])
 
   return (
     <div className="wiiHome">
