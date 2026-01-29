@@ -832,7 +832,15 @@ class SynthEngine {
     this._seq.currentTime = 0
     this._synth.stopAll(true)
     this._seq.loadNewSongList([{ binary: buffer, fileName: midiName }])
-    this._setState({ midiUrl, midiName, status: `MIDI loaded: ${midiName}` })
+    const initialDuration = this._seq?.duration || 0
+    this._setState({ midiUrl, midiName, status: `MIDI loaded: ${midiName}`, duration: initialDuration, currentTime: 0 })
+    requestAnimationFrame(() => {
+      if (!this._seq) return
+      const nextDuration = this._seq.duration || 0
+      if (nextDuration !== initialDuration) {
+        this._setState({ duration: nextDuration, currentTime: 0 })
+      }
+    })
 
     this._updateChannelInstrumentNames().catch(() => {
       // ignore
