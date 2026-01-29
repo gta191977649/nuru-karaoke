@@ -1,6 +1,6 @@
 import { Sequencer, WorkletSynthesizer } from 'spessasynth_lib'
 import processorUrl from 'spessasynth_lib/dist/spessasynth_processor.min.js?url'
-import defaultSoundFontUrl from '../soundfont/gm.sf2'
+import defaultSoundFontUrl from '../soundfont/sc55.sf2'
 //import defaultSoundFontUrl from '../soundfont/a320u.sf2'
 import { createMidiMapper } from './MidiMapper.js'
 import { findActiveLyricIndex, parseLrc } from './lrc.js'
