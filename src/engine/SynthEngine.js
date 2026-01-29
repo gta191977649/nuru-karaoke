@@ -439,6 +439,8 @@ class SynthEngine {
             uiState.lrcEntries[activeLyricIndex + 1]?.time ?? Math.max(start + 1, duration || start + 1)
           const denom = Math.max(0.001, end - start)
           karaokeProgress = Math.min(1, Math.max(0, (t - start) / denom))
+        } else if (duration > 0) {
+          karaokeProgress = Math.min(1, Math.max(0, currentTime / duration))
         }
 
         const isPlaying = !seq.paused && !seq.isFinished
@@ -926,7 +928,6 @@ class SynthEngine {
       lrcEntries: [],
       lyricOffsetMs: 0,
       activeLyricIndex: -1,
-      karaokeProgress: 0,
     })
     this._setState({ queueIndex: i })
     await this.loadMidiFromUrl(song.url, { autoPlay: false })
