@@ -14,6 +14,7 @@ import { useSingingTechnique } from '../hooks/useSingingTechnique.js'
 import { useKaraokeScoring } from '../hooks/useKaraokeScoring.js'
 import RealtimeScoreCounter from '../../components/RealtimeScoreCounter.jsx'
 import { usePlayerScoreStore } from '../../state/playerScoreStore.js'
+import logoTitle from '../../assets/logo_title.png'
 
 function splitRubySegments(text) {
     const raw = String(text ?? '')
@@ -244,12 +245,17 @@ function SingingPage({ onFinish }) {
         <div className={`karaokePage${showSongInfo ? ' karaokePage--intro' : ''}`}>
             <RealtimeScoreCounter score={liveScore} />
             <KeyChangeAlert />
-            {showSongInfo ? (
-                <div className="karaokeSongIntro">
+            <div className="karaokeSongIntro">
+                <div className="karaokeSongIntro__content">
                     <div className="karaokeSongIntro__title">{songInfo.title}</div>
                     {songInfo.artist ? <div className="karaokeSongIntro__artist">♪{songInfo.artist}</div> : null}
                 </div>
-            ) : null}
+                <img
+                    src={logoTitle}
+                    alt="Logo"
+                    className="karaokeSongIntro__logo"
+                />
+            </div>
             <div className="karaoke-stage">
                 <div className="karaoke-screen">
                     <div className="top-section">
@@ -319,6 +325,7 @@ function SingingPage({ onFinish }) {
                     </div>
                 </div>
             </div>
+
         </div>
     )
 }
