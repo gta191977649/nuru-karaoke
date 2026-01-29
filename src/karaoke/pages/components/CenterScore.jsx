@@ -33,7 +33,7 @@ export const CenterScore = ({ score }) => {
                 <div style={{ color: '#fed7aa', fontWeight: 'bold', letterSpacing: '0.1em', textTransform: 'uppercase', textShadow: '0 0 10px rgba(234,179,8,0.9), 0 0 20px rgba(234,179,8,0.6)', fontSize: '1em', marginBottom: '1%' }}>
                     TOTAL
                 </div>
-                <div style={{ color: 'white', fontWeight: 'bold', letterSpacing: '0.05em', marginTop: '-2%', marginBottom: '2%', opacity: 0.9, fontSize: '1em', backgroundColor: 'rgba(153, 27, 27, 0.6)', padding: '0 10%', borderRadius: '9999px', border: '1px solid rgba(239, 68, 68, 0.8)', boxShadow: '0 0 15px rgba(239, 68, 68, 0.5)', textShadow: '0 0 10px rgba(234, 88, 12, 0.8)' }}>
+                <div style={{ color: 'white', fontWeight: 'bold', letterSpacing: '0.05em', marginTop: '-2%', marginBottom: '2%', opacity: 0.9, fontSize: '1em', backgroundColor: 'rgba(153, 27, 27, 0.6)', padding: '0 10%', borderRadius: '9999px', border: '1px solid rgba(239, 68, 68, 0.8)', boxShadow: '0 0 15px rgba(242, 0, 0, 0.5)', textShadow: '0 0 10px rgba(234, 88, 12, 0.8)' }}>
                     総合得点
                 </div>
 
