@@ -1,15 +1,15 @@
 
 // GM2 drum kit program numbers (0-based)
 const GM2_DRUM_KITS = {
-    STANDARD: 0,
-    ROOM: 8,
-    POWER: 16,
-    ELECTRONIC: 24,
-    TR808: 25,
-    JAZZ: 32,
-    BRUSH: 40,
-    ORCHESTRA: 48,
-    SFX: 56
+    STANDARD: 1,
+    ROOM: 9,
+    POWER: 17,
+    ELECTRONIC: 25,
+    TR808: 26,
+    JAZZ: 33,
+    BRUSH: 41,
+    ORCHESTRA: 49,
+    SFX: 57
 }
 
 // Internal map of known XG Drum Kit names to help mapping
@@ -18,15 +18,15 @@ const GM2_DRUM_KITS = {
 // Let's create a lookup from XG Program -> GM2 Kit based on heuristics.
 // Standard XG Kit Map (Bank 127)
 const XG_KIT_MAP = {
-    0: GM2_DRUM_KITS.STANDARD, // Standard
-    1: GM2_DRUM_KITS.STANDARD, // Standard 2
-    8: GM2_DRUM_KITS.ROOM,     // Room
-    16: GM2_DRUM_KITS.POWER,   // Rock
-    24: GM2_DRUM_KITS.ELECTRONIC, // Electro
-    25: GM2_DRUM_KITS.TR808,   // Analog
-    32: GM2_DRUM_KITS.JAZZ,    // Jazz
-    40: GM2_DRUM_KITS.BRUSH,   // Brush
-    48: GM2_DRUM_KITS.ORCHESTRA, // Classic
+    1: GM2_DRUM_KITS.STANDARD, // Standard
+    2: GM2_DRUM_KITS.STANDARD, // Standard 2
+    9: GM2_DRUM_KITS.ROOM,     // Room
+    17: GM2_DRUM_KITS.POWER,   // Rock
+    25: GM2_DRUM_KITS.ELECTRONIC, // Electro
+    26: GM2_DRUM_KITS.TR808,   // Analog
+    33: GM2_DRUM_KITS.JAZZ,    // Jazz
+    41: GM2_DRUM_KITS.BRUSH,   // Brush
+    49: GM2_DRUM_KITS.ORCHESTRA, // Classic
     // SFX Kits
     // XG SFX 1 is Prog 0 in Bank 126? Or Prog 0 in Bank 127 is Standard.
     // XG Prog 0..127 in Bank 127 are kits.
@@ -58,17 +58,28 @@ const GM_CYMBALS_TARGETS = [49, 57, 51, 53] // Crash1, Crash2, Ride1, Ride Bell
 // Explicit Low Note Mappings
 // Logic: Snare-like -> 38, Kick-like -> 36, Others -> Drop (unless explicitly safe)
 const XG_LOW_MAP = {
-    13: 36, // Surdo Mute -> Kick
-    14: 36, // Surdo Open -> Kick (Safe fallback)
+    13: 86, // Surdo Mute -> Surdo Mute
+    14: 87, // Surdo Open -> Surdo Open
+    15: 27, // Hi-Q -> Hi Q
+    16: 28, // Whip Slap -> Whip Slap
+    17: 29, // Scratch H -> Scratch Push
+    18: 30, // Scratch L -> Scratch Pull
+    19: 39, // Finger Snap -> Hand Clap
+    20: 32, // Click Noise -> Click Noise
+    21: 33, // Metronome Click -> Metronome Click
+    22: 34, // Metronome Bell -> Metronome Bell
+    23: 32, // Seq Click L -> Click Noise
+    24: 32, // Seq Click H -> Click Noise
     25: 38, // Brush Tap -> Snare
     26: 38, // Brush Swirl -> Snare
-    27: 38, // Brush Slap -> Snare
-    28: 38, // Brush Tap Swirl -> Snare (Simplification)
+    // 27 Starts GM Level 2 Mapping Area
+    27: 37, // Brush Slap -> Snare
+    28: 37, // Brush Swirl -> Snare
     29: 38, // Snare Roll -> Snare
-    31: 38, // Snare Soft -> Snare
-    33: 36, // Kick Soft -> Kick
-    34: 38, // Open Rim Shot -> Snare (Rim -> Snare common fallback)
-    // 37 is handled as special case in function
+    31: 38, // Snare L -> Snare
+    32: 37, // Sticks 1 -> Side Stick
+    33: 35, // Bass Drum L -> Bass Drum Kick
+    34: 38, // Open Rim Shot -> Snare
 }
 
 // Explicit High extensions (Cymbal-like)
@@ -86,16 +97,12 @@ const XG_HIGH_CYMBALS = {
 export function mapXgDrumNoteToGm(note) {
     if (!STRICT_GM_DRUM_RANGE) return note
 
-    // 1) SPECIAL CASE: 37 (Side Stick) -> 38 (Snare)
-    // "Mandatory special-case... remap -> 38"
-    if (note === 37) return 38
-
-    // 2) GM VALID RANGE [35..81]
+    // 1) GM VALID RANGE [35..81]
     if (note >= GM_RANGE_MIN && note <= GM_RANGE_MAX) {
         return note // Return unchanged
     }
 
-    // 3) LOW RANGE (< 35)
+    // 2) LOW RANGE (< 35)
     if (note < GM_RANGE_MIN) {
         // Check explicit map (Snare-like / Kick-like)
         if (XG_LOW_MAP[note] !== undefined) return XG_LOW_MAP[note]
@@ -104,7 +111,7 @@ export function mapXgDrumNoteToGm(note) {
         return null
     }
 
-    // 4) HIGH RANGE (> 81)
+    // 3) HIGH RANGE (> 81)
     if (note > GM_RANGE_MAX) {
         // "If cymbal-like... remap -> nearest... Else: DROP"
         // Without a strict "is cymbal" check, we might just drop all unless we know it's a cymbal.
@@ -152,8 +159,8 @@ export function createXGConverter() {
                 state.bankMSB[ch] = val
 
                 // Dynamic Drum Switching
-                // XG: MSB 127 or 126 means Drum Mode
-                const isDrum = (val === 127 || val === 126)
+                // XG/GM2: MSB 127/126 (XG drums/SFX) or 120 (GM2 drums)
+                const isDrum = (val === 127 || val === 126 || val === 120)
                 if (state.drumChannels[ch] !== (isDrum ? 1 : 0)) {
                     state.drumChannels[ch] = isDrum ? 1 : 0
                     if (process.onStateChange) process.onStateChange(process.getState())

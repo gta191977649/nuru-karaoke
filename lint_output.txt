@@ -1,0 +1,92 @@
+yarn run v1.22.22
+$ eslint .
+
+/Users/nurupo/Desktop/dev/nurukaraoke/src/components/MelodyGuideCanvas.jsx
+   481:17  error    'startX' is assigned a value but never used. Allowed unused vars must match /^[A-Z_]/u                                                                                                                                                                                   no-unused-vars
+   482:17  error    'startY' is assigned a value but never used. Allowed unused vars must match /^[A-Z_]/u                                                                                                                                                                                   no-unused-vars
+   483:17  error    'targetY' is assigned a value but never used. Allowed unused vars must match /^[A-Z_]/u                                                                                                                                                                                  no-unused-vars
+  1345:46  warning  The ref value 'containerRef.current' will likely have changed by the time this effect cleanup function runs. If this ref points to a node rendered by React, copy 'containerRef.current' to a variable inside the effect, and use that variable in the cleanup function  react-hooks/exhaustive-deps
+  1368:6   warning  React Hook useEffect has missing dependencies: 'glissandoDownCount', 'glissandoUpCount', 'height', 'kobushiCount', 'particleConfig', 'techniqueEventsRef', 'vibratoCount', and 'width'. Either include them or remove the dependency array                               react-hooks/exhaustive-deps
+
+/Users/nurupo/Desktop/dev/nurukaraoke/src/components/RealtimeScoreCounter.jsx
+  13:25  error  Error: Cannot call impure function during render
+
+`Date.now` is an impure function. Calling an impure function can produce unstable results that update unpredictably when the component happens to re-render. (https://react.dev/reference/rules/components-and-hooks-must-be-pure#components-and-hooks-must-be-idempotent).
+
+  11 |     const stateRef = useRef({
+  12 |         phase: 'IDLE', // 'IDLE' (Score face) or 'CALCULATING' (Computing face)
+> 13 |         lastSwitchTime: Date.now(),
+     |                         ^^^^^^^^^^ Cannot call impure function
+  14 |         displayScore: score
+  15 |     })
+  16 |  react-hooks/purity
+
+/Users/nurupo/Desktop/dev/nurukaraoke/src/components/particles/ParticlePreview.jsx
+  102:46  warning  The ref value 'containerRef.current' will likely have changed by the time this effect cleanup function runs. If this ref points to a node rendered by React, copy 'containerRef.current' to a variable inside the effect, and use that variable in the cleanup function  react-hooks/exhaustive-deps
+
+/Users/nurupo/Desktop/dev/nurukaraoke/src/karaoke/components/BottomPanel.jsx
+  102:47  error  Error: Cannot call impure function during render
+
+`Math.random` is an impure function. Calling an impure function can produce unstable results that update unpredictably when the component happens to re-render. (https://react.dev/reference/rules/components-and-hooks-must-be-pure#components-and-hooks-must-be-idempotent).
+
+  100 | // RhythmBar Component
+  101 | const RhythmBar = ({ index }) => {
+> 102 |     const [height, setHeight] = useState(30 + Math.random() * 70);
+      |                                               ^^^^^^^^^^^^^ Cannot call impure function
+  103 |
+  104 |     useEffect(() => {
+  105 |         const interval = setInterval(() => {  react-hooks/purity
+
+/Users/nurupo/Desktop/dev/nurukaraoke/src/karaoke/components/LiquidTube.jsx
+  11:23  error  Error: Cannot call impure function during render
+
+`Math.random` is an impure function. Calling an impure function can produce unstable results that update unpredictably when the component happens to re-render. (https://react.dev/reference/rules/components-and-hooks-must-be-pure#components-and-hooks-must-be-idempotent).
+
+   9 |         return [...Array(8)].map((_, i) => ({
+  10 |             key: i,
+> 11 |             width: `${Math.random() * 30 + 10}%`,
+     |                       ^^^^^^^^^^^^^ Cannot call impure function
+  12 |             left: `${Math.random() * 80 + 10}%`,
+  13 |             animationDuration: `${Math.random() * 3 + 2}s`,
+  14 |             animationDelay: `${Math.random() * 2}s`  react-hooks/purity
+  12:22  error  Error: Cannot call impure function during render
+
+`Math.random` is an impure function. Calling an impure function can produce unstable results that update unpredictably when the component happens to re-render. (https://react.dev/reference/rules/components-and-hooks-must-be-pure#components-and-hooks-must-be-idempotent).
+
+  10 |             key: i,
+  11 |             width: `${Math.random() * 30 + 10}%`,
+> 12 |             left: `${Math.random() * 80 + 10}%`,
+     |                      ^^^^^^^^^^^^^ Cannot call impure function
+  13 |             animationDuration: `${Math.random() * 3 + 2}s`,
+  14 |             animationDelay: `${Math.random() * 2}s`
+  15 |         }));                                    react-hooks/purity
+  13:35  error  Error: Cannot call impure function during render
+
+`Math.random` is an impure function. Calling an impure function can produce unstable results that update unpredictably when the component happens to re-render. (https://react.dev/reference/rules/components-and-hooks-must-be-pure#components-and-hooks-must-be-idempotent).
+
+  11 |             width: `${Math.random() * 30 + 10}%`,
+  12 |             left: `${Math.random() * 80 + 10}%`,
+> 13 |             animationDuration: `${Math.random() * 3 + 2}s`,
+     |                                   ^^^^^^^^^^^^^ Cannot call impure function
+  14 |             animationDelay: `${Math.random() * 2}s`
+  15 |         }));
+  16 |     }, []);                               react-hooks/purity
+  14:32  error  Error: Cannot call impure function during render
+
+`Math.random` is an impure function. Calling an impure function can produce unstable results that update unpredictably when the component happens to re-render. (https://react.dev/reference/rules/components-and-hooks-must-be-pure#components-and-hooks-must-be-idempotent).
+
+  12 |             left: `${Math.random() * 80 + 10}%`,
+  13 |             animationDuration: `${Math.random() * 3 + 2}s`,
+> 14 |             animationDelay: `${Math.random() * 2}s`
+     |                                ^^^^^^^^^^^^^ Cannot call impure function
+  15 |         }));
+  16 |     }, []);
+  17 |                                                                                    react-hooks/purity
+
+/Users/nurupo/Desktop/dev/nurukaraoke/src/karaoke/hooks/useKaraokeReference.js
+  28:6  warning  React Hook useEffect has a missing dependency: 'reference'. Either include it or remove the dependency array  react-hooks/exhaustive-deps
+
+✖ 13 problems (9 errors, 4 warnings)
+
+error Command failed with exit code 1.
+info Visit https://yarnpkg.com/en/docs/cli/run for documentation about this command.

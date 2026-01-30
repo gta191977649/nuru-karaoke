@@ -3,6 +3,7 @@ import FindSongs from './FindSongs.jsx'
 import ComfirnSong from './ComfirnSong.jsx'
 import { setPendingSong } from '../engine/playerController.js'
 import ViewSelectedSong from './ViewSelectedSong.jsx'
+import logo from '../assets/logo.png'
 
 const SCREENS = {
   home: 'home',
@@ -99,7 +100,7 @@ function WiiHomeMain({ screen, onNavigate, onOpenKaraoke, karaokeTargetRef, main
             />
           </main>
         )
-        
+
       default:
         return (
           <main className="wiiHome__main" ref={mainRef}>
@@ -113,8 +114,11 @@ function WiiHomeMain({ screen, onNavigate, onOpenKaraoke, karaokeTargetRef, main
     <main className="wiiHome__main joyHome" ref={mainRef}>
       <div className="joyHeader">
         <div className="joyBrand">
-          <span className="joyBrand__main">NURUSOUND WEB GO</span>
-          <span className="joyBrand__sub">v1.231</span>
+          <span className="joyBrand__main" style={{ display: 'inline-flex', alignItems: 'center' }}>
+            <img src={logo} alt="RAKUSONG" style={{ height: '1.8em', marginRight: '0.2em' }} />
+            <span className="joyBrand__sub">v1.231</span>
+
+          </span>
         </div>
       </div>
 
@@ -152,8 +156,8 @@ function WiiHomeMain({ screen, onNavigate, onOpenKaraoke, karaokeTargetRef, main
             </Col>
             <Col xs={6} md={6} lg={3}>
               <Button className="joyTile w-100" type="button">
-                りれき
-                <span className="joyTile__sub">HISTORY</span>
+                キーワード
+                <span className="joyTile__sub">KEYWORD</span>
               </Button>
             </Col>
             <Col xs={6} md={6} lg={3}>
@@ -166,7 +170,7 @@ function WiiHomeMain({ screen, onNavigate, onOpenKaraoke, karaokeTargetRef, main
         </Col>
         <Col xs={12} lg={4}>
           <div className="joyInfo">
-            <div className="joyInfo__label">LIVE!</div>
+            <div className="joyInfo__label">演奏画面</div>
             <div className="joyInfo__media" ref={karaokeTargetRef}>
               <div className="joyInfo__overlay">ARENA SOUND</div>
             </div>

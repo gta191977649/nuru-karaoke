@@ -1,248 +1,131 @@
 import React, { useMemo } from 'react'
-import '../Karaoke.css'
+import './ResultsPage.css'
+import { LiquidTube } from './components/LiquidTube'
+import { CenterScore } from './components/CenterScore'
+import { SongInfo } from './components/SongInfo'
+import { BottomPanel } from './components/BottomPanel'
+import { usePlayerScoreStore } from '../../state/playerScoreStore.js'
 
-
-const SCORE_RING_CONFIG = {
-    radius: 48, // Larger radius to be "outside"
-    strokeWidth: 1.5,
-    cx: 50,
-    cy: 50
-}
+// Importing icons for components if needed, but components likely handle their own or use text/emoji for now.
+import { Play, Pause } from 'lucide-react'
 
 function ResultsPage({ score, techniques, songInfo, onNext }) {
-
-    const displayScore = (Number(score) || 0).toFixed(2)
-    const [intPart, decPart] = displayScore.split('.')
+    const finalScore = usePlayerScoreStore((store) => store.finalScore)
+    //const finalScore = 30
+    const techniqueCounts = usePlayerScoreStore((store) => store.techniqueCounts)
+    const storedSongInfo = usePlayerScoreStore((store) => store.songInfo)
 
     // Mock Analysis Data (since we don't have real analytics for these yet)
+    // In the future this should come from the backend/analysis engine
     const analysisdata = useMemo(() => ({
         pitch: { label: '音程', val: 0, max: 40 },
         stability: { label: '安定感', val: 0, max: 30 },
         intonation: { label: '抑揚', val: 0, max: 15 },
-        longTone: { label: 'ロングトーン', val: 0, max: 10 },
-        technique: { label: 'テクニック', val: 0, max: 5 },
+        longTone: { label: 'ロング\nトーン', val: 0, max: 10 },
+        technique: { label: 'テク\nニック', val: 0, max: 5 },
     }), [])
 
-    const circumference = 2 * Math.PI * SCORE_RING_CONFIG.radius
-    const progressOffset = circumference * (1 - (Math.min(100, Math.max(0, Number(score) || 0)) / 100))
+    // While we don't have detailed breakdown, we can simulate "filled" tubes based on the total score ratio
+    // or just leave them empty/random for now if that's preferred.
+    // Let's approximate based on the total score percentage to make it look alive.
+    const resolvedScore = Number.isFinite(score) ? score : finalScore
+    const resolvedTechniques = techniques || techniqueCounts
+    const resolvedSongInfo = songInfo || storedSongInfo
+    const scoreRatio = (Number(resolvedScore) || 0) / 100;
+
+    const bottomPanelCounts = useMemo(() => ({
+        kobushi: resolvedTechniques?.kobushi || 0,
+        fall: resolvedTechniques?.glissdown || 0,
+        shakuri: resolvedTechniques?.glissup || 0,
+        vibrato: resolvedTechniques?.vibrato || 0
+    }), [resolvedTechniques]);
 
     return (
-        <div className="karaokePage resultsPage">
-            <div className="results-container">
+        <div className="resultsPageNew">
+            {/* Background Animation */}
+            <div className="tech-grid-wrapper">
+                <div className="tech-header-overlay"></div>
+                <div className="tech-grid-floor"></div>
+                <div className="tech-horizon-glow"></div>
+                <div className="tech-vignette"></div>
+            </div>
 
-                {/* Header: Analysis Title & Time */}
-                <div className="results-header-row">
-                    <div className="analysis-logo">
-                        <span className="analysis-logo-text">分析採点</span>
-                        <span className="analysis-logo-sub">マスター</span>
+            <div className="rp-container font-mono-tech">
+
+                {/* Header */}
+                <header className="rp-header">
+                    <div className="rp-header-left">
+                        {/* <div className="rp-header-logo-circle">
+                            <span style={{ fontSize: '1.5em', fontStyle: 'italic', color: 'white' }}>D</span>
+                        </div> */}
+                        <h1 className="rp-header-logo-text font-digital">
+                            周波採点<span className="font-digital" style={{ color: '#ee9c22ff', fontStyle: 'normal', fontSize: '0.5em', marginLeft: '5px' }}>DX</span>
+                        </h1>
                     </div>
-                    <div className="results-time-info">
-                        {new Date().toLocaleString('ja-JP', { year: 'numeric', month: 'numeric', day: 'numeric', hour: '2-digit', minute: '2-digit' })}
-                        <span className="guest-name">ゲスト さん</span>
+                    <div style={{ textAlign: 'right', display: 'flex', flexDirection: 'column', alignItems: 'flex-end', justifyContent: 'center', height: '100%' }}>
+
+                        <div style={{ fontWeight: 'bold', fontSize: '1.5em', whiteSpace: 'nowrap' }}>
+                            ゲスト <span style={{ color: '#94a3b8', fontSize: '0.7em' }}>さん</span>
+                        </div>
+                        <div className="font-mono-tech" style={{ color: '#bae6fd', letterSpacing: '0.1em', opacity: 0.8, fontSize: '1.2em' }}>
+                            {new Date().toLocaleString('ja-JP', { year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit' })}
+                        </div>
+                    </div>
+                </header>
+
+                {/* Main Display Area */}
+                <div className="rp-main-display">
+
+                    {/* Left: Liquid Tubes */}
+                    <div style={{ width: '33%', display: 'flex', justifyContent: 'space-between', gap: '2%', height: '100%', alignItems: 'flex-end', paddingBottom: '1%' }}>
+                        <LiquidTube label={analysisdata.pitch.label} score={scoreRatio * 92} maxScoreDisplay={40} />
+                        <LiquidTube label={analysisdata.stability.label} score={scoreRatio * 85} maxScoreDisplay={30} />
+                        <LiquidTube label={analysisdata.intonation.label} score={scoreRatio * 98} maxScoreDisplay={15} />
+                        <LiquidTube label={analysisdata.longTone.label} score={scoreRatio * 70} maxScoreDisplay={10} />
+                        <LiquidTube label={analysisdata.technique.label} score={scoreRatio * 88} maxScoreDisplay={5} />
+                    </div>
+
+                    {/* Center: Score */}
+                    <div style={{ width: '34%', display: 'flex', justifyContent: 'center', alignItems: 'center', height: '100%', position: 'relative' }}>
+                        <CenterScore score={Number(resolvedScore) || 0} />
+                    </div>
+
+                    {/* Right: Song Info */}
+                    <div style={{ width: '33%', display: 'flex', flexDirection: 'column', justifyContent: 'center', alignItems: 'flex-end', height: '100%', padding: '2% 0' }}>
+                        <SongInfo data={{
+                            title: resolvedSongInfo?.title || 'Unknown Title',
+                            artist: resolvedSongInfo?.artist || 'Unknown Artist',
+                            avgScore: 74.123,
+                            rank: 0,
+                            calories: 12.5 // Mock for now or calculate from song length
+                        }} />
                     </div>
                 </div>
 
-                {/* Main Body */}
-                <div className="results-main-body">
-
-                    {/* Left: Bar Graph Analysis */}
-                    <div className="analysis-bars-section">
-                        {Object.entries(analysisdata).map(([key, data]) => (
-                            <div className={`analysis-bar-new bar-type-${key}`} key={key}>
-                                <div className="bar-fill-layer" style={{ width: `${(data.val / data.max) * 100}%` }}></div>
-                                <div className="bar-content-layer">
-                                    <div className="bar-label-new">{data.label}</div>
-                                    <div className="bar-value-new">
-                                        <span className="val-big">{data.val}</span>
-                                        <span className="val-small">/{data.max}点</span>
-                                    </div>
-                                </div>
-                            </div>
-                        ))}
-                    </div>
-
-                    {/* Center: Big Score */}
-                    <div className="center-score-section">
-                        <div className="total-score-circle">
-                            {/* Score Progress Ring */}
-                            <svg className="score-ring-svg" viewBox="0 0 100 100">
-                                <defs>
-                                    <linearGradient id="scoreGradient" x1="0" y1="0" x2="0" y2="1">
-                                        <stop offset="0%" stopColor="#0080e8ff" />
-                                        <stop offset="100%" stopColor="#0900aaff" />
-                                    </linearGradient>
-                                </defs>
-
-                                {/* Base Background Circle (Outer) */}
-                                <circle
-                                    cx={SCORE_RING_CONFIG.cx}
-                                    cy={SCORE_RING_CONFIG.cy}
-                                    r={SCORE_RING_CONFIG.radius + SCORE_RING_CONFIG.strokeWidth}
-                                    fill="rgba(0, 0, 0, 0.5)"
-                                />
-
-                                {/* Background Circle (Gradient Fill) */}
-                                <circle
-                                    cx={SCORE_RING_CONFIG.cx}
-                                    cy={SCORE_RING_CONFIG.cy}
-                                    r={47.5} /* Fill to ring edge */
-                                    fill="url(#scoreGradient)"
-                                />
-
-                                {/* Track Ring */}
-                                <circle
-                                    className="score-ring-bg"
-                                    cx={SCORE_RING_CONFIG.cx}
-                                    cy={SCORE_RING_CONFIG.cy}
-                                    r={SCORE_RING_CONFIG.radius}
-                                    fill="none"
-                                    style={{ strokeWidth: SCORE_RING_CONFIG.strokeWidth }}
-                                />
-
-                                {/* Progress Ring */}
-                                <circle
-                                    className="score-ring-progress"
-                                    cx={SCORE_RING_CONFIG.cx}
-                                    cy={SCORE_RING_CONFIG.cy}
-                                    r={SCORE_RING_CONFIG.radius}
-                                    fill="none"
-                                    transform={`translate(100, 0) scale(-1, 1) rotate(-90 ${SCORE_RING_CONFIG.cx} ${SCORE_RING_CONFIG.cy})`}
-                                    style={{
-                                        strokeWidth: SCORE_RING_CONFIG.strokeWidth,
-                                        strokeDasharray: circumference,
-                                        strokeDashoffset: progressOffset,
-                                        strokeLinecap: 'butt'
-                                    }}
-                                />
-                            </svg>
-
-                            <div className="total-score-content">
-                                <div className="total-score-label">TOTAL<br />総合得点</div>
-                                <div className="total-score-value">
-                                    <div className="ts-int-row">{intPart}</div>
-                                    <div className="ts-dec-row">
-                                        <span className="ts-dec">.{decPart}</span>
-                                        <span className="ts-unit">点</span>
-                                    </div>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-
-                    {/* Right: Song Information & Calories */}
-                    <div className="right-song-section">
-                        <div className="song-info-list">
-                            <div className="song-info-row">
-                                <div className="song-info-badge">曲名</div>
-                                <div className="song-info-val">{songInfo.title}</div>
-                            </div>
-                            <div className="song-info-row">
-                                <div className="song-info-badge">歌手名</div>
-                                <div className="song-info-val">♪ {songInfo.artist}</div>
-                            </div>
-                            <div className="song-info-row">
-                                <div className="song-info-badge">全国平均</div>
-                                <div className="song-info-val">74.123 点</div>
-                            </div>
-                            <div className="song-info-row">
-                                <div className="song-info-badge">全国順位</div>
-                                <div className="song-info-val">0 位</div>
-                            </div>
-                            {/* Calories integrated as a row */}
-                            <div className="song-info-row">
-                                <div className="song-info-badge">消費</div>
-                                <div className="song-info-val calorie-val">0 kcal <span className="fire-icon">🔥</span></div>
-                            </div>
-                        </div>
-                    </div>
-
+                {/* Bottom Panel */}
+                <div style={{ height: '22%', width: '100%', flexShrink: 0 }}>
+                    <BottomPanel counts={bottomPanelCounts} />
                 </div>
 
-                {/* Bottom Details (Technique, Vibrato, Rhythm) */}
-                <div className="details-section">
+                {/* Footer Controls */}
+                <div className="rp-footer">
+                    <button className="rp-btn rp-btn-red" onClick={onNext}>
+                        <Pause style={{ fill: 'white', height: '50%', aspectRatio: '1/1' }} />
+                        <span>演奏停止</span>
+                    </button>
 
-                    {/* Technique Detail */}
-                    <div className="detail-box tech-detail">
-                        <div className="detail-circle-badge">
-                            <div className="badge-content">
-                                <div className="badge-small">テクニック</div>
-                                <div className="badge-large">詳細</div>
-                            </div>
-                        </div>
-                        <div className="tech-list">
-                            <div className="tech-row color-kobushi">
-                                <span className="tech-icon-circle">~</span>
-                                <span className="tech-name">こぶし</span>
-                                <span className="tech-count">{techniques?.kobushi || 0}</span>
-                                <span className="tech-unit">回</span>
-                            </div>
-                            <div className="tech-row color-fall">
-                                <span className="tech-icon-circle">⤵</span>
-                                <span className="tech-name">フォール</span>
-                                <span className="tech-count">{techniques?.glissdown || 0}</span>
-                                <span className="tech-unit">回</span>
-                            </div>
-                            <div className="tech-row color-shakuri">
-                                <span className="tech-icon-circle">↝</span>
-                                <span className="tech-name">しゃくり</span>
-                                <span className="tech-count">{techniques?.glissup || 0}</span>
-                                <span className="tech-unit">回</span>
-                            </div>
-                            <div className="tech-row color-vibrato">
-                                <span className="tech-icon-circle">〰</span>
-                                <span className="tech-name">ビブラート</span>
-                                <span className="tech-count">{techniques?.vibrato || 0}</span>
-                                <span className="tech-unit">回</span>
-                            </div>
-                        </div>
+                    <div style={{ display: 'flex', height: '100%', alignItems: 'center' }}>
+                        <button className="rp-btn rp-btn-blue">
+                            <span>音程強化モード</span>
+                        </button>
+                        <button className="rp-btn rp-btn-blue">
+                            <span>マイルームに保存</span>
+                        </button>
+                        <button className="rp-btn rp-btn-cyan" onClick={onNext}>
+                            <Play style={{ fill: 'white', height: '50%', aspectRatio: '1/1' }} />
+                            <span>プレビュー</span>
+                        </button>
                     </div>
-
-                    {/* Vibrato Type (Mock) */}
-                    <div className="detail-box vibrato-type">
-                        <div className="detail-header">ビブラートタイプ</div>
-                        <div className="vibrato-grid">
-                            <div className="v-row">
-                                <div className="v-label">早い</div>
-                                <div className="v-cell">〰</div><div className="v-cell">〰</div><div className="v-cell">〰</div>
-                            </div>
-                            <div className="v-row">
-                                <div className="v-label">標準</div>
-                                <div className="v-cell selected">〰</div><div className="v-cell">〰</div><div className="v-cell">〰</div>
-                            </div>
-                            <div className="v-row">
-                                <div className="v-label">遅い</div>
-                                <div className="v-cell">〰</div><div className="v-cell">〰</div><div className="v-cell">〰</div>
-                            </div>
-                            <div className="v-footer">
-                                <span>浅い</span><span>標準</span><span>深い</span>
-                            </div>
-                        </div>
-                    </div>
-
-                    {/* Rhythm (Mock) */}
-                    <div className="detail-box rhythm-box">
-                        <div className="detail-header">リズム</div>
-                        <div className="rhythm-meter">
-                            <div className="rhythm-bar">
-                                <div className="rhythm-center-line"></div>
-                                <div className="rhythm-fill"></div>
-                            </div>
-                        </div>
-                        <div className="rhythm-labels">
-                            <span>後ろノリ</span>
-                            <span>前ノリ</span>
-                        </div>
-                    </div>
-
-                </div>
-
-                {/* Footer Buttons */}
-                <div className="results-footer-bar">
-                    <button className="footer-btn red" onClick={onNext}>演奏停止</button>
-                    <div className="spacer"></div>
-                    <button className="footer-btn blue">音程強化モード</button>
-                    <button className="footer-btn blue">マイルームに保存</button>
-                    <button className="footer-btn cyan" onClick={onNext}>プレビュー</button>
                 </div>
 
             </div>

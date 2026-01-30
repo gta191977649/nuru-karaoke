@@ -15,6 +15,10 @@ import SpectrumView from '../components/SpectrumView.jsx'
 import WaveformPixi from '../components/WaveformPixi.jsx'
 import { DEFAULT_PARTICLE_CONFIG, cloneParticleConfig } from '../components/particles/particleSystem.js'
 import { useSingingTechnique } from '../karaoke/hooks/useSingingTechnique.js'
+import gmLogo from '../assets/gm.svg'
+import gsLogo from '../assets/gs.svg'
+import xgLogo from '../assets/xg.svg'
+import scLogo from '../assets/sc.png'
 
 const DEMO_MIDI_URL = new URL('../library/demo/sc55.mid', import.meta.url).toString()
 
@@ -31,6 +35,8 @@ const LCD_SEGMENTS = 8
 const LCD_SEGMENT_INDEXES = Array.from({ length: LCD_SEGMENTS }, (_, idx) => idx)
 const LCD_HOLD_SEC = 0.12
 const LCD_DECAY_SEC = 0.65
+const MIDI_MARK_ACTIVE = 'rgba(70, 32, 0, 0.75)'
+const MIDI_MARK_INACTIVE = 'rgba(110, 58, 0, 0.18)'
 
 const formatHexColor = (value) => {
   const num = clampNumber(Number(value) || 0, 0, 0xffffff)
@@ -110,6 +116,21 @@ const extractSysExMessages = (midiData) => {
 
 function Synth({ onNavigateHome }) {
   const state = useKaraokeStore()
+  const detectedStandard = state.midiMapState?.detectedStandard
+  const activeStandard = detectedStandard === 'GM2'
+    ? 'GM'
+    : detectedStandard === 'SMF'
+      ? 'GM'
+      : detectedStandard
+  const isXgActive = activeStandard === 'XG'
+  const isGsActive = activeStandard === 'GS'
+  const isGmActive = activeStandard === 'GM'
+  const detectedModule = state.midiMapState?.detectedModule
+  const showSoundCanvas = detectedModule === '55' || detectedModule === '88' || detectedModule === '88PRO'
+  const midiMarkStyle = (isActive) => ({
+    opacity: isActive ? 0.7 : 0.1,
+    color: isActive ? MIDI_MARK_ACTIVE : MIDI_MARK_INACTIVE,
+  })
   const [midiUrl, setMidiUrl] = useState('')
   const [reference, setReference] = useState(null)
   const [sysExMessages, setSysExMessages] = useState([])
@@ -660,7 +681,7 @@ function Synth({ onNavigateHome }) {
                   disabled={!state.ready}
                   type="button"
                 >
-                  TEST
+                  DEMO
                 </Button>
               </Col>
               <Col xs={12} md="auto">
@@ -720,6 +741,9 @@ function Synth({ onNavigateHome }) {
               Detected Standard: {state.midiMapState?.detectedStandard || 'unknown'}
             </div>
             <div className="small text-muted">
+              Detected Module: {state.midiMapState?.detectedModule || '—'}
+            </div>
+            <div className="small text-muted">
               Active Config: {state.midiMapState?.configName || 'None'}
             </div>
             <div className="small text-muted">
@@ -729,7 +753,7 @@ function Synth({ onNavigateHome }) {
               Detected by: {state.midiMapState?.detectedBy || '—'}
             </div>
             <div className="small text-muted">
-              Drum channels: {formatChannelList(state.midiMapState?.drumChannels)}
+              Drum channels: {formatChannelList(state.midiChannels?.map((ch) => ch?.isDrum))}
             </div>
             <div className="small text-muted">
               Brush channels: {formatChannelList(state.midiMapState?.brushChannels)}
@@ -750,6 +774,32 @@ function Synth({ onNavigateHome }) {
             <div className="sc-lcd">
               <div className="sc-lcd__meta">
                 <div className="sc-lcd__metaLabel">POLY:{state.polyphonyCount ?? 0}</div>
+                <div className="sc-lcd__metaMarks">
+                  <img
+                    src={scLogo}
+                    alt="Sound Canvas"
+                    className="sc-lcd__metaIcon sc-lcd__metaIcon--sc"
+                    style={midiMarkStyle(showSoundCanvas)}
+                  />
+                  <img
+                    src={gsLogo}
+                    alt="GS"
+                    className="sc-lcd__metaIcon"
+                    style={midiMarkStyle(isGsActive)}
+                  />
+                  <img
+                    src={xgLogo}
+                    alt="XG"
+                    className="sc-lcd__metaIcon"
+                    style={midiMarkStyle(isXgActive)}
+                  />
+                  <img
+                    src={gmLogo}
+                    alt="GM"
+                    className="sc-lcd__metaIcon"
+                    style={midiMarkStyle(isGmActive)}
+                  />
+                </div>
               </div>
               <SoundCanvasLcd
                 levels={lcdLevels}
@@ -994,7 +1044,7 @@ function Synth({ onNavigateHome }) {
                     <Form.Check
                       type="switch"
                       id="debug-pitch-raw"
-                      label="Show Raw F0"
+                      label="Debug"
                       checked={showPitchDebug}
                       onChange={(e) => setShowPitchDebug(e.currentTarget.checked)}
                       className="text-nowrap"
@@ -1014,7 +1064,7 @@ function Synth({ onNavigateHome }) {
                       rmsGate={rmsGate}
                       gateUserByTarget={false}
                       windowSec={8}
-                      showPitchDebug={showPitchDebug}
+                      debug={showPitchDebug}
                       width={830}
                       height={220}
                       style={{ width: '100%', height: 220 }}

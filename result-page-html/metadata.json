@@ -1,0 +1,5 @@
+{
+  "name": "Cyber Karaoke Scorer",
+  "description": "A high-fidelity replica of a Japanese Karaoke scoring interface featuring animated liquid gauges, real-time waveform visualization, and cyberpunk aesthetics.",
+  "requestFramePermissions": []
+}

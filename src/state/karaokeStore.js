@@ -11,17 +11,29 @@ const initialEngineState = {
   duration: 0,
   reverbGain: 1.5,
   chorusGain: 1.2,
+  enableMIDIStandardMapping: true,
   transposition: 0,
   queue: [],
   queueIndex: -1,
   history: [],
   enabledChannels: Array.from({ length: 16 }, () => true),
   channelInstrumentNames: Array.from({ length: 16 }, (_, i) => (i === 9 ? 'Drums' : '—')),
+  midiChannels: Array.from({ length: 16 }, (_, i) => ({
+    channel: i,
+    isDrum: i === 9,
+    program: 0,
+    bankMSB: 0,
+    bankLSB: 0,
+    name: i === 9 ? 'Drums' : '—',
+  })),
   channelActivityVelocity: Array.from({ length: 16 }, () => 0),
   channelActivityTime: Array.from({ length: 16 }, () => -1),
   polyphonyCount: 0,
   xgDrumMapEnabled: true,
   xgPreferGsPlayback: true,
+  smfKnifeConfigName: '',
+  smfKnifeSource: '',
+  smfKnifeDestination: '',
   xgDrumMapState: {
     globalMode: 'unknown',
     detectedBy: null,
@@ -41,6 +53,7 @@ const initialUiState = {
   activeLyricIndex: -1,
   karaokeProgress: 0,
   lastIntroMidiUrl: '',
+  karaokeView: 'singing',
 }
 
 const useKaraokeStore = create((set) => ({
@@ -60,6 +73,10 @@ const useKaraokeStore = create((set) => ({
       karaokeProgress: Number.isFinite(patch?.karaokeProgress) ? patch.karaokeProgress : 0,
     }),
   setLastIntroMidiUrl: (value) => set({ lastIntroMidiUrl: value || '' }),
+  setKaraokeView: (view) =>
+    set({
+      karaokeView: view === 'results' ? 'results' : view === 'message' ? 'message' : 'singing',
+    }),
   resetLyrics: () =>
     set({
       lrcName: '',
