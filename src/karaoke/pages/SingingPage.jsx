@@ -13,6 +13,8 @@ import { useKaraokeSongIntro } from '../hooks/useKaraokeSongIntro.js'
 import { useSingingTechnique } from '../hooks/useSingingTechnique.js'
 import { useKaraokeScoring } from '../hooks/useKaraokeScoring.js'
 import RealtimeScoreCounter from '../../components/RealtimeScoreCounter.jsx'
+import { usePlayerScoreStore } from '../../state/playerScoreStore.js'
+import logoTitle from '../../assets/logo_title.png'
 
 function splitRubySegments(text) {
     const raw = String(text ?? '')
@@ -73,7 +75,12 @@ function SingingPage({ onFinish }) {
     const currentTimeRef = useRef(0)
     const transpositionRef = useRef(0)
     const micRmsGate = 0.01
-    const [liveScore, setLiveScore] = useState(0)
+    const liveScore = usePlayerScoreStore((store) => store.liveScore)
+    const setLiveScore = usePlayerScoreStore((store) => store.setLiveScore)
+    const setTechniqueCounts = usePlayerScoreStore((store) => store.setTechniqueCounts)
+    const setResults = usePlayerScoreStore((store) => store.setResults)
+    const resetPlayerScore = usePlayerScoreStore((store) => store.resetPlayerScore)
+    const setSongInfo = usePlayerScoreStore((store) => store.setSongInfo)
     const showKeyChangeAlert = useKeyChangeAlertStore((store) => store.showKeyChangeAlert)
     const reference = useKaraokeReference({
         ready: state.ready,
@@ -121,6 +128,7 @@ function SingingPage({ onFinish }) {
     const techniqueCountsRef = useRef({ glissup: 0, kobushi: 0, glissdown: 0, vibrato: 0 })
     const handleTechniqueCountsChange = (counts) => {
         techniqueCountsRef.current = counts
+        setTechniqueCounts(counts)
     }
 
 
@@ -181,6 +189,14 @@ function SingingPage({ onFinish }) {
     }, [state.transposition])
 
     useEffect(() => {
+        resetPlayerScore()
+    }, [resetPlayerScore, state.midiName, state.queueIndex])
+
+    useEffect(() => {
+        if (songInfo) setSongInfo(songInfo)
+    }, [setSongInfo, songInfo])
+
+    useEffect(() => {
         let cancelled = false
         const start = async () => {
             try {
@@ -219,21 +235,27 @@ function SingingPage({ onFinish }) {
             if (onFinish) {
                 const finalScore = getScore()
                 const finalTechniques = { ...techniqueCountsRef.current }
+                setResults({ score: finalScore, techniques: finalTechniques, songInfo })
                 onFinish({ score: finalScore, techniques: finalTechniques, songInfo })
             }
         }
-    }, [state.currentTime, state.duration, onFinish, getScore, songInfo, state.status])
+    }, [state.currentTime, state.duration, onFinish, getScore, songInfo, state.status, setResults])
 
     return (
         <div className={`karaokePage${showSongInfo ? ' karaokePage--intro' : ''}`}>
             <RealtimeScoreCounter score={liveScore} />
             <KeyChangeAlert />
-            {showSongInfo ? (
-                <div className="karaokeSongIntro">
+            <div className="karaokeSongIntro">
+                <div className="karaokeSongIntro__content">
                     <div className="karaokeSongIntro__title">{songInfo.title}</div>
                     {songInfo.artist ? <div className="karaokeSongIntro__artist">♪{songInfo.artist}</div> : null}
                 </div>
-            ) : null}
+                <img
+                    src={logoTitle}
+                    alt="Logo"
+                    className="karaokeSongIntro__logo"
+                />
+            </div>
             <div className="karaoke-stage">
                 <div className="karaoke-screen">
                     <div className="top-section">
@@ -303,6 +325,7 @@ function SingingPage({ onFinish }) {
                     </div>
                 </div>
             </div>
+
         </div>
     )
 }

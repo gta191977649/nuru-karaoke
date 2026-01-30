@@ -18,13 +18,32 @@
   --karaoke-visual-opacity: 0.5;
 
   /* background-color: var(--bg-color); */
-  background-image: url("../assets/bg/bg.jpg");
+  background-image: url("../assets/bg/bg2.jpg");
   background-size: cover;
   font-family: 'Hiragino Sans', 'Meiryo', sans-serif;
   color: white;
   height: 100%;
   width: 100%;
   overflow: hidden;
+}
+
+.karaokeMessagePage {
+  background: #000000;
+  color: #ffffff;
+  height: 100%;
+  width: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-family: 'Hiragino Sans', 'Meiryo', sans-serif;
+}
+
+.karaokeMessagePage__text {
+  font-size: clamp(1.6rem, 2.6vw, 2.4rem);
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-align: center;
+  padding: 0 8%;
 }
 
 .karaoke-stage {
@@ -45,13 +64,8 @@
 
 .karaokeSongIntro {
   position: absolute;
-  top: 120px;
-  left: 50%;
-  transform: translateX(-50%);
+  inset: 0;
   z-index: 900;
-  text-align: center;
-  text-shadow: 0 6px 0 rgba(0, 0, 0, 0.55);
-  color: #ffffff;
   pointer-events: none;
   opacity: 0;
   transition: opacity 1000ms ease;
@@ -59,6 +73,24 @@
 
 .karaokePage--intro .karaokeSongIntro {
   opacity: 1;
+}
+
+.karaokeSongIntro__content {
+  position: absolute;
+  top: 120px;
+  left: 50%;
+  transform: translateX(-50%);
+  text-align: center;
+  text-shadow: 0 6px 0 rgba(0, 0, 0, 0.55);
+  color: #ffffff;
+}
+
+.karaokeSongIntro__logo {
+  position: absolute;
+  bottom: 40px;
+  left: 40px;
+  width: 280px;
+  z-index: 100;
 }
 
 .karaokeSongIntro__title {
@@ -250,23 +282,25 @@
 }
 
 .scoring-badge {
-  background: linear-gradient(#ff33cc, #ff00ff);
+  background: linear-gradient(#fb52d1, #fb36fb);
   color: white;
   padding: 5px 20px;
   border-radius: 8px;
   font-weight: bold;
   font-size: 1 rem;
   display: flex;
+  text-shadow: 1px 1px 0 #000;
   align-items: center;
-  box-shadow: 0 0 15px rgba(255, 0, 255, 0.6);
-  /* border: 2px solid rgba(174, 0, 116, 0.8); */
+  /* box-shadow: 0 0 15px rgba(174, 0, 116, 0.8); */
+  border: 2px solid rgb(255, 155, 255);
+
   animation: scoringPulse 1s infinite alternate;
 }
 
 @keyframes scoringPulse {
   0% {
     transform: scale(1);
-    box-shadow: 0 0 15px rgba(255, 0, 255, 0.6);
+    box-shadow: 0 0 15px rgba(255, 73, 255, 0.6);
   }
 
   100% {
@@ -1560,4 +1594,29 @@
   line-height: 1;
   /* text-shadow: 0 0 10px #00befc; */
   margin-top: 2px;
+}
+
+.karaokeTransitionRoot {
+  position: relative;
+  width: 100%;
+  height: 100%;
+  isolation: isolate;
+}
+
+.karaokeTransition {
+  position: absolute;
+  inset: 0;
+  background: #000000;
+  opacity: 0;
+  pointer-events: none;
+  z-index: 20000;
+  transition: opacity var(--karaoke-transition-ms, 300ms) ease;
+}
+
+.karaokeTransition--in {
+  opacity: 1;
+}
+
+.karaokeTransition--out {
+  opacity: 0;
 }

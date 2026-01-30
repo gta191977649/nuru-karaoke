@@ -28,7 +28,7 @@ function useKaraokeSongIntro({
   }, [showSongInfo, reference, currentTime])
 
   useEffect(() => {
-    if (!midiUrl) return
+    if (!midiUrl && !midiName) return
 
     const currentSong = queueIndex >= 0 ? queue?.[queueIndex] : null
     const title = currentSong?.title || midiName || ''
@@ -40,10 +40,11 @@ function useKaraokeSongIntro({
     }
 
     // Only trigger the intro animation if it's a new song load
-    if (midiUrl === lastIntroMidiUrl) return
+    const introKey = midiUrl || `${queueIndex ?? -1}:${midiName || ''}`
+    if (introKey === lastIntroMidiUrl) return
     if (!title) return
 
-    setLastIntroMidiUrl(midiUrl)
+    setLastIntroMidiUrl(introKey)
     if (showKeyChangeAlert) showKeyChangeAlert(transposition ?? 0, 5000)
     setShowSongInfo(true)
 

@@ -1,7 +1,7 @@
 import { Sequencer, WorkletSynthesizer } from 'spessasynth_lib'
 import processorUrl from 'spessasynth_lib/dist/spessasynth_processor.min.js?url'
 import defaultSoundFontUrl from '../soundfont/sc55.sf2'
-//import defaultSoundFontUrl from '../soundfont/gmex.sf2' //Default, Save Memory
+//import defaultSoundFontUrl from '../soundfont/a320u.sf2'
 import { createMidiMapper } from './MidiMapper.js'
 import { findActiveLyricIndex, parseLrc } from './lrc.js'
 import { getKaraokeAudioEngine } from './audioEngine.js'
@@ -10,8 +10,8 @@ import { getKaraokeStoreState, setKaraokeStoreState } from '../state/karaokeStor
 
 const DEFAULT_CONFIG = {
   enableMIDIStandardMapping: true,
-  reverb: 1.5,
-  chorus: 1.3,
+  reverb: 1.15,
+  chorus: 1.1,
 }
 
 const MIDI_STATUS = {
@@ -149,7 +149,7 @@ const encodeMidiEvent = (event, buffer3, buffer2) => {
   }
 }
 
-function extractChannelPatchesFromMIDI(midi) {
+function extractChannelPatchesFromMIDI(midi, drumChannels = null) {
   if (!midi?.tracks?.length) return Array.from({ length: 16 }, () => null)
 
   const bankMSB = Array.from({ length: 16 }, () => 0)
@@ -221,11 +221,12 @@ function extractChannelPatchesFromMIDI(midi) {
       if (firstNoteSeen[channel]) continue
       firstNoteSeen[channel] = true
       const program = programCandidate[channel] ?? 0
+      const isDrum = channel === 9 || Boolean(drumChannels?.[channel])
       patchAtFirstNote[channel] = {
         program,
         bankMSB: bankCandidateMSB[channel],
         bankLSB: bankCandidateLSB[channel],
-        isGMGSDrum: channel === 9,
+        isGMGSDrum: isDrum,
       }
     }
   }
@@ -233,18 +234,20 @@ function extractChannelPatchesFromMIDI(midi) {
   for (let ch = 0; ch < 16; ch++) {
     if (patchAtFirstNote[ch]) continue
     if (programCandidate[ch] == null) continue
+    const isDrum = ch === 9 || Boolean(drumChannels?.[ch])
     patchAtFirstNote[ch] = {
       program: programCandidate[ch],
       bankMSB: bankCandidateMSB[ch],
       bankLSB: bankCandidateLSB[ch],
-      isGMGSDrum: ch === 9,
+      isGMGSDrum: isDrum,
     }
   }
 
   for (let ch = 0; ch < 16; ch++) {
     if (patchAtFirstNote[ch]) continue
     if (!hasAnyEvent[ch]) continue
-    patchAtFirstNote[ch] = { program: 0, bankMSB: bankMSB[ch], bankLSB: bankLSB[ch], isGMGSDrum: ch === 9 }
+    const isDrum = ch === 9 || Boolean(drumChannels?.[ch])
+    patchAtFirstNote[ch] = { program: 0, bankMSB: bankMSB[ch], bankLSB: bankLSB[ch], isGMGSDrum: isDrum }
   }
 
   return patchAtFirstNote
@@ -278,6 +281,11 @@ class SynthEngine {
     this._synth = null
     this._seq = null
 
+    this._smfKnifeConfigText = ''
+    this._smfKnifeConfigName = ''
+    this._smfKnifeForce = false
+    this._lastMidiBuffer = null
+
     this._midiMapper = createMidiMapper(null)
     this._midiEvent = createMidiEvent()
     this._midiMessage3 = new Uint8Array(3)
@@ -292,12 +300,23 @@ class SynthEngine {
     // Real-time instrument tracking
     this._channelInstrumentNames = Array.from({ length: 16 }, () => '—')
     this._channelPrograms = Array.from({ length: 16 }, () => ({ program: 0, bankMSB: 0, bankLSB: 0 }))
+    this._drumChannelsApplied = new Uint8Array(16)
+    this._midiChannelState = Array.from({ length: 16 }, (_, i) => ({
+      channel: i,
+      isDrum: i === 9,
+      program: 0,
+      bankMSB: 0,
+      bankLSB: 0,
+      name: i === 9 ? 'Drums' : '—',
+    }))
     this._instrumentDirty = false
 
     this._raf = 0
     this._prevFinished = false
     this._isAdvancing = false
     this._isStopping = false
+    this._sequencerEventsBound = false
+    this._autoPlayOnNextSong = false
 
     this._midiMapper.setEnabled(DEFAULT_CONFIG.enableMIDIStandardMapping)
     this._midiMapper.onStateChange = (state) => {
@@ -309,11 +328,34 @@ class SynthEngine {
       midiMapState: this._midiMapper.getState(),
       reverbGain: DEFAULT_CONFIG.reverb,
       chorusGain: DEFAULT_CONFIG.chorus,
+      smfKnifeConfigName: '',
+      smfKnifeSource: '',
+      smfKnifeDestination: '',
+      midiChannels: this._cloneMidiChannelState(),
     })
   }
 
   _setState(patch) {
     setKaraokeStoreState(patch)
+  }
+
+  _cloneMidiChannelState() {
+    return this._midiChannelState.map((entry) => ({ ...entry }))
+  }
+
+  _syncMidiChannelState(channel) {
+    if (!Number.isInteger(channel) || channel < 0 || channel > 15) return
+    const base = this._midiChannelState[channel]
+    const programState = this._channelPrograms[channel]
+    const name = this._channelInstrumentNames[channel] || '—'
+    this._midiChannelState[channel] = {
+      ...base,
+      program: programState.program,
+      bankMSB: programState.bankMSB,
+      bankLSB: programState.bankLSB,
+      name,
+    }
+    this._setState({ midiChannels: this._cloneMidiChannelState() })
   }
 
   async ensureInitialized() {
@@ -340,6 +382,7 @@ class SynthEngine {
       this._context = context
       this._synth = synth
       this._seq = seq
+      this._bindSequencerEvents()
       this._setupMidiMapper()
 
       this._applyDefaultEffects()
@@ -396,6 +439,8 @@ class SynthEngine {
             uiState.lrcEntries[activeLyricIndex + 1]?.time ?? Math.max(start + 1, duration || start + 1)
           const denom = Math.max(0.001, end - start)
           karaokeProgress = Math.min(1, Math.max(0, (t - start) / denom))
+        } else if (duration > 0) {
+          karaokeProgress = Math.min(1, Math.max(0, currentTime / duration))
         }
 
         const isPlaying = !seq.paused && !seq.isFinished
@@ -418,9 +463,11 @@ class SynthEngine {
 
         if (seq.isFinished && !this._prevFinished) {
           this._prevFinished = true
-          this._advanceQueueIfNeeded().catch(() => {
-            // ignore
-          })
+          if (PLAYER_CONFIG.autoAdvanceOnFinish) {
+            this._advanceQueueIfNeeded().catch(() => {
+              // ignore
+            })
+          }
         }
         if (!seq.isFinished) this._prevFinished = false
       }
@@ -444,8 +491,21 @@ class SynthEngine {
     if (typeof this._synth.setDrums !== 'function') return
     try {
       drumChannels.forEach((isDrum, channel) => {
+        const next = isDrum ? 1 : 0
+        if (this._drumChannelsApplied[channel] === next) return
+        this._drumChannelsApplied[channel] = next
+        const entry = this._midiChannelState[channel]
+        if (entry) {
+          entry.isDrum = Boolean(isDrum)
+          if (entry.isDrum && !entry.name) entry.name = 'Drums'
+        }
         this._synth.setDrums(channel, Boolean(isDrum))
+        const program = this._channelPrograms?.[channel]?.program ?? 0
+        if (typeof this._synth.programChange === 'function') {
+          this._synth.programChange(channel, program)
+        }
       })
+      this._setState({ midiChannels: this._cloneMidiChannelState() })
     } catch (e) {
       console.warn('Failed to sync drums', e)
     }
@@ -461,6 +521,46 @@ class SynthEngine {
         this._handleMidiOutputMessage(data)
       },
     })
+  }
+
+  _bindSequencerEvents() {
+    if (!this._seq || this._sequencerEventsBound) return
+    this._sequencerEventsBound = true
+    this._seq.eventHandler.addEvent('songChange', 'sync-playback-state', () => {
+      const duration = this._seq?.duration || 0
+      this._setState({ currentTime: 0, duration })
+      if (this._autoPlayOnNextSong) {
+        this._autoPlayOnNextSong = false
+        this.play()
+      }
+    })
+  }
+
+  _rebuildMidiMapper(buffer) {
+    if (buffer) this._lastMidiBuffer = buffer
+    const prevEnabled = getKaraokeStoreState().enableMIDIStandardMapping ?? DEFAULT_CONFIG.enableMIDIStandardMapping
+    this._midiMapper = createMidiMapper(buffer, {
+      smfKnifeConfigText: this._smfKnifeConfigText,
+      smfKnifeConfigName: this._smfKnifeConfigName,
+      forceSmfKnife: Boolean(this._smfKnifeForce),
+    })
+    this._midiMapper.setEnabled(prevEnabled)
+    if (typeof this._midiMapper.reset === 'function') {
+      this._midiMapper.reset()
+    }
+    this._midiMapper.onStateChange = (state) => {
+      this._setState({ midiMapState: state })
+      console.log(state)
+      this._bgSyncDrums(state.drumChannels)
+    }
+    const newState = this._midiMapper.getState()
+    this._setState({
+      midiMapState: newState,
+      smfKnifeConfigName: newState?.globalMode === 'smfknife' ? newState.configName : '',
+      smfKnifeSource: newState?.mappingSource || '',
+      smfKnifeDestination: newState?.mappingDestination || '',
+    })
+    this._bgSyncDrums(newState.drumChannels)
   }
 
   _handleMidiOutputMessage(message) {
@@ -525,6 +625,7 @@ class SynthEngine {
         this._channelInstrumentNames[channel] = name
         this._instrumentDirty = true
       }
+      this._syncMidiChannelState(channel)
     }
   }
 
@@ -537,16 +638,26 @@ class SynthEngine {
     this._channelActivityVelocity.fill(0)
     this._channelActivityTime.fill(-1)
     this._activityDirty = false
+    this._drumChannelsApplied.fill(0)
 
     // Reset instrument state
     this._channelInstrumentNames.fill('—')
     this._channelPrograms.forEach(p => { p.program = 0; p.bankMSB = 0; p.bankLSB = 0 })
     this._instrumentDirty = true
+    this._midiChannelState = Array.from({ length: 16 }, (_, i) => ({
+      channel: i,
+      isDrum: i === 9,
+      program: 0,
+      bankMSB: 0,
+      bankLSB: 0,
+      name: i === 9 ? 'Drums' : '—',
+    }))
 
     this._setState({
       channelActivityVelocity: this._channelActivityVelocity.slice(),
       channelActivityTime: this._channelActivityTime.slice(),
-      channelInstrumentNames: this._channelInstrumentNames.slice()
+      channelInstrumentNames: this._channelInstrumentNames.slice(),
+      midiChannels: this._cloneMidiChannelState(),
     })
   }
 
@@ -635,6 +746,32 @@ class SynthEngine {
         if (sendProgram) sendProgram(ch, 0)
       }
     }
+    if (typeof synth.setDrums === 'function') {
+      for (let ch = 0; ch < 16; ch++) {
+        const isDrum = ch === 9
+        synth.setDrums(ch, isDrum)
+        const entry = this._midiChannelState?.[ch]
+        if (entry) {
+          entry.isDrum = isDrum
+          entry.name = isDrum ? 'Drums' : (this._channelInstrumentNames?.[ch] || '—')
+        }
+        this._drumChannelsApplied[ch] = isDrum ? 1 : 0
+      }
+      this._setState({ midiChannels: this._cloneMidiChannelState() })
+    }
+    if (typeof synth.stopAll === 'function') {
+      try {
+        synth.stopAll(true)
+      } catch {
+        // ignore
+      }
+    }
+    if (typeof synth.muteChannel === 'function') {
+      const enabled = getKaraokeStoreState().enabledChannels || []
+      for (let ch = 0; ch < 16; ch++) {
+        synth.muteChannel(ch, !enabled[ch])
+      }
+    }
     // Reset internal instrument tracking to default state
     this._channelPrograms.forEach((state, channel) => {
       state.program = 0
@@ -679,89 +816,54 @@ class SynthEngine {
     }
   }
 
-  async loadMidiFromUrl(url, options = {}) {
+  async loadMIDI({ buffer, midiName, midiUrl = '' }) {
     await this.ensureInitialized()
     this.panic()
-    // Buffer loading is needed for detection. Url load gets buffer later.
-    // Ideally we should move buffer fetch earlier if we want early mapper creation?
-    // Wait, loadFromUrl fetches buffer. We can update mapper AFTER fetch.
-    this._resetChannelActivity()
-    this._resetPolyphony()
-    this._setState({ status: `Loading MIDI: ${url}` })
-    const response = await fetch(url)
-    if (!response.ok) throw new Error(`MIDI HTTP ${response.status}`)
-    const buffer = await response.arrayBuffer()
+    this._autoPlayOnNextSong = true
 
-    // Re-create mapper with new buffer for detection
-    const prevEnabled = getKaraokeStoreState().enableMIDIStandardMapping ?? DEFAULT_CONFIG.enableMIDIStandardMapping
-    this._midiMapper = createMidiMapper(buffer)
-    this._midiMapper.setEnabled(prevEnabled)
-    this._midiMapper.onStateChange = (state) => {
-      this._setState({ midiMapState: state })
-      this._bgSyncDrums(state.drumChannels)
-    }
-    this._setupMidiMapper() // Re-attach if needed? Actually _seq.connectMIDIOutput is persistent, but the closure uses this._midiMapper ref?
-    // The loop in _handleMidiOutputMessage uses this._midiMapper, so updating the property is enough if the closure reads "this._midiMapper" dynamically.
-    // Yes: "this._xgMapper ? this._xgMapper(event)"
-
-    // Update State
-    const newState = this._midiMapper.getState()
-    this._setState({ midiMapState: newState })
-    this._bgSyncDrums(newState.drumChannels)
-    console.log({ status: `Loading MIDI: ${url}` })
-
-    this._seq.pause()
-    this._seq.currentTime = 0
-    this._synth.stopAll(true)
-    this._seq.loadNewSongList([{ binary: buffer, fileName: url.split('/').pop() }])
-    const midiName = url.split('/').pop() || url
-    this._setState({ midiUrl: url, midiName, status: `MIDI loaded: ${midiName}` })
-
-    this._updateChannelInstrumentNames().catch(() => {
-      // ignore
-    })
-    this._applyDefaultEffects()
-
-    const autoPlay = options.autoPlay !== false
-    if (autoPlay) this.play()
-
-    return buffer
-  }
-
-  async loadMidiFromFile(file, options = {}) {
-    await this.ensureInitialized()
-    this.panic()
-    const buffer = await file.arrayBuffer()
-
-    const prevEnabled = getKaraokeStoreState().enableMIDIStandardMapping ?? DEFAULT_CONFIG.enableMIDIStandardMapping
-    this._midiMapper = createMidiMapper(buffer)
-    this._midiMapper.setEnabled(prevEnabled)
-    this._midiMapper.onStateChange = (state) => {
-      this._setState({ midiMapState: state })
-      this._bgSyncDrums(state.drumChannels)
-    }
-    const newState = this._midiMapper.getState()
-    this._setState({ midiMapState: newState })
-    this._bgSyncDrums(newState.drumChannels)
+    this._rebuildMidiMapper(buffer)
+    this._setupMidiMapper()
 
     this._resetChannelActivity()
     this._resetPolyphony()
-    const midiName = file.name
+    this._setState({ isPlaying: false, currentTime: 0, duration: 0 })
+
     this._seq.pause()
     this._seq.currentTime = 0
     this._synth.stopAll(true)
     this._seq.loadNewSongList([{ binary: buffer, fileName: midiName }])
-    this._setState({ midiUrl: '', midiName, status: `MIDI loaded: ${midiName}` })
+    const initialDuration = this._seq?.duration || 0
+    this._setState({ midiUrl, midiName, status: `MIDI loaded: ${midiName}`, duration: initialDuration, currentTime: 0 })
+    requestAnimationFrame(() => {
+      if (!this._seq) return
+      const nextDuration = this._seq.duration || 0
+      if (nextDuration !== initialDuration) {
+        this._setState({ duration: nextDuration, currentTime: 0 })
+      }
+    })
 
     this._updateChannelInstrumentNames().catch(() => {
       // ignore
     })
     this._applyDefaultEffects()
-
-    const autoPlay = options.autoPlay !== false
-    if (autoPlay) this.play()
+    this._startClock()
 
     return buffer
+  }
+
+  async loadMidiFromUrl(url, options = {}) {
+    this._setState({ status: `Loading MIDI: ${url}` })
+    const response = await fetch(url)
+    if (!response.ok) throw new Error(`MIDI HTTP ${response.status}`)
+    const buffer = await response.arrayBuffer()
+    const midiName = url.split('/').pop() || url
+    return this.loadMIDI({ buffer, midiName, midiUrl: url })
+  }
+
+  async loadMidiFromFile(file, options = {}) {
+    const buffer = await file.arrayBuffer()
+    const midiName = file.name
+    return this.loadMIDI({ buffer, midiName, midiUrl: '' })
   }
 
   setPendingSong(song) {
@@ -834,7 +936,6 @@ class SynthEngine {
       lrcEntries: [],
       lyricOffsetMs: 0,
       activeLyricIndex: -1,
-      karaokeProgress: 0,
     })
     this._setState({ queueIndex: i })
     await this.loadMidiFromUrl(song.url, { autoPlay: false })
@@ -977,6 +1078,32 @@ class SynthEngine {
     this._setState({ chorusGain: v })
   }
 
+  setSmfKnifeMapping(text, name = '') {
+    const sourceText = String(text || '')
+    if (!sourceText.trim()) return
+    this._smfKnifeConfigText = sourceText
+    this._smfKnifeConfigName = name || 'SMF Knife'
+    this._smfKnifeForce = false
+    this._setState({
+      smfKnifeConfigName: this._smfKnifeConfigName,
+      smfKnifeSource: '',
+      smfKnifeDestination: '',
+    })
+    this._rebuildMidiMapper(this._lastMidiBuffer || null)
+  }
+
+  clearSmfKnifeMapping() {
+    this._smfKnifeConfigText = ''
+    this._smfKnifeConfigName = ''
+    this._smfKnifeForce = false
+    this._setState({
+      smfKnifeConfigName: '',
+      smfKnifeSource: '',
+      smfKnifeDestination: '',
+    })
+    this._rebuildMidiMapper(this._lastMidiBuffer || null)
+  }
+
   setTransposition(semitones) {
     if (!this._synth) return
     const v = Number(semitones) || 0
@@ -1022,7 +1149,8 @@ class SynthEngine {
       setTimeout(() => reject(new Error('getMIDI timeout')), timeoutMs)
     })
     const midi = await Promise.race([this._seq.getMIDI(), timeout])
-    const patches = extractChannelPatchesFromMIDI(midi)
+    const drumChannels = this._midiMapper?.getState?.()?.drumChannels
+    const patches = extractChannelPatchesFromMIDI(midi, drumChannels)
     // Update internal state
     patches.forEach((p, i) => {
       if (p) {
