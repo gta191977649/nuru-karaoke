@@ -3,6 +3,7 @@ import FindSongs from './FindSongs.jsx'
 import ComfirnSong from './ComfirnSong.jsx'
 import { setPendingSong } from '../engine/playerController.js'
 import ViewSelectedSong from './ViewSelectedSong.jsx'
+import FindSongKeywords from './FindSongKeywords.jsx'
 import logo from '../assets/logo.png'
 
 const SCREENS = {
@@ -15,6 +16,7 @@ const SCREENS = {
   comfirmSongs: 'confirmSongs',
   karaoke: 'karaoke',
   queue: 'queue',
+  findSongKeywords: 'findSongKeywords',
 }
 
 function WiiScreen({ title, subtitle, onBack }) {
@@ -100,6 +102,14 @@ function WiiHomeMain({ screen, onNavigate, onOpenKaraoke, karaokeTargetRef, main
             />
           </main>
         )
+      case SCREENS.findSongKeywords:
+        return (
+          <main className="wiiHome__main" ref={mainRef}>
+            <FindSongKeywords
+              onBack={() => onNavigate(SCREENS.home)}
+            />
+          </main>
+        )
 
       default:
         return (
@@ -155,7 +165,7 @@ function WiiHomeMain({ screen, onNavigate, onOpenKaraoke, karaokeTargetRef, main
               </Button>
             </Col>
             <Col xs={6} md={6} lg={3}>
-              <Button className="joyTile w-100" type="button">
+              <Button className="joyTile w-100" type="button" onClick={() => onNavigate(SCREENS.findSongKeywords)}>
                 キーワード
                 <span className="joyTile__sub">KEYWORD</span>
               </Button>
