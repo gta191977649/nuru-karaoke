@@ -1,5 +1,5 @@
 import '../Karaoke.css'
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { useKaraokeStore } from '../../state/karaokeStore.js'
 import { synthEngine } from '../../engine/SynthEngine.js'
 import { sharedPitchEngine, startSharedMic, stopSharedMic } from '../../engine/audio/pitch/sharedPitchEngine.js'
@@ -74,6 +74,11 @@ function SingingPage({ onFinish }) {
     const [micActive, setMicActive] = useState(false)
     const currentTimeRef = useRef(0)
     const transpositionRef = useRef(0)
+    const lyricsContainerRef = useRef(null)
+    const lyricsMeasureLeftRef = useRef(null)
+    const lyricsMeasureRightRef = useRef(null)
+    const overflowLayoutRef = useRef(false)
+    const overflowLockIndexRef = useRef(-1)
     const micRmsGate = 0.01
     const liveScore = usePlayerScoreStore((store) => store.liveScore)
     const setLiveScore = usePlayerScoreStore((store) => store.setLiveScore)
@@ -150,27 +155,84 @@ function SingingPage({ onFinish }) {
 
     // Live score now updates via onScoreChange from the scoring hook.
 
-    const lines = useMemo(() => {
+    const progressPercent = Math.round((state.karaokeProgress ?? 0) * 1000) / 10
+
+    const { lineRowsTwo, lineRowsThree, measureLeftSegments, measureRightSegments } = useMemo(() => {
         const entries = state.lrcEntries || []
         const i = state.activeLyricIndex ?? -1
-        const pairStart = i >= 0 ? i - (i % 2) : -1
-        const current =
-            pairStart >= 0 ? splitRubySegments(entries[pairStart]?.text) : { segments: [{ text: '…', ruby: '' }], hasRuby: false }
-        const next =
-            pairStart + 1 < entries.length
-                ? splitRubySegments(entries[pairStart + 1]?.text)
-                : { segments: [{ text: '…', ruby: '' }], hasRuby: false }
-        const activeInPair = i >= 0 ? i % 2 : 0
-        return {
-            current,
-            next,
-            currentAlign: 'text-left',
-            nextAlign: 'text-right lyric-row--indent',
-            activeInPair,
-        }
-    }, [state.activeLyricIndex, state.lrcEntries])
+        const placeholder = { segments: [{ text: '…', ruby: '' }], hasRuby: false }
+        const stripRuby = (text) => String(text ?? '').replace(/<[^>]*>/g, '')
+        const safeSegments = (text) => (text ? splitRubySegments(text) : placeholder)
 
-    const progressPercent = Math.round((state.karaokeProgress ?? 0) * 1000) / 10
+        const pairStart = i >= 0 ? i - (i % 2) : -1
+        const current = pairStart >= 0 ? safeSegments(entries[pairStart]?.text) : placeholder
+        const next =
+            pairStart + 1 < entries.length ? safeSegments(entries[pairStart + 1]?.text) : placeholder
+        const activeInPair = i >= 0 ? i % 2 : 0
+        const aText = stripRuby(entries[pairStart]?.text || '')
+        const bText = stripRuby(entries[pairStart + 1]?.text || '')
+
+        const prev = i - 1 >= 0 ? safeSegments(entries[i - 1]?.text) : placeholder
+        const curr = i >= 0 ? safeSegments(entries[i]?.text) : placeholder
+        const nextThree = i + 1 < entries.length ? safeSegments(entries[i + 1]?.text) : placeholder
+
+        return {
+            lineRowsTwo: [
+                { segments: current.segments, align: 'text-left', progress: activeInPair === 0 ? progressPercent : 100 },
+                { segments: next.segments, align: 'text-right lyric-row--indent', progress: activeInPair === 1 ? progressPercent : 0 },
+            ],
+            lineRowsThree: [
+                { segments: prev.segments, align: 'text-center', progress: i - 1 >= 0 ? 100 : 0 },
+                { segments: curr.segments, align: 'text-center', progress: progressPercent },
+                { segments: nextThree.segments, align: 'text-center', progress: 0 },
+            ],
+            measureLeftSegments: aText ? splitRubySegments(aText).segments : placeholder.segments,
+            measureRightSegments: bText ? splitRubySegments(bText).segments : placeholder.segments,
+        }
+    }, [progressPercent, state.activeLyricIndex, state.lrcEntries])
+
+    useLayoutEffect(() => {
+        const measureOverflow = () => {
+            const container = lyricsContainerRef.current
+            const measurerLeft = lyricsMeasureLeftRef.current
+            const measurerRight = lyricsMeasureRightRef.current
+            if (!container || !measurerLeft || !measurerRight) return
+            const containerWidth = container.clientWidth
+            const leftWidth = measurerLeft.scrollWidth
+            const rightWidth = measurerRight.scrollWidth
+            const textWidth = Math.max(leftWidth, rightWidth)
+            const hysteresisPx = 24
+            const currentlyOverflowing = overflowLayoutRef.current
+            const next = currentlyOverflowing
+                ? textWidth > containerWidth - hysteresisPx
+                : textWidth > containerWidth + 1
+            const activeIndex = Number.isFinite(state.activeLyricIndex) ? state.activeLyricIndex : -1
+            const activePairStart = activeIndex >= 0 ? activeIndex - (activeIndex % 2) : -1
+            if (next) {
+                overflowLayoutRef.current = true
+                overflowLockIndexRef.current = activePairStart
+                if (container.dataset.layout !== 'three') {
+                    container.dataset.layout = 'three'
+                }
+                return
+            }
+
+            const isLocked = overflowLockIndexRef.current >= 0 && activeIndex <= overflowLockIndexRef.current + 1
+            if (isLocked) return
+
+            overflowLayoutRef.current = false
+            overflowLockIndexRef.current = -1
+            if (container.dataset.layout !== 'two') {
+                container.dataset.layout = 'two'
+            }
+        }
+
+        measureOverflow()
+        if (typeof ResizeObserver === 'undefined' || !lyricsContainerRef.current) return
+        const observer = new ResizeObserver(measureOverflow)
+        observer.observe(lyricsContainerRef.current)
+        return () => observer.disconnect()
+    }, [measureLeftSegments, measureRightSegments, state.activeLyricIndex, state.lrcEntries])
 
     // Audio start logic
     useEffect(() => {
@@ -290,37 +352,56 @@ function SingingPage({ onFinish }) {
                     </div>
 
                     <div className="bottom-section">
-                        <div className="lyrics-container">
-                            <div className={`lyric-row ${lines.currentAlign}`}>
-                                <span className="text">
-                                    <span
-                                        className="karaokeTextWrap"
-                                        style={{
-                                            '--karaoke-progress': `${lines.activeInPair === 0 ? progressPercent : 100}%`,
-                                        }}
-                                    >
-                                        <span className="karaokeTextBase">{renderRubySegments(lines.current.segments)}</span>
-                                        <span className="karaokeTextFill" aria-hidden="true">
-                                            {renderRubySegments(lines.current.segments)}
-                                        </span>
+                        <div className="lyrics-container" ref={lyricsContainerRef} data-layout="two">
+                            <span className="lyrics-measure" aria-hidden="true">
+                                <span className="text" ref={lyricsMeasureLeftRef}>
+                                    <span className="karaokeTextWrap">
+                                        <span className="karaokeTextBase">{renderRubySegments(measureLeftSegments)}</span>
                                     </span>
                                 </span>
+                                <span className="text" ref={lyricsMeasureRightRef}>
+                                    <span className="karaokeTextWrap">
+                                        <span className="karaokeTextBase">{renderRubySegments(measureRightSegments)}</span>
+                                    </span>
+                                </span>
+                            </span>
+                            <div className="lyrics-lines lyrics-lines--two">
+                                {lineRowsTwo.map((row, idx) => (
+                                    <div className={`lyric-row ${row.align}`} key={`two-${row.align}-${idx}`}>
+                                        <span className="text">
+                                            <span
+                                                className="karaokeTextWrap"
+                                                style={{
+                                                    '--karaoke-progress': `${row.progress}%`,
+                                                }}
+                                            >
+                                                <span className="karaokeTextBase">{renderRubySegments(row.segments)}</span>
+                                                <span className="karaokeTextFill" aria-hidden="true">
+                                                    {renderRubySegments(row.segments)}
+                                                </span>
+                                            </span>
+                                        </span>
+                                    </div>
+                                ))}
                             </div>
-
-                            <div className={`lyric-row ${lines.nextAlign}`}>
-                                <span className="text">
-                                    <span
-                                        className="karaokeTextWrap"
-                                        style={{
-                                            '--karaoke-progress': `${lines.activeInPair === 1 ? progressPercent : 0}%`,
-                                        }}
-                                    >
-                                        <span className="karaokeTextBase">{renderRubySegments(lines.next.segments)}</span>
-                                        <span className="karaokeTextFill" aria-hidden="true">
-                                            {renderRubySegments(lines.next.segments)}
+                            <div className="lyrics-lines lyrics-lines--three">
+                                {lineRowsThree.map((row, idx) => (
+                                    <div className={`lyric-row ${row.align}`} key={`three-${row.align}-${idx}`}>
+                                        <span className="text">
+                                            <span
+                                                className="karaokeTextWrap"
+                                                style={{
+                                                    '--karaoke-progress': `${row.progress}%`,
+                                                }}
+                                            >
+                                                <span className="karaokeTextBase">{renderRubySegments(row.segments)}</span>
+                                                <span className="karaokeTextFill" aria-hidden="true">
+                                                    {renderRubySegments(row.segments)}
+                                                </span>
+                                            </span>
                                         </span>
-                                    </span>
-                                </span>
+                                    </div>
+                                ))}
                             </div>
                         </div>
                     </div>
