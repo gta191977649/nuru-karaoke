@@ -1,7 +1,8 @@
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { Button, Col, Form, Row, Stack } from 'react-bootstrap'
 
 import { SONG_LIBRARY } from '../library/songs.js'
+import { fetchSongs } from '../services/songLibrary.js'
 
 
 const KEYBOARD_ROWS = [
@@ -11,8 +12,6 @@ const KEYBOARD_ROWS = [
   ['Z', 'X', 'C', 'V', 'B', 'N', 'M'],
 ]
 
-const MOCK_SONGS = SONG_LIBRARY
-
 function normalize(text) {
   return String(text ?? '').trim().toLowerCase()
 }
@@ -21,21 +20,52 @@ function FindSongs({ onBack, onSelectSong }) {
   const [term, setTerm] = useState('Pretender')
   const [isComposing, setIsComposing] = useState(false)
   const [mode, setMode] = useState('title') // 'title' | 'artist'
+  const [songs, setSongs] = useState(SONG_LIBRARY)
+  const [isLoading, setIsLoading] = useState(false)
+  const [loadError, setLoadError] = useState('')
+
+  useEffect(() => {
+    const controller = new AbortController()
+    let didCancel = false
+
+    setIsLoading(true)
+    setLoadError('')
+    fetchSongs({ signal: controller.signal })
+      .then((items) => {
+        if (didCancel) return
+        setSongs(Array.isArray(items) ? items : [])
+      })
+      .catch((err) => {
+        if (didCancel) return
+        setLoadError(err?.message || 'Failed to load songs.')
+      })
+      .finally(() => {
+        if (didCancel) return
+        setIsLoading(false)
+      })
+
+    return () => {
+      didCancel = true
+      controller.abort()
+    }
+  }, [])
 
   const suggestions = useMemo(() => {
     const q = normalize(term)
     if (!q) return []
-    const matches = MOCK_SONGS.filter((song) => {
+    const matches = songs.filter((song) => {
       const haystack = mode === 'artist' ? song.artist : song.title
       return normalize(haystack).includes(q)
     })
     return matches.slice(0, 3)
-  }, [mode, term])
+  }, [mode, songs, term])
 
   return (
     <div className="wiiFind">
       <div className="wiiFind__header">
         <div className="wiiFind__hint">Enter a search term to find an original artist or song.</div>
+        {isLoading ? <div className="wiiFind__hint text-muted">Loading songs…</div> : null}
+        {loadError ? <div className="wiiFind__hint text-danger">{loadError}</div> : null}
       </div>
 
       <Row className="g-3">

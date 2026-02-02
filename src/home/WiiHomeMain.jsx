@@ -4,6 +4,8 @@ import ComfirnSong from './ComfirnSong.jsx'
 import { setPendingSong } from '../engine/playerController.js'
 import ViewSelectedSong from './ViewSelectedSong.jsx'
 import FindSongKeywords from './FindSongKeywords.jsx'
+import Leaderboard from './Leaderboard.jsx'
+import ScoringPage from './ScoringPage.jsx'
 import logo from '../assets/logo.png'
 
 const SCREENS = {
@@ -17,6 +19,7 @@ const SCREENS = {
   karaoke: 'karaoke',
   queue: 'queue',
   findSongKeywords: 'findSongKeywords',
+  leaderboard: 'leaderboard',
 }
 
 function WiiScreen({ title, subtitle, onBack }) {
@@ -59,7 +62,7 @@ function WiiHomeMain({ screen, onNavigate, onOpenKaraoke, karaokeTargetRef, main
       case SCREENS.moreModes:
         return (
           <main className="wiiHome__main" ref={mainRef}>
-            <WiiScreen title="More Modes" subtitle="TODO: scoring / game modes" onBack={() => onNavigate(SCREENS.home)} />
+            <ScoringPage onBack={() => onNavigate(SCREENS.home)} />
           </main>
         )
       case SCREENS.singWithGamepad:
@@ -107,7 +110,20 @@ function WiiHomeMain({ screen, onNavigate, onOpenKaraoke, karaokeTargetRef, main
           <main className="wiiHome__main" ref={mainRef}>
             <FindSongKeywords
               onBack={() => onNavigate(SCREENS.home)}
+              onSelectSong={(song) => {
+                onNavigate(SCREENS.comfirmSongs)
+                setPendingSong(song)
+              }}
+              onConfirm={() => {
+                if (onOpenKaraoke) onOpenKaraoke()
+              }}
             />
+          </main>
+        )
+      case SCREENS.leaderboard:
+        return (
+          <main className="wiiHome__main" ref={mainRef}>
+            <Leaderboard onBack={() => onNavigate(SCREENS.home)} />
           </main>
         )
 
@@ -159,7 +175,7 @@ function WiiHomeMain({ screen, onNavigate, onOpenKaraoke, karaokeTargetRef, main
               </Button>
             </Col>
             <Col xs={6} md={6} lg={3}>
-              <Button className="joyTile w-100" type="button">
+              <Button className="joyTile w-100" type="button" onClick={() => onNavigate(SCREENS.leaderboard)}>
                 ランキング
                 <span className="joyTile__sub">RANKING</span>
               </Button>

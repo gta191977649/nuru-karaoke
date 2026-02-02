@@ -1,0 +1,15 @@
+{% extends "base.html" %}
+
+{% block title %}Delete Song{% endblock %}
+
+{% block content %}
+  <div class="card p-4 mx-auto" style="max-width: 600px;">
+    <h2 class="mb-3">Delete Song</h2>
+    <p>Are you sure you want to delete <strong>{{ song.title }}</strong>?</p>
+    <form method="post" class="d-flex gap-2">
+      {% csrf_token %}
+      <button class="btn btn-danger" type="submit">Delete</button>
+      <a class="btn btn-outline-secondary" href="{% url 'ui_song_edit' song.pk %}">Cancel</a>
+    </form>
+  </div>
+{% endblock %}

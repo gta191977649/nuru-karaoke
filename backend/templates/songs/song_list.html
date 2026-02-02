@@ -1,0 +1,85 @@
+{% extends "base.html" %}
+
+{% block title %}Songs{% endblock %}
+
+{% block content %}
+  <div class="card p-4">
+    <div class="d-flex flex-wrap gap-3 justify-content-between align-items-center mb-3">
+      <div>
+        <h2 class="mb-1">Songs</h2>
+        <div class="text-muted">Manage your karaoke library</div>
+      </div>
+      <a class="btn btn-primary" href="{% url 'ui_song_create' %}">New Song</a>
+    </div>
+
+    <form method="get" class="row g-3 align-items-end mb-3">
+      <div class="col-md-4">
+        <label class="form-label">Search</label>
+        <input type="text" name="q" value="{{ q }}" placeholder="Title, artist, code" class="form-control" />
+      </div>
+      <div class="col-md-3">
+        <label class="form-label">Tags</label>
+        <select name="tag" class="form-select">
+          <option value="">All</option>
+          {% for t in tag_options %}
+            <option value="{{ t.name }}" {% if t.name == tag %}selected{% endif %}>{{ t.name }}</option>
+          {% endfor %}
+        </select>
+      </div>
+      <div class="col-md-3">
+        <label class="form-label">Language</label>
+        <select name="language" class="form-select">
+          <option value="">All</option>
+          {% for lang in language_options %}
+            <option value="{{ lang }}" {% if lang == language %}selected{% endif %}>{{ lang }}</option>
+          {% endfor %}
+        </select>
+      </div>
+      <div class="col-md-2 d-grid">
+        <button class="btn btn-outline-secondary" type="submit">Filter</button>
+      </div>
+    </form>
+
+    <div class="table-responsive">
+      <table class="table align-middle">
+      <thead>
+        <tr>
+          <th>Code</th>
+          <th>Title</th>
+          <th>Artist</th>
+          <th>Language</th>
+          <th>Tags</th>
+          <th>Published</th>
+          <th></th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for song in songs %}
+          <tr>
+            <td><a class="link-danger fw-semibold" href="{% url 'ui_song_edit' song.pk %}">{{ song.code }}</a></td>
+            <td><a class="link-danger" href="{% url 'ui_song_edit' song.pk %}">{{ song.title }}</a></td>
+            <td>{{ song.artist }}</td>
+            <td>{{ song.language|default:"-" }}</td>
+            <td>
+              {% for tag in song.tags.all %}
+                <span class="pill">{{ tag.name }}</span>
+              {% empty %}
+                <span class="text-muted">—</span>
+              {% endfor %}
+            </td>
+            <td>{{ song.is_published|yesno:"Yes,No" }}</td>
+            <td>
+              <a class="btn btn-sm btn-outline-primary" href="{% url 'ui_song_edit' song.pk %}">Edit</a>
+              <a class="btn btn-sm btn-outline-danger" href="{% url 'ui_song_delete' song.pk %}">Delete</a>
+            </td>
+          </tr>
+        {% empty %}
+          <tr>
+            <td colspan="7" class="text-muted">No songs found.</td>
+          </tr>
+        {% endfor %}
+      </tbody>
+      </table>
+    </div>
+  </div>
+{% endblock %}
