@@ -434,11 +434,53 @@ class SynthEngine {
         const activeLyricIndex = findActiveLyricIndex(uiState.lrcEntries || [], t)
         let karaokeProgress = 0
         if (activeLyricIndex >= 0) {
-          const start = uiState.lrcEntries[activeLyricIndex].time
-          const end =
-            uiState.lrcEntries[activeLyricIndex + 1]?.time ?? Math.max(start + 1, duration || start + 1)
-          const denom = Math.max(0.001, end - start)
-          karaokeProgress = Math.min(1, Math.max(0, (t - start) / denom))
+          const entry = uiState.lrcEntries[activeLyricIndex]
+          const nextStart = uiState.lrcEntries[activeLyricIndex + 1]?.time
+          if (entry?.tokens?.length) {
+            const start = entry.time
+            const fallbackEnd = nextStart ?? Math.max(start + 1, duration || start + 1)
+            const end = Number.isFinite(entry.endTime) ? Math.min(entry.endTime, fallbackEnd) : fallbackEnd
+            if (t <= start) {
+              karaokeProgress = 0
+            } else if (t >= end) {
+              karaokeProgress = 1
+            } else {
+              const tokens = entry.tokens
+              const totalTokens = tokens.length
+              let lo = 0
+              let hi = tokens.length - 1
+              let idx = 0
+              if (t < tokens[0].time) {
+                idx = 0
+              } else {
+                while (lo <= hi) {
+                  const mid = (lo + hi) >> 1
+                  const tt = tokens[mid].time
+                  if (tt === t) {
+                    idx = mid
+                    break
+                  }
+                  if (tt < t) {
+                    idx = mid
+                    lo = mid + 1
+                  } else {
+                    hi = mid - 1
+                  }
+                }
+              }
+              const token = tokens[idx]
+              const nextTokenTime = tokens[idx + 1]?.time ?? end
+              const denom = Math.max(0.001, nextTokenTime - token.time)
+              const frac = Math.min(1, Math.max(0, (t - token.time) / denom))
+              const progressUnits = Math.min(totalTokens, Math.max(0, idx + frac))
+              karaokeProgress = Math.min(1, Math.max(0, progressUnits / Math.max(1, totalTokens)))
+            }
+          } else {
+            const start = entry.time
+            const end = nextStart ?? Math.max(start + 1, duration || start + 1)
+            const denom = Math.max(0.001, end - start)
+            karaokeProgress = Math.min(1, Math.max(0, (t - start) / denom))
+          }
         } else if (duration > 0) {
           karaokeProgress = Math.min(1, Math.max(0, currentTime / duration))
         }
@@ -458,8 +500,12 @@ class SynthEngine {
           patch.channelInstrumentNames = this._channelInstrumentNames.slice()
           this._instrumentDirty = false
         }
+
+        // Batch lyric/progress updates into the same state patch
+        patch.activeLyricIndex = activeLyricIndex
+        patch.karaokeProgress = karaokeProgress
+
         this._setState(patch)
-        setKaraokeStoreState({ activeLyricIndex, karaokeProgress })
 
         if (seq.isFinished && !this._prevFinished) {
           this._prevFinished = true
