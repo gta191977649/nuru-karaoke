@@ -10,8 +10,8 @@ import { getKaraokeStoreState, setKaraokeStoreState } from '../state/karaokeStor
 
 const DEFAULT_CONFIG = {
   enableMIDIStandardMapping: true,
-  reverb: 1.15,
-  chorus: 1.1,
+  reverb: 1.35,
+  chorus: 1.2,
 }
 
 const MIDI_STATUS = {
