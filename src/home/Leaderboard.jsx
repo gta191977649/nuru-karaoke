@@ -17,10 +17,10 @@ function Leaderboard({ onBack }) {
 
     setIsLoadingSongs(true)
     setLoadError('')
-    fetchSongs({ signal: controller.signal })
-      .then((items) => {
+    fetchSongs({ signal: controller.signal, pageSize: 200 })
+      .then((data) => {
         if (didCancel) return
-        const list = Array.isArray(items) ? items : []
+        const list = Array.isArray(data?.items) ? data.items : []
         setSongs(list)
         if (!songCode && list.length) setSongCode(list[0].id)
       })

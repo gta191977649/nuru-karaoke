@@ -30,10 +30,10 @@ function FindSongs({ onBack, onSelectSong }) {
 
     setIsLoading(true)
     setLoadError('')
-    fetchSongs({ signal: controller.signal })
-      .then((items) => {
+    fetchSongs({ signal: controller.signal, pageSize: 200 })
+      .then((data) => {
         if (didCancel) return
-        setSongs(Array.isArray(items) ? items : [])
+        setSongs(Array.isArray(data?.items) ? data.items : [])
       })
       .catch((err) => {
         if (didCancel) return

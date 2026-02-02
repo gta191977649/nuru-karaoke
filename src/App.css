@@ -1687,10 +1687,15 @@
   flex-direction: column;
   gap: 0.5rem;
   overflow-y: auto;
-  flex: 1;
+  flex: 1 1 0;
+  /* flex-grow: 1, flex-shrink: 1, flex-basis: 0 */
+  min-height: 0;
+  /* Crucial for scrolling inside flex items */
   padding: 0.2rem;
   scrollbar-width: thin;
   scrollbar-color: rgba(0, 0, 0, 0.3) transparent;
+  height: 100%;
+  /* Force it to fill the parent Col */
 }
 
 .wiiList__item {
@@ -2174,4 +2179,155 @@
 .wiiScoring__startBtn:active {
   transform: translateY(2px) !important;
   box-shadow: 0 2px 3px rgba(0, 0, 0, 0.2) !important;
+}
+
+/* FindSongKeywords Redesign */
+
+.wiiFind__headerRed {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  margin-bottom: 0.5rem;
+  padding-left: 0.5rem;
+  padding-right: 0.5rem;
+}
+
+.wiiFind__backRed {
+  color: #e60012 !important;
+  /* Wii/JoySound Red */
+  font-weight: 800 !important;
+  font-size: 1.4rem !important;
+  text-decoration: none !important;
+  display: flex;
+  align-items: center;
+  gap: 0.2rem;
+  padding: 0 !important;
+  box-shadow: none !important;
+  text-shadow: none !important;
+  border: none !important;
+}
+
+.wiiFind__backRed:focus,
+.wiiFind__backRed:active {
+  box-shadow: none !important;
+  text-shadow: none !important;
+}
+
+.wiiFind__backRed:hover {
+  text-decoration: none !important;
+  color: #bf000f !important;
+}
+
+.wiiFind__backIcon {
+  font-size: 1.8rem;
+  line-height: 1;
+  font-weight: 900;
+  margin-bottom: 4px;
+  /* tweak alignment */
+}
+
+/* Override existing input to match design (white box, simple border) */
+.wiiFind__inputRed {
+  height: 48px;
+  border-radius: 4px !important;
+  border: 2px solid rgba(0, 0, 0, 0.25) !important;
+  font-size: 2rem !important;
+  font-weight: 700 !important;
+  padding: 0 0.5rem !important;
+  box-shadow: inset 0 2px 4px rgba(0, 0, 0, 0.1);
+}
+
+.wiiFind__suffix {
+  font-weight: 700;
+  font-size: 1.2rem;
+  white-space: nowrap;
+  margin-left: 0.5rem;
+  color: #222;
+}
+
+.wiiFind__countRed {
+  margin-left: auto;
+  font-weight: 800;
+  font-size: 1.6rem;
+  color: #ff00cc;
+  /* Pinkish magenta from screenshot */
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+  text-shadow: 1px 1px 0 #fff;
+}
+
+.wiiFind__tabs {
+  display: flex;
+  gap: 4px;
+  padding: 0 0.5rem 0.5rem;
+  margin-bottom: 0.2rem;
+  border-bottom: 1px solid rgba(0, 0, 0, 0.1);
+}
+
+.wiiFind__tabBtn {
+  flex: 1;
+  border-radius: 4px !important;
+  border: 1px solid #cc0000 !important;
+  background: #fff !important;
+  color: #cc0000 !important;
+  font-weight: 700 !important;
+  font-size: 0.9rem !important;
+  padding: 6px 2px !important;
+  white-space: nowrap;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.1);
+}
+
+.wiiFind__tabBtn--active {
+  background: #cc0000 !important;
+  color: #fff !important;
+  border-color: #cc0000 !important;
+  box-shadow: inset 0 2px 4px rgba(0, 0, 0, 0.2);
+}
+
+.wiiFind__navBar {
+  /* background: #333; */
+  width: 100%;
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: space-between;
+  padding: 4px;
+}
+
+.wiiFind__navBtn {
+  width: 100%;
+  flex: 1;
+  border-radius: 4px !important;
+  background: linear-gradient(#555, #333) !important;
+  border: 1px solid #777 !important;
+  color: #fff !important;
+  font-weight: 700 !important;
+  font-size: 1.2rem !important;
+  display: flex !important;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  line-height: 1.2;
+  margin-bottom: 4px;
+}
+
+.wiiFind__navBtn:last-child {
+  margin-bottom: 0;
+}
+
+.wiiFind__navBtn:disabled {
+  opacity: 0.5;
+  background: #333 !important;
+  color: #888 !important;
+  border-color: #444 !important;
+}
+
+.wiiFind__navBtn:active:not(:disabled) {
+  background: #222 !important;
+  box-shadow: inset 0 2px 5px rgba(0, 0, 0, 0.5);
+}
+
+.btn-link {
+  box-shadow: none !important;
 }

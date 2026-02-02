@@ -1,6 +1,6 @@
-import React, { useEffect, useState } from 'react'
+import React, { useEffect, useMemo, useState } from 'react'
 import { Button, Row, Col, Form, Spinner } from 'react-bootstrap'
-import { fetchSongs } from '../services/songLibrary.js'
+import { fetchSongs, fetchTags } from '../services/songLibrary.js'
 import ConnectionAlert from '../components/ConnectionAlert.jsx'
 import { enqueueSongAndPlay } from '../engine/playerController.js'
 import useAlertStore from '../state/alertStore.js'
@@ -9,11 +9,15 @@ function FindSongKeywords({ onBack, onSelectSong, onConfirm }) {
     const showAlert = useAlertStore((state) => state.showAlert)
     const [term, setTerm] = useState('')
     const [results, setResults] = useState([])
+    const [totalCount, setTotalCount] = useState(0)
+    const [page, setPage] = useState(1)
     const [isLoading, setIsLoading] = useState(true)
     const [loadError, setLoadError] = useState('')
     const [alertOpen, setAlertOpen] = useState(false)
     const [connectionStatus, setConnectionStatus] = useState('loading')
     const [connectionMessage, setConnectionMessage] = useState('')
+    const [tags, setTags] = useState([])
+    const [activeTag, setActiveTag] = useState('')
 
     const buildNetworkMessage = (error) => String(error?.message || 'Unknown error')
 
@@ -51,14 +55,40 @@ function FindSongKeywords({ onBack, onSelectSong, onConfirm }) {
         const controller = new AbortController()
         let didCancel = false
 
+        fetchTags({ signal: controller.signal })
+            .then((items) => {
+                if (didCancel) return
+                const list = Array.isArray(items) ? items.map((t) => t.name || t) : []
+                setTags(list)
+            })
+            .catch(() => {
+                if (didCancel) return
+                setTags([])
+            })
+
+        return () => {
+            didCancel = true
+            controller.abort()
+        }
+    }, [])
+
+    useEffect(() => {
+        const controller = new AbortController()
+        let didCancel = false
+
+        setIsLoading(true)
         setLoadError('')
         fetchSongs({
             q: term,
+            tag: activeTag || undefined,
+            page,
             signal: controller.signal,
         })
-            .then((items) => {
+            .then((data) => {
                 if (didCancel) return
-                setResults(Array.isArray(items) ? items : [])
+                const list = Array.isArray(data?.items) ? data.items : []
+                setResults(list)
+                setTotalCount(Number(data?.count) || list.length)
             })
             .catch((err) => {
                 if (didCancel) return
@@ -73,42 +103,70 @@ function FindSongKeywords({ onBack, onSelectSong, onConfirm }) {
             didCancel = true
             controller.abort()
         }
-    }, [term])
+    }, [activeTag, page, term])
+
+    useEffect(() => {
+        setPage(1)
+    }, [activeTag, term])
+
+    const totalPages = useMemo(() => Math.max(1, Math.ceil(totalCount / 10)), [totalCount])
 
     return (
         <div className="wiiFind h-100 d-flex flex-column">
 
-            {/* Main Content */}
-            <Row className="g-3 flex-grow-1 overflow-hidden">
-                <Col xs={12} className="d-flex flex-column h-100">
-                    <div className="wiiFind__hint mb-2">キーワードを入力して楽曲やアーティストを検索します。</div>
+            {/* Redesigned Header */}
+            <div className="wiiFind__headerRed">
+                <a href="#" className="wiiFind__backRed" onClick={(e) => { e.preventDefault(); onBack() }}>
+                    <span className="wiiFind__backIcon">←</span> 戻る
+                </a>
 
-                    {/* Search Bar */}
-                    <div className="wiiFind__inputRow">
-                        <Form.Control
-                            className="wiiFind__input"
-                            value={term}
-                            onChange={(e) => {
-                                setTerm(e.target.value)
-                                setIsLoading(true)
-                            }}
-                            placeholder="Enter keyword"
-                        />
-                        <Button className="wiiFind__delete" onClick={() => setTerm('')}>
-                            <span className="wiiFind__deleteX">×</span>
-                            Delete
-                        </Button>
-                    </div>
-                    {isLoading ? (
-                        <div className="text-muted small mt-2 d-flex align-items-center gap-2">
-                            <Spinner animation="border" size="sm" />
-                            Loading songs…
-                        </div>
-                    ) : null}
-                    {loadError ? <div className="text-danger small mt-2">{loadError}</div> : null}
+                <div className="d-flex align-items-center flex-grow-1 mx-2">
+                    <Form.Control
+                        className="wiiFind__inputRed"
+                        value={term}
+                        onChange={(e) => {
+                            setTerm(e.target.value)
+                            setIsLoading(true)
+                        }}
+                    />
+                    <span className="wiiFind__suffix">で 始まる曲</span>
+                </div>
 
-                    {/* Results List */}
-                    <div className="wiiList">
+                <div className="wiiFind__countRed">{totalCount ? `${totalCount}件` : '0件'}</div>
+            </div>
+
+            {/* Tabs */}
+            <div className="wiiFind__tabs">
+                <Button
+                    className={`wiiFind__tabBtn ${activeTag === '' ? 'wiiFind__tabBtn--active' : ''}`}
+                    onClick={() => setActiveTag('')}
+                >
+                    すべて
+                </Button>
+                {tags.map((tag) => (
+                    <Button
+                        key={tag}
+                        className={`wiiFind__tabBtn ${activeTag === tag ? 'wiiFind__tabBtn--active' : ''}`}
+                        onClick={() => setActiveTag(tag)}
+                    >
+                        {tag}
+                    </Button>
+                ))}
+            </div>
+
+            {/* Main Content Area */}
+            <Row className="g-0 flex-grow-1 overflow-hidden">
+                {/* Song List Column - Expand to fill available space */}
+                <Col className="h-100 d-flex flex-column" style={{ minWidth: 0 }}>
+                    <div className="wiiList h-100">
+                        {isLoading ? (
+                            <div className="text-muted small mt-2 d-flex align-items-center gap-2">
+                                <Spinner animation="border" size="sm" />
+                                読み込み中…
+                            </div>
+                        ) : null}
+                        {loadError ? <div className="text-danger small mt-2">{loadError}</div> : null}
+
                         {results.length ? (
                             results.map((song) => (
                                 <div
@@ -152,8 +210,33 @@ function FindSongKeywords({ onBack, onSelectSong, onConfirm }) {
                                 </div>
                             ))
                         ) : (
-                            <div className="wiiList__empty text-muted">No results</div>
+                            !isLoading && <div className="wiiList__empty text-muted">該当する曲がありません。</div>
                         )}
+                    </div>
+                </Col>
+
+                {/* Right Navigation Column - Fixed width */}
+                <Col xs="auto" className="h-100 ps-0">
+                    <div className="wiiFind__navBar" style={{ width: '50px' }}>
+                        <Button
+                            className="wiiFind__navBtn"
+                            disabled={page <= 1 || isLoading}
+                            onClick={() => setPage((p) => Math.max(1, p - 1))}
+                        >
+                            <div style={{ fontSize: '1.5rem' }}>▲</div>
+                            前
+                        </Button>
+
+                        {/* Spacer / Page Info could go here if needed, but image shows solid control area */}
+
+                        <Button
+                            className="wiiFind__navBtn"
+                            disabled={page >= totalPages || isLoading}
+                            onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
+                        >
+                            次
+                            <div style={{ fontSize: '1.5rem' }}>▼</div>
+                        </Button>
                     </div>
                 </Col>
             </Row>

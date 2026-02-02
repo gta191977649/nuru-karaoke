@@ -1,4 +1,4 @@
-import { useRef, useEffect, useState } from 'react'
+import { useRef, useEffect, useState, useCallback } from 'react'
 
 export function useSingingTechnique(pitchEngine, currentTimeRef, micActive) {
     const workerRef = useRef(null)
@@ -115,7 +115,7 @@ export function useSingingTechnique(pitchEngine, currentTimeRef, micActive) {
         }
     }, [pitchEngine, micActive, techniqueHistory, currentTimeRef])
 
-    const resetCounts = () => {
+    const resetCounts = useCallback(() => {
         setCounts({ vibrato: 0, kobushi: 0, glissup: 0, glissdown: 0 })
         if (workerRef.current) {
             workerRef.current.postMessage({ type: 'reset' })
@@ -125,7 +125,7 @@ export function useSingingTechnique(pitchEngine, currentTimeRef, micActive) {
         hist.vibrato.fill(0)
         hist.kobushi.fill(0)
         hist.glissando.fill(0)
-    }
+    }, [techniqueHistory])
 
     return {
         counts,
