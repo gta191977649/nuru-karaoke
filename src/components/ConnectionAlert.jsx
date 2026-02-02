@@ -1,6 +1,19 @@
-import React from 'react'
+import { useEffect } from 'react'
+import { SFX } from '../config/sfxConfig.js'
 
 function ConnectionAlert({ isOpen, onClose, status = 'success', message }) {
+    useEffect(() => {
+        if (!isOpen) return
+
+        if (status === 'success') {
+            const audio = new Audio(SFX.SUCCESS)
+            audio.play().catch(e => console.warn('SFX play failed', e))
+        } else if (status === 'error') {
+            const audio = new Audio(SFX.FAIL)
+            audio.play().catch(e => console.warn('SFX play failed', e))
+        }
+    }, [isOpen, status])
+
     if (!isOpen) return null
 
     const resolvedMessage = message || (status === 'loading'

@@ -118,6 +118,27 @@ function App({ onNavigate }) {
     }
   }, [karaokeActive, karaokeMini, screen])
 
+  // Global SFX Listener
+  useEffect(() => {
+    const handleGlobalClick = (e) => {
+      // Check if the clicked element or its parents is a button or link
+      const target = e.target.closest('button, a, [role="button"]')
+      if (target) {
+        // Create audio instance for each click to allow rapid overlapping sounds
+        // using the path directly from import via SFX config would need imports in App.jsx
+        // Let's import SFX at top of file first.
+        import('./config/sfxConfig.js').then(({ SFX }) => {
+          const audio = new Audio(SFX.SELECT)
+          audio.volume = 0.5 // Optional: slightly lower volume for frequent clicks? keeping 1.0 for now, remove if wanted. 
+          // Actually let's keep it simple at default volume.
+          audio.play().catch(() => { })
+        })
+      }
+    }
+    window.addEventListener('click', handleGlobalClick, { capture: true })
+    return () => window.removeEventListener('click', handleGlobalClick, { capture: true })
+  }, [])
+
   const runTransition = useCallback(async (action) => {
     if (transitionLockRef.current) return
     transitionLockRef.current = true
