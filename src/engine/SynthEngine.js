@@ -829,9 +829,9 @@ class SynthEngine {
     this._setState({ isPlaying: false, currentTime: 0, duration: 0 })
 
     this._seq.pause()
-    this._seq.currentTime = 0
     this._synth.stopAll(true)
     this._seq.loadNewSongList([{ binary: buffer, fileName: midiName }])
+    this._seq.currentTime = 0
     const initialDuration = this._seq?.duration || 0
     this._setState({ midiUrl, midiName, status: `MIDI loaded: ${midiName}`, duration: initialDuration, currentTime: 0 })
     requestAnimationFrame(() => {
@@ -955,6 +955,7 @@ class SynthEngine {
       }
     }
     if (Number.isFinite(song.lrc_offset)) this.setLyricOffsetMs(song.lrc_offset)
+    this.seek(0)
     this.play()
 
   }

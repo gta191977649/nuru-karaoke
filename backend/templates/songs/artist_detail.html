@@ -1,0 +1,55 @@
+{% extends "base.html" %}
+
+{% block title %}Artist Details{% endblock %}
+
+{% block content %}
+  <div class="card p-4">
+    <div class="d-flex flex-wrap gap-3 justify-content-between align-items-center mb-3">
+      <div>
+        <h2 class="mb-1">{{ artist.name }}</h2>
+        <div class="text-muted">{{ songs|length }} songs</div>
+      </div>
+      <div class="d-flex gap-2">
+        <a class="btn btn-outline-secondary" href="{% url 'ui_artist_list' %}">Back</a>
+        <a class="btn btn-primary" href="{% url 'ui_artist_edit' artist.id %}">Edit Artist</a>
+      </div>
+    </div>
+
+    <div class="table-responsive">
+      <table class="table align-middle">
+      <thead>
+        <tr>
+          <th>Code</th>
+          <th>Title</th>
+          <th>Language</th>
+          <th>Tags</th>
+          <th></th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for song in songs %}
+          <tr>
+            <td><a class="link-danger fw-semibold" href="{% url 'ui_song_edit' song.pk %}">{{ song.code }}</a></td>
+            <td><a class="link-danger" href="{% url 'ui_song_edit' song.pk %}">{{ song.title }}</a></td>
+            <td>{{ song.language|default:"-" }}</td>
+            <td>
+              {% for tag in song.tags.all %}
+                <span class="pill">{{ tag.name }}</span>
+              {% empty %}
+                <span class="text-muted">—</span>
+              {% endfor %}
+            </td>
+            <td>
+              <a class="btn btn-sm btn-outline-primary" href="{% url 'ui_song_edit' song.pk %}">Edit</a>
+            </td>
+          </tr>
+        {% empty %}
+          <tr>
+            <td colspan="5" class="text-muted">No songs for this artist.</td>
+          </tr>
+        {% endfor %}
+      </tbody>
+      </table>
+    </div>
+  </div>
+{% endblock %}

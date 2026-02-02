@@ -108,7 +108,7 @@ function SingingPage({ onFinish }) {
     })
 
     // Technique Detection
-    const { techniqueEventsRef } = useSingingTechnique(pitchEngine, currentTimeRef, micActive)
+    const { techniqueEventsRef, resetCounts } = useSingingTechnique(pitchEngine, currentTimeRef, micActive)
 
     // Scoring
     const { getScore } = useKaraokeScoring({
@@ -190,7 +190,8 @@ function SingingPage({ onFinish }) {
 
     useEffect(() => {
         resetPlayerScore()
-    }, [resetPlayerScore, state.midiName, state.queueIndex])
+        resetCounts()
+    }, [resetPlayerScore, resetCounts, state.midiName, state.queueIndex])
 
     useEffect(() => {
         if (songInfo) setSongInfo(songInfo)

@@ -1,0 +1,87 @@
+{% extends "base.html" %}
+
+{% block title %}Leaderboard{% endblock %}
+
+{% block content %}
+  <div class="card p-4 mb-4">
+    <div class="d-flex flex-wrap gap-3 justify-content-between align-items-center mb-3">
+      <div>
+        <h2 class="mb-1">National Leaderboard</h2>
+        <div class="text-muted">Select a song to view its rankings</div>
+      </div>
+    </div>
+
+    <div class="table-responsive">
+      <table class="table align-middle">
+        <thead>
+          <tr>
+            <th>Code</th>
+            <th>Title</th>
+            <th>Artist</th>
+            <th>Top Score</th>
+            <th></th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for song in songs %}
+            <tr>
+              <td>{{ song.code }}</td>
+              <td>{{ song.title }}</td>
+              <td>{{ song.artist }}</td>
+              <td>{{ song.top_score|default:"-" }}</td>
+              <td>
+                <a class="btn btn-sm btn-outline-primary" href="?song={{ song.code }}">View</a>
+              </td>
+            </tr>
+          {% empty %}
+            <tr>
+              <td colspan="5" class="text-muted">No songs found.</td>
+            </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  {% if selected_song %}
+    <div class="card p-4">
+      <div class="d-flex flex-wrap gap-3 justify-content-between align-items-center mb-3">
+        <div>
+          <h3 class="mb-1">{{ selected_song.title }} - {{ selected_song.artist }}</h3>
+          <div class="text-muted">Top 100</div>
+        </div>
+      </div>
+
+      <div class="table-responsive">
+        <table class="table align-middle">
+          <thead>
+            <tr>
+              <th>Rank</th>
+              <th>User</th>
+              <th>Score</th>
+              <th>Accuracy</th>
+              <th>Max Combo</th>
+              <th>Updated</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for score in scores %}
+              <tr>
+                <td>{{ forloop.counter }}</td>
+                <td>{{ score.user.username }}</td>
+                <td>{{ score.score }}</td>
+                <td>{{ score.accuracy|default:"-" }}</td>
+                <td>{{ score.max_combo|default:"-" }}</td>
+                <td>{{ score.updated_at }}</td>
+              </tr>
+            {% empty %}
+              <tr>
+                <td colspan="6" class="text-muted">No scores found.</td>
+              </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  {% endif %}
+{% endblock %}

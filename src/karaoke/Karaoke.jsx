@@ -44,7 +44,10 @@ function Karaoke({ onStop, resetKey, transitionPhase = 'idle' }) {
       ) : view === 'message' ? (
         <MessagePage />
       ) : (
-        <SingingPage onFinish={handleFinish} />
+        <SingingPage
+          key={`${midiName}-${queueIndex}-${resetKey}`}
+          onFinish={handleFinish}
+        />
       )}
     </div>
   )

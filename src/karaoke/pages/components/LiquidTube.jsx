@@ -4,14 +4,14 @@ export const LiquidTube = ({ label, score, maxScoreDisplay }) => {
     // Calculate the displayed score based on the max possible for this column
     const clampedScore = Math.max(0, Math.min(Number(score) || 0, 100));
     const displayValue = Math.floor((clampedScore / 100) * maxScoreDisplay);
-    const bubbles = useMemo(() => {
+    const [bubbles] = React.useState(() => {
         const phase = Math.random() * 2.5;
         return [
             { size: 14, left: 18, duration: 3.2, delay: 0.1 + phase },
             { size: 10, left: 48, duration: 2.6, delay: 0.6 + phase },
             { size: 18, left: 70, duration: 3.8, delay: 0.2 + phase },
         ];
-    }, []);
+    });
 
     return (
         <div className="liquid-tube-container">

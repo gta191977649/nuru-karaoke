@@ -5,6 +5,7 @@ import { parseLrc } from '../engine/lrc.js'
 import useAlertStore from '../state/alertStore.js'
 import WiiDialog from '../components/WiiDialog.jsx'
 import { enqueueSongAndPlay } from '../engine/playerController.js'
+import ConnectionAlert from '../components/ConnectionAlert.jsx'
 
 function InfoRow({ icon, label, value }) {
   return (
@@ -31,6 +32,11 @@ export default function ComfirmSong({ onBack, onConfirm }) {
   const [previewText, setPreviewText] = useState('—')
   const [showLyrics, setShowLyrics] = useState(false)
   const [lyricsText, setLyricsText] = useState('')
+  const [connectionOpen, setConnectionOpen] = useState(false)
+  const [connectionStatus, setConnectionStatus] = useState('loading')
+  const [connectionMessage, setConnectionMessage] = useState('')
+
+  const buildNetworkMessage = (error) => String(error?.message || 'Unknown error')
 
   useEffect(() => {
     let ignore = false
@@ -92,12 +98,13 @@ export default function ComfirmSong({ onBack, onConfirm }) {
     <Container fluid className="py-3">
       <div className="bg-light border rounded-3 p-3">
         <div className="text-muted small mb-2">
-          予約を決定します。この曲でよろしければ、「予約」をタッチしてください。
+          曲予約を確定します。よろしければ「予約」をタッチしてください。
         </div>
 
         <Row className="g-3">
           <Col xs={12} lg={9}>
             <div className="bg-white border rounded-3 p-3">
+              <InfoRow icon="🆔" label="曲番号" value={song?.id || '—'} />
               <InfoRow icon="👤" label="歌手名" value={song?.artist || '—'} />
               <InfoRow icon="🎵" label="曲名" value={song?.title || '—'} />
               <div className="d-flex align-items-center gap-3 py-2">
@@ -118,7 +125,7 @@ export default function ComfirmSong({ onBack, onConfirm }) {
                   type="button"
                   onClick={() => setShowLyrics(true)}
                 >
-                  歌詞続き
+                  歌詞を見る
                 </Button>
               </div>
             </div>
@@ -127,23 +134,23 @@ export default function ComfirmSong({ onBack, onConfirm }) {
               <Row className="g-2">
                 <Col xs={12} md={4}>
                   <Card className="h-100">
-                    <Card.Header className="py-2 fw-semibold">ガイドメロディ設定</Card.Header>
+                    <Card.Header className="py-2 fw-semibold">ガイドメロディ</Card.Header>
                     <Card.Body className="py-2">
-                      <div className="text-muted small">ガイドあり</div>
+                      <div className="text-muted small">あり</div>
                     </Card.Body>
                   </Card>
                 </Col>
                 <Col xs={12} md={4}>
                   <Card className="h-100">
-                    <Card.Header className="py-2 fw-semibold">キー設定</Card.Header>
+                    <Card.Header className="py-2 fw-semibold">キー</Card.Header>
                     <Card.Body className="py-2">
-                      <div className="text-muted small">原曲キー</div>
+                      <div className="text-muted small">原曲</div>
                     </Card.Body>
                   </Card>
                 </Col>
                 <Col xs={12} md={4}>
                   <Card className="h-100">
-                    <Card.Header className="py-2 fw-semibold">歌詞のサイズ</Card.Header>
+                    <Card.Header className="py-2 fw-semibold">歌詞サイズ</Card.Header>
                     <Card.Body className="py-2">
                       <div className="text-muted small">ふつう</div>
                     </Card.Body>
@@ -156,7 +163,7 @@ export default function ComfirmSong({ onBack, onConfirm }) {
                   もどる
                 </Button>
                 <Button variant="secondary" className="rounded-pill px-4" type="button">
-                  トップへ
+                  トップメニュー
                 </Button>
               </div>
             </div>
@@ -165,12 +172,12 @@ export default function ComfirmSong({ onBack, onConfirm }) {
           <Col xs={12} lg={3}>
             <Stack gap={2} className="h-100">
               <Button variant="info" className="fw-semibold" type="button">
-                お気に入りに
+                マイうたに
                 <br />
-                登録する
+                登録
               </Button>
               <Button variant="info" className="fw-semibold" type="button">
-                全国歌ランクを見る
+                全国ランキング
               </Button>
 
               <div className="flex-grow-1 d-flex align-items-end justify-content-center">
@@ -182,13 +189,32 @@ export default function ComfirmSong({ onBack, onConfirm }) {
                   disabled={!song}
                   onClick={async () => {
                     if (!song) return
-                    await enqueueSongAndPlay(song)
-                    showAlert({
-                      message: `${song.title} を予約しました`,
-                      variant: 'success',
-                      timeoutMs: 2500,
-                    })
-                    if (onConfirm) onConfirm()
+                    setConnectionOpen(true)
+                    setConnectionStatus('loading')
+                    setConnectionMessage('通信中です…')
+                    try {
+                      await enqueueSongAndPlay(song)
+                      setConnectionStatus('success')
+                      setConnectionMessage('読み込み完了しました。')
+                      showAlert({
+                        message: `${song.title} を予約しました。`,
+                        variant: 'success',
+                        timeoutMs: 2500,
+                      })
+                      setTimeout(() => {
+                        setConnectionOpen(false)
+                        if (onConfirm) onConfirm()
+                      }, 600)
+                    } catch (error) {
+                      setConnectionStatus('error')
+                      const message = buildNetworkMessage(error)
+                      setConnectionMessage(message)
+                      showAlert({
+                        message,
+                        variant: 'danger',
+                        timeoutMs: 3500,
+                      })
+                    }
                   }}
                 >
                   予約
@@ -200,7 +226,7 @@ export default function ComfirmSong({ onBack, onConfirm }) {
       </div>
       <WiiDialog
         show={showLyrics}
-        title={song?.title || 'Lyrics'}
+        title={song?.title || '歌詞'}
         showActions={false}
         onClose={() => setShowLyrics(false)}
       >
@@ -213,6 +239,12 @@ export default function ComfirmSong({ onBack, onConfirm }) {
           </Button>
         </div>
       </WiiDialog>
+      <ConnectionAlert
+        isOpen={connectionOpen}
+        status={connectionStatus}
+        message={connectionMessage}
+        onClose={() => setConnectionOpen(false)}
+      />
     </Container>
   )
 }

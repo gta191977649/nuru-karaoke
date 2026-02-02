@@ -1,0 +1,27 @@
+{% extends "base.html" %}
+
+{% block title %}Edit Artist{% endblock %}
+
+{% block content %}
+  <div class="card p-4 mx-auto" style="max-width: 520px;">
+    <div class="d-flex flex-wrap gap-3 justify-content-between align-items-center mb-3">
+      <div>
+        <h2 class="mb-1">Edit Artist</h2>
+        <div class="text-muted">Rename artist and update all songs</div>
+      </div>
+      <a class="btn btn-outline-secondary" href="{% url 'ui_artist_list' %}">Back</a>
+    </div>
+
+    <form method="post">
+      {% csrf_token %}
+      <div class="mb-3">
+        <label for="id_name" class="form-label">Artist Name</label>
+        {{ form.name }}
+      </div>
+      <div class="d-flex gap-2">
+        <button class="btn btn-primary" type="submit">Save</button>
+        <a class="btn btn-outline-secondary" href="{% url 'ui_artist_list' %}">Cancel</a>
+      </div>
+    </form>
+  </div>
+{% endblock %}

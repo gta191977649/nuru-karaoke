@@ -1,0 +1,215 @@
+{% extends "base.html" %}
+
+{% block title %}Song{% endblock %}
+
+{% block content %}
+  <div class="card p-4">
+    <div class="d-flex flex-wrap gap-3 justify-content-between align-items-center mb-3">
+      <div>
+        <h2 class="mb-1">{% if mode == 'edit' %}Edit Song{% else %}New Song{% endif %}</h2>
+        <div class="text-muted">Fill in metadata and upload files</div>
+        {% if mode == 'edit' and song %}
+          <div class="text-muted small mt-2">
+            API: <a class="link-danger" href="/api/songs/{{ song.code }}">/api/songs/{{ song.code }}</a>
+          </div>
+        {% endif %}
+      </div>
+      <div class="d-flex gap-2">
+        <a class="btn btn-outline-secondary" href="{% url 'ui_song_list' %}">Back</a>
+        {% if mode == 'edit' %}
+          <a class="btn btn-outline-danger" href="{% url 'ui_song_delete' song.pk %}">Delete</a>
+        {% endif %}
+      </div>
+    </div>
+
+    <form method="post" enctype="multipart/form-data">
+      {% csrf_token %}
+
+      <div class="border rounded-4 p-3 mb-4 bg-light-subtle">
+        <div class="d-flex align-items-center gap-2 mb-3">
+          <span class="badge text-bg-danger">Basics</span>
+          <span class="text-muted small">Title / Artist / Language</span>
+        </div>
+        <div class="row g-3">
+          {% if form.code %}
+            <div class="col-md-3">
+              <label for="id_code" class="form-label">Code</label>
+              {{ form.code }}
+            </div>
+          {% endif %}
+          <div class="col-md-5">
+            <label for="id_title" class="form-label">Title</label>
+            {{ form.title }}
+          </div>
+          <div class="col-md-4">
+            <label for="id_artist" class="form-label">Artist</label>
+            {{ form.artist }}
+            <datalist id="artist-options">
+              {% for name in form.artist_suggestions %}
+                <option value="{{ name }}"></option>
+              {% endfor %}
+            </datalist>
+          </div>
+          <div class="col-md-3">
+            <label for="id_language" class="form-label">Language</label>
+            {{ form.language }}
+          </div>
+          <div class="col-md-6">
+            <label for="id_tags" class="form-label">Tags</label>
+            {{ form.tags }}
+            <div class="form-text">
+              Manage tags in <a class="link-danger" href="{% url 'ui_tag_list' %}">Tags</a>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="border rounded-4 p-3 mb-4">
+        <div class="d-flex align-items-center gap-2 mb-3">
+          <span class="badge text-bg-danger">Files</span>
+          <span class="text-muted small">MIDI / LRC / Cover</span>
+        </div>
+        <div class="row g-3">
+          <div class="col-md-4">
+            <label for="id_midi_file" class="form-label">MIDI File</label>
+            <div class="dropzone-wrap" data-dropzone>
+              <div class="dropzone">
+                <div>
+                  <div><strong>Drag & Drop</strong> or <span class="browse">Browse</span></div>
+                  <div class="dropzone-filename" data-filename>No file selected</div>
+                </div>
+              </div>
+              {{ form.midi_file }}
+            </div>
+          </div>
+          <div class="col-md-4">
+            <label for="id_lrc_file" class="form-label">LRC File</label>
+            <div class="dropzone-wrap" data-dropzone>
+              <div class="dropzone">
+                <div>
+                  <div><strong>Drag & Drop</strong> or <span class="browse">Browse</span></div>
+                  <div class="dropzone-filename" data-filename>No file selected</div>
+                </div>
+              </div>
+              {{ form.lrc_file }}
+            </div>
+          </div>
+          <div class="col-md-4">
+            <label for="id_cover_image" class="form-label">Cover Image</label>
+            <div class="dropzone-wrap" data-dropzone>
+              <div class="dropzone">
+                <div>
+                  <div><strong>Drag & Drop</strong> or <span class="browse">Browse</span></div>
+                  <div class="dropzone-filename" data-filename>No file selected</div>
+                </div>
+              </div>
+              {{ form.cover_image }}
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="border rounded-4 p-3 mb-4 bg-light-subtle">
+        <div class="d-flex align-items-center gap-2 mb-3">
+          <span class="badge text-bg-danger">Performance</span>
+          <span class="text-muted small">Lyric offset / publish</span>
+        </div>
+        <div class="row g-3">
+          {% if song %}
+            <div class="col-md-3">
+              <label class="form-label">Duration (sec)</label>
+              <input type="text" value="{{ song.duration_seconds|default:'-' }}" class="form-control" disabled />
+            </div>
+            <div class="col-md-3">
+              <label class="form-label">BPM</label>
+              <input type="text" value="{{ song.bpm|default:'-' }}" class="form-control" disabled />
+            </div>
+            <div class="col-md-3">
+              <label class="form-label">Key</label>
+              <input type="text" value="{{ song.key|default:'-' }}" class="form-control" disabled />
+            </div>
+          {% endif %}
+          <div class="col-md-3">
+            <label for="id_lrc_offset" class="form-label">LRC Offset (ms)</label>
+            {{ form.lrc_offset }}
+          </div>
+          <div class="col-md-3">
+            <label for="id_is_published" class="form-label">Published</label>
+            <div class="form-check mt-2">
+              {{ form.is_published }}
+              <label class="form-check-label" for="id_is_published">Visible in library</label>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="d-flex gap-2 mt-4">
+        <button class="btn btn-primary" type="submit">Save</button>
+        <a class="btn btn-outline-secondary" href="{% url 'ui_song_list' %}">Cancel</a>
+      </div>
+    </form>
+  </div>
+  <script>
+    (function () {
+      const zones = document.querySelectorAll('[data-dropzone]')
+      zones.forEach((wrap) => {
+        const input = wrap.querySelector('input[type="file"]')
+        const filename = wrap.querySelector('[data-filename]')
+        const box = wrap.querySelector('.dropzone')
+        if (!input || !filename || !box) return
+
+        const allowedMap = {
+          midi_file: ['.mid', '.midi'],
+          lrc_file: ['.lrc'],
+          cover_image: ['.png', '.jpg', '.jpeg', '.webp'],
+        }
+
+        const updateName = () => {
+          const file = input.files && input.files[0]
+          filename.textContent = file ? file.name : 'No file selected'
+        }
+
+        const validateFile = (file) => {
+          if (!file) return true
+          const key = input.id || ''
+          const allow = allowedMap[key]
+          if (!allow) return true
+          const lower = file.name.toLowerCase()
+          return allow.some((ext) => lower.endsWith(ext))
+        }
+
+        box.addEventListener('dragover', (event) => {
+          event.preventDefault()
+          box.classList.add('is-dragover')
+        })
+        box.addEventListener('dragleave', () => {
+          box.classList.remove('is-dragover')
+        })
+        box.addEventListener('drop', (event) => {
+          event.preventDefault()
+          box.classList.remove('is-dragover')
+          if (event.dataTransfer?.files?.length) {
+            const file = event.dataTransfer.files[0]
+            if (!validateFile(file)) {
+              filename.textContent = 'Unsupported file type'
+              return
+            }
+            const dataTransfer = new DataTransfer()
+            dataTransfer.items.add(file)
+            input.files = dataTransfer.files
+            updateName()
+          }
+        })
+        input.addEventListener('change', updateName)
+        input.addEventListener('change', () => {
+          const file = input.files && input.files[0]
+          if (file && !validateFile(file)) {
+            filename.textContent = 'Unsupported file type'
+            input.value = ''
+          }
+        })
+        updateName()
+      })
+    })()
+  </script>
+{% endblock %}

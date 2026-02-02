@@ -1807,3 +1807,371 @@
 .wiiList__actionBtn--reserve:active {
   background: linear-gradient(#f88e40, #e07020) !important;
 }
+
+/* Connection Alert Modal */
+.wiiAlertOverlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.35);
+  z-index: 2000;
+  display: grid;
+  place-items: center;
+  backdrop-filter: blur(2px);
+}
+
+.wiiAlertBox {
+  width: min(600px, 90vw);
+  background: linear-gradient(180deg, #f0f8ff 0%, #d0e8ff 100%);
+  border-radius: 12px;
+  box-shadow: 0 10px 25px rgba(0, 0, 0, 0.3), 0 0 0 4px rgba(255, 255, 255, 0.8) inset;
+  border: 2px solid rgba(100, 150, 220, 0.8);
+  overflow: hidden;
+  position: relative;
+}
+
+.wiiAlertHeader {
+  background: linear-gradient(180deg, #8abaf0 0%, #4a8ad0 50%, #2a6ac0 51%, #4a8ad0 100%);
+  color: #fff;
+  text-align: center;
+  font-weight: 700;
+  padding: 0.6rem;
+  font-size: 1.2rem;
+  border-bottom: 2px solid rgba(255, 255, 255, 0.5);
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.3);
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+}
+
+.wiiAlertBody {
+  padding: 3rem 2rem;
+  text-align: center;
+  font-weight: 600;
+  color: #333;
+  font-size: 1.1rem;
+  position: relative;
+  min-height: 180px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.wiiAlertIcon {
+  position: absolute;
+  bottom: 10px;
+  right: 20px;
+  font-size: 4rem;
+  color: rgba(100, 150, 220, 0.15);
+  transform: rotate(-10deg);
+  pointer-events: none;
+}
+
+/* Scoring Page - Consistent App Style (Joy/Wii Modern) */
+.wiiScoringPage {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  background-color: transparent;
+  /* Transparent as requested */
+  font-family: "M PLUS 1p", "Rounded Mplus 1c", sans-serif;
+  overflow: hidden;
+  padding: 10px;
+}
+
+/* Header removed/hidden */
+.wiiScoring__header {
+  display: none;
+}
+
+.wiiScoring__backBtn {
+  background: linear-gradient(#4b4b4b, #2b2b2b) !important;
+  color: #fff !important;
+  border: 2px solid rgba(0, 0, 0, 0.18) !important;
+  border-radius: 999px !important;
+  font-weight: 800 !important;
+  padding: 5px 20px !important;
+  box-shadow: inset 0 2px 0 rgba(255, 255, 255, 0.2), 0 3px 0 rgba(0, 0, 0, 0.16) !important;
+  text-shadow: 0 1px 1px rgba(0, 0, 0, 0.3);
+  font-size: 0.9rem;
+}
+
+.wiiScoring__backBtn:active {
+  transform: translateY(1px);
+  box-shadow: inset 0 2px 0 rgba(0, 0, 0, 0.2) !important;
+}
+
+.wiiScoring__headerTitle {
+  display: none;
+}
+
+.wiiScoring__content {
+  flex: 1;
+  background-color: transparent;
+  border-radius: 0;
+  border: none;
+  box-shadow: none;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  margin: 0 10px 10px;
+  min-height: 0;
+  gap: 15px;
+  /* Spacing between banner and body */
+}
+
+.wiiScoring__banner {
+  background-color: #f0fff4;
+  background-image:
+    radial-gradient(#a3cfbb 1px, transparent 1px),
+    linear-gradient(to bottom, #ffffff 0%, #e0f2e0 100%);
+  background-size: 6px 6px, 100% 100%;
+  /* Dot pattern + Gradient */
+  padding: 15px 20px;
+  border: 1px solid #b0d0b0;
+  border-radius: 12px;
+  box-shadow: 0 4px 8px rgba(0, 0, 0, 0.05);
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  flex-shrink: 0;
+}
+
+.wiiScoring__bannerTitle {
+  display: flex;
+  align-items: baseline;
+  gap: 5px;
+  filter: drop-shadow(2px 2px 0px rgba(0, 0, 0, 0.1));
+}
+
+.wiiScoring__bannerTitleMain {
+  font-size: 2.2rem;
+  font-weight: 900;
+  background: linear-gradient(to bottom, #29d9ff 0%, #0080ff 50%, #0050c0 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  transform: skewX(-5deg);
+  margin: 0;
+  -webkit-text-stroke: 1px #003366;
+  /* Simulate stroke */
+  filter: drop-shadow(1px 1px 0 #fff) drop-shadow(-1px -1px 0 #fff) drop-shadow(1px -1px 0 #fff) drop-shadow(-1px 1px 0 #fff);
+  /* White outline simulation */
+  padding-right: 5px;
+}
+
+.wiiScoring__bannerTitleSub {
+  font-size: 2.4rem;
+  font-weight: 900;
+  background: linear-gradient(to bottom, #ffff00 0%, #ffaa00 50%, #cc5500 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  font-style: italic;
+  transform: skewX(-10deg);
+  -webkit-text-stroke: 1px #804000;
+  filter: drop-shadow(1px 1px 0 #fff) drop-shadow(-1px -1px 0 #fff) drop-shadow(1px -1px 0 #fff) drop-shadow(-1px 1px 0 #fff);
+}
+
+.wiiScoring__bannerSlogan {
+  background: linear-gradient(to bottom, #4facfe 0%, #00f2fe 50%, #0099cc 51%, #006699 100%);
+  border: 2px solid #fff;
+  outline: 1px solid #005080;
+  border-radius: 99px;
+  padding: 4px 16px;
+  color: #fff;
+  font-weight: 800;
+  font-size: 0.95rem;
+  box-shadow: 0 4px 6px rgba(0, 0, 0, 0.3);
+  align-self: flex-start;
+  margin: 5px 2px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.5);
+}
+
+.wiiScoring__bannerSlogan::before {
+  content: "INFO";
+  font-size: 0.7rem;
+  background: linear-gradient(to bottom, #fff 0%, #ddd 100%);
+  color: #005080;
+  padding: 1px 6px;
+  border-radius: 4px;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.3);
+  font-weight: 900;
+  border: 1px solid #005080;
+  text-shadow: none;
+}
+
+.wiiScoring__mainBody {
+  display: flex;
+  flex: 1;
+  overflow: hidden;
+  gap: 15px;
+  /* Gap between columns */
+}
+
+.wiiScoring__leftCol {
+  flex: 1;
+  padding: 0;
+  /* Removing padding as rows are cards now */
+  background: transparent;
+  overflow-y: auto;
+  border-right: none;
+}
+
+.wiiScoring__pointRow {
+  display: flex;
+  align-items: center;
+  margin-bottom: 10px;
+  background: #fff;
+  padding: 10px 15px;
+  border-radius: 12px;
+  /* Card style */
+  border: 1px solid rgba(0, 0, 0, 0.08);
+  box-shadow: 0 2px 5px rgba(0, 0, 0, 0.04);
+}
+
+.wiiScoring__pointLabel {
+  width: 100px;
+  color: #fff;
+  font-weight: 800;
+  text-align: center;
+  padding: 6px 0;
+  border-radius: 6px;
+  margin-right: 15px;
+  font-size: 0.85rem;
+  background: #666;
+  /* Default gray fallback */
+  border: none;
+  box-shadow: none;
+  text-shadow: none;
+}
+
+/* Specific colors for labels matching app palette */
+.wiiScoring__pointLabel--pitch {
+  background: linear-gradient(#9c27b0, #7b1fa2);
+}
+
+.wiiScoring__pointLabel--stability {
+  background: linear-gradient(#2196f3, #1976d2);
+}
+
+.wiiScoring__pointLabel--tone {
+  background: linear-gradient(#4caf50, #388e3c);
+}
+
+.wiiScoring__pointLabel--rhythm {
+  background: linear-gradient(#ff9800, #f57c00);
+}
+
+.wiiScoring__pointLabel--tech {
+  background: linear-gradient(#f44336, #d32f2f);
+}
+
+.wiiScoring__pointDesc {
+  flex: 1;
+  color: #444;
+  font-weight: 700;
+  font-size: 0.95rem;
+}
+
+.wiiScoring__rightCol {
+  flex: 0 0 320px;
+  background: transparent;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  justify-content: flex-start;
+  /* Align top */
+  align-items: stretch;
+}
+
+.wiiScoring__chartBox {
+  background: #fff;
+  /* White card for chart */
+  border: 1px solid rgba(0, 0, 0, 0.08);
+  padding: 15px;
+  border-radius: 12px;
+  width: 100%;
+  text-align: center;
+  box-shadow: 0 4px 10px rgba(0, 0, 0, 0.05);
+}
+
+.wiiScoring__chartTitle {
+  color: #d21818;
+  font-weight: 800;
+  font-size: 0.9rem;
+  margin-bottom: 5px;
+  text-shadow: none;
+}
+
+.wiiScoring__chartMock {
+  height: 150px;
+  background: linear-gradient(180deg, #2a2a2a, #111);
+  border: 2px solid #555;
+  border-radius: 8px;
+  margin: 10px 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  position: relative;
+  overflow: hidden;
+  box-shadow: 0 4px 8px rgba(0, 0, 0, 0.3);
+}
+
+.wiiScoring__pentagon {
+  width: 100px;
+  height: 100px;
+  background: rgba(210, 24, 24, 0.2);
+  clip-path: polygon(50% 0%, 100% 38%, 82% 100%, 18% 100%, 0% 38%);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: none;
+  position: relative;
+}
+
+.wiiScoring__pentagon::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: transparent;
+  clip-path: polygon(50% 0%, 100% 38%, 82% 100%, 18% 100%, 0% 38%);
+  box-shadow: inset 0 0 0 2px #d21818;
+}
+
+.wiiScoring__pentagon span {
+  color: #fff;
+  font-weight: 900;
+  font-size: 1.4rem;
+  text-shadow: 0 2px 4px rgba(0, 0, 0, 0.5);
+  font-family: sans-serif;
+}
+
+.wiiScoring__footer {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  padding: 15px 40px;
+  background: transparent;
+  flex-shrink: 0;
+}
+
+/* Use standard app button style for Start */
+.wiiScoring__startBtn {
+  position: static !important;
+  transform: none !important;
+  background: linear-gradient(#ff9000, #ff6d00) !important;
+  border: 2px solid rgba(0, 0, 0, 0.1) !important;
+  color: #fff !important;
+  font-size: 1.5rem !important;
+  font-weight: 900 !important;
+  padding: 12px 60px !important;
+  border-radius: 99px !important;
+  box-shadow: 0 4px 6px rgba(0, 0, 0, 0.2) !important;
+  text-shadow: 0 1px 1px rgba(0, 0, 0, 0.2) !important;
+  transition: transform 0.1s, box-shadow 0.1s;
+  white-space: nowrap;
+}
+
+.wiiScoring__startBtn:active {
+  transform: translateY(2px) !important;
+  box-shadow: 0 2px 3px rgba(0, 0, 0, 0.2) !important;
+}

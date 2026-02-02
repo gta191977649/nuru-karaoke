@@ -352,6 +352,16 @@ function MelodyGuideCanvas({
   ])
 
   useEffect(() => {
+    // Reset internal tracking on song change
+    if (pixiRef.current) {
+      if (pixiRef.current.processedNotesRef) pixiRef.current.processedNotesRef.clear()
+      pixiRef.current.lastTechniqueEventIndex = 0
+      pixiRef.current.lastCounts = { shakuri: 0, kobushi: 0, fall: 0, vibrato: 0 }
+    }
+    setValidCounts({ glissup: 0, kobushi: 0, glissdown: 0, vibrato: 0 })
+  }, [reference])
+
+  useEffect(() => {
     if (onTechniqueCountsChange) {
       onTechniqueCountsChange(validCounts)
     }

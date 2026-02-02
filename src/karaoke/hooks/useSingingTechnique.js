@@ -120,6 +120,7 @@ export function useSingingTechnique(pitchEngine, currentTimeRef, micActive) {
         if (workerRef.current) {
             workerRef.current.postMessage({ type: 'reset' })
         }
+        techniqueEventsRef.current = [] // Clear accumulated events
         const hist = techniqueHistory
         hist.vibrato.fill(0)
         hist.kobushi.fill(0)
