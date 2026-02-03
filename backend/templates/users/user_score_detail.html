@@ -1,0 +1,189 @@
+{% extends 'base.html' %}
+
+{% block title %}Score Detail · RAKUSONG 楽曲{% endblock %}
+
+{% block content %}
+<div class="d-flex flex-wrap justify-content-between align-items-center mb-4">
+  <div>
+    <h1 class="h4 fw-bold mb-1">Score Detail</h1>
+    <div class="text-muted">{{ user_obj.username }} · {{ song.title }} ({{ song.code }})</div>
+  </div>
+  <div class="d-flex gap-2">
+    <a class="btn btn-outline-secondary" href="{% url 'ui_user_song_detail' user_obj.id song.id %}">Back to History</a>
+  </div>
+</div>
+
+<div class="card p-4 mb-4">
+  <div class="row g-3">
+    <div class="col-12 col-md-3">
+      <div class="text-muted text-uppercase small">Score</div>
+      <div class="h3 fw-bold mb-0">{{ history.score|default:'-' }}</div>
+    </div>
+    <div class="col-12 col-md-3">
+      <div class="text-muted text-uppercase small">Accuracy</div>
+      <div class="h5 mb-0">{% if history.accuracy %}{{ history.accuracy }}{% else %}-{% endif %}</div>
+    </div>
+    <div class="col-12 col-md-3">
+      <div class="text-muted text-uppercase small">Max Combo</div>
+      <div class="h5 mb-0">{% if history.max_combo %}{{ history.max_combo }}{% else %}-{% endif %}</div>
+    </div>
+    <div class="col-12 col-md-3">
+      <div class="text-muted text-uppercase small">Time</div>
+      <div class="h6 mb-0">{{ history.created_at|date:"Y-m-d H:i" }}</div>
+    </div>
+  </div>
+  {% if midi_path %}
+    <div class="mt-3 text-muted small">MIDI: {{ midi_path }}</div>
+  {% endif %}
+  {% if ref_debug %}
+    <div class="mt-1 text-muted small">
+      Ref segments: {{ ref_debug.segments }}{% if ref_debug.min_t %}, range: {{ ref_debug.min_t|floatformat:2 }}s - {{ ref_debug.max_t|floatformat:2 }}s{% endif %}
+    </div>
+  {% endif %}
+</div>
+
+<div class="row g-4">
+  <div class="col-12 col-lg-6">
+    <div class="card p-4 h-100">
+      <h2 class="h6 fw-semibold mb-3">Technique Counts</h2>
+      {% if history.technique_counts %}
+        <div class="ratio ratio-1x1">
+          <canvas id="techniqueRadarChart"></canvas>
+        </div>
+        {{ history.technique_counts|json_script:"techniqueCountsData" }}
+      {% else %}
+        <div class="text-muted">No technique data.</div>
+      {% endif %}
+    </div>
+  </div>
+  <div class="col-12 col-lg-6">
+    <div class="card p-4 h-100">
+      <h2 class="h6 fw-semibold mb-3">F0 Curve</h2>
+      {% if history.f0_curve %}
+        <div class="ratio ratio-16x9">
+          <canvas id="f0CurveChart"></canvas>
+        </div>
+        {{ history.f0_curve|json_script:"f0CurveData" }}
+        {{ reference_curve|json_script:"refCurveData" }}
+      {% else %}
+        <div class="text-muted">No f0 curve data.</div>
+      {% endif %}
+    </div>
+  </div>
+</div>
+
+{% if history.f0_curve %}
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
+  <script>
+    (function () {
+      const countsRaw = document.getElementById('techniqueCountsData')
+      if (countsRaw) {
+        const counts = JSON.parse(countsRaw.textContent || '{}') || {}
+        const radarCtx = document.getElementById('techniqueRadarChart')
+        if (radarCtx) {
+          const keys = ['glissup', 'kobushi', 'glissdown', 'vibrato']
+          const values = keys.map((key) => Number(counts[key]) || 0)
+          new Chart(radarCtx, {
+            type: 'radar',
+            data: {
+              labels: ['しゃくり', 'こぶし', 'フォール', 'ビブラート'],
+              datasets: [
+                {
+                  label: 'Technique',
+                  data: values,
+                  backgroundColor: 'rgba(230, 0, 0, 0.2)',
+                  borderColor: '#e60000',
+                  borderWidth: 2,
+                  pointBackgroundColor: '#e60000',
+                },
+              ],
+            },
+            options: {
+              responsive: true,
+              maintainAspectRatio: false,
+              scales: {
+                r: {
+                  beginAtZero: true,
+                  ticks: { stepSize: 1 },
+                },
+              },
+              plugins: {
+                legend: { display: false },
+              },
+            },
+          })
+        }
+      }
+      const raw = JSON.parse(document.getElementById('f0CurveData').textContent || '[]')
+      const refRaw = JSON.parse(document.getElementById('refCurveData').textContent || '[]')
+      const toCents = (midi) => {
+        if (!Number.isFinite(midi)) return null
+        return 1200 * (Number(midi) - 69)
+      }
+      const points = Array.isArray(raw)
+        ? raw
+            .filter((item) => Number.isFinite(item?.t) && Number.isFinite(item?.midi))
+            .map((item) => ({ x: Number(item.t), y: toCents(item.midi) }))
+        : []
+      const refPoints = Array.isArray(refRaw)
+        ? refRaw
+            .filter((item) => Number.isFinite(item?.t) && Number.isFinite(item?.midi))
+            .map((item) => ({ x: Number(item.t), y: toCents(item.midi) }))
+        : []
+      const ctx = document.getElementById('f0CurveChart')
+      if (!ctx) return
+      const pointsMin = points.length ? points[0].x : null
+      const refMin = refPoints.length ? refPoints[0].x : null
+      if (Number.isFinite(refMin)) {
+        for (const p of refPoints) {
+          p.x = p.x - refMin
+        }
+      }
+      if (Number.isFinite(pointsMin)) {
+        for (const p of points) {
+          p.x = p.x - pointsMin
+        }
+      }
+      new Chart(ctx, {
+        type: 'line',
+        data: {
+          datasets: [
+            {
+              label: 'User (Normalized)',
+              data: points,
+              borderColor: '#e60000',
+              borderWidth: 2,
+              pointRadius: 0,
+              tension: 0.15,
+            },
+            {
+              label: 'Reference (Channel 0)',
+              data: refPoints,
+              borderColor: '#0ea5e9',
+              borderWidth: 2,
+              pointRadius: 0,
+              tension: 0.15,
+            },
+          ],
+        },
+        options: {
+          responsive: true,
+          maintainAspectRatio: false,
+          scales: {
+            x: {
+              type: 'linear',
+              title: { display: true, text: 'Time (s)' },
+            },
+            y: {
+              title: { display: true, text: 'Pitch (cents, A4=0)' },
+            },
+          },
+          plugins: {
+            legend: { display: true },
+          },
+        },
+      })
+    })()
+  </script>
+{% endif %}
+{% endblock %}

@@ -16,6 +16,7 @@ urlpatterns = [
     path('api/', include('songs.urls')),
     path('api/', include('scores.urls')),
     path('ui/', include('songs.urls_ui')),
+    path('ui/', include('users.urls_ui')),
     path('', root_redirect),
 ]
 

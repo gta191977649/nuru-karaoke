@@ -118,6 +118,7 @@
             <li class="nav-item"><a class="nav-link" href="{% url 'ui_artist_list' %}">Artists</a></li>
             <li class="nav-item"><a class="nav-link" href="{% url 'ui_tag_list' %}">Tags</a></li>
             <li class="nav-item"><a class="nav-link" href="{% url 'ui_leaderboard' %}">Leaderboard</a></li>
+            <li class="nav-item"><a class="nav-link" href="{% url 'ui_user_list' %}">Users</a></li>
           </ul>
           {% if request.user.is_authenticated %}
             <div class="d-flex align-items-center gap-3">
