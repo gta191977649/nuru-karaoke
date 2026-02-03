@@ -10,6 +10,7 @@ import WiiAlert from './components/WiiAlert.jsx'
 import KeyChangeAlert from './components/KeyChangeAlert.jsx'
 import useKeyChangeAlertStore from './state/keyChangeAlertStore.js'
 import useAlertStore from './state/alertStore.js'
+import useUserStore from './state/userStore.js'
 import { UI_CONFIG } from './config.js'
 import './App.css'
 
@@ -42,6 +43,10 @@ function App({ onNavigate }) {
   const [karaokeResetKey, setKaraokeResetKey] = useState(0)
   const showKeyChangeAlert = useKeyChangeAlertStore((state) => state.showKeyChangeAlert)
   const showAlert = useAlertStore((state) => state.showAlert)
+  const refreshUser = useUserStore((state) => state.refresh)
+  const authStatus = useUserStore((state) => state.status)
+  const isGuest = useUserStore((state) => state.isGuest)
+  const user = useUserStore((state) => state.user)
 
   const isKaraoke = useMemo(
     () => screen === SCREENS.karaoke && karaokeActive && !karaokeMini,
@@ -139,6 +144,10 @@ function App({ onNavigate }) {
     return () => window.removeEventListener('click', handleGlobalClick, { capture: true })
   }, [])
 
+  useEffect(() => {
+    refreshUser()
+  }, [refreshUser])
+
   const runTransition = useCallback(async (action) => {
     if (transitionLockRef.current) return
     transitionLockRef.current = true
@@ -205,7 +214,16 @@ function App({ onNavigate }) {
             <div className="joyTopStatus">
               <div className="joyTopUser">
                 <div className="joyTopUser__icon" aria-hidden="true" />
-                <div className="joyTopUser__name">Nurupo</div>
+                <div className="joyTopUser__name">
+                  {isGuest ? 'GUEST' : authStatus === 'authenticated' ? (user?.profile?.display_name || user?.username || 'USER') : 'GUEST'}
+                </div>
+                <button
+                  className="joyTopUser__switch"
+                  type="button"
+                  onClick={() => navigateScreen(SCREENS.auth)}
+                >
+                  ユーザー切替
+                </button>
               </div>
               <div className="joyTopSignal" aria-hidden="true">
                 <span />

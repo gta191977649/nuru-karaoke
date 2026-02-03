@@ -373,6 +373,17 @@
   letter-spacing: 0.02em;
 }
 
+.joyTopUser__switch {
+  border: none;
+  background: #e60000;
+  color: #fff;
+  padding: 0.2rem 0.6rem;
+  border-radius: 999px;
+  font-size: 0.7rem;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+}
+
 .joyTopSignal {
   display: flex;
   align-items: flex-end;
