@@ -1,0 +1,47 @@
+{% extends 'base.html' %}
+
+{% block title %}Score History · RAKUSONG 楽曲{% endblock %}
+
+{% block content %}
+<div class="d-flex flex-wrap justify-content-between align-items-center mb-4">
+  <div>
+    <h1 class="h4 fw-bold mb-1">{{ user_obj.username }} · {{ song.title }}</h1>
+    <div class="text-muted">{{ song.artist|default:'Unknown Artist' }} · {{ song.code }}</div>
+  </div>
+  <div class="d-flex gap-2">
+    <a class="btn btn-outline-secondary" href="{% url 'ui_user_detail' user_obj.id %}">Back to User</a>
+  </div>
+</div>
+
+<div class="card p-4">
+  <h2 class="h6 fw-semibold mb-3">Score History</h2>
+  <div class="table-responsive">
+    <table class="table align-middle">
+      <thead>
+        <tr>
+          <th>Score</th>
+          <th>Accuracy</th>
+          <th>Max Combo</th>
+          <th>Time</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for history in histories %}
+        <tr>
+          <td>
+            <a class="fw-semibold text-decoration-none" href="{% url 'ui_user_score_detail' user_obj.id song.id history.id %}">{{ history.score|default:'-' }}</a>
+          </td>
+          <td class="text-muted">{% if history.accuracy %}{{ history.accuracy }}{% else %}-{% endif %}</td>
+          <td class="text-muted">{% if history.max_combo %}{{ history.max_combo }}{% else %}-{% endif %}</td>
+          <td class="text-muted">{{ history.created_at|date:"Y-m-d H:i" }}</td>
+        </tr>
+        {% empty %}
+        <tr>
+          <td colspan="4" class="text-muted">No score history yet.</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+{% endblock %}
