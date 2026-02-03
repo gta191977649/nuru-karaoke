@@ -182,11 +182,20 @@ def leaderboard_list(request):
     if song_code:
         selected_song = Song.objects.filter(code=song_code).first()
         if selected_song:
-            scores = (
+            qs = (
                 Score.objects.filter(song=selected_song)
                 .select_related('user')
-                .order_by('-score', '-accuracy', '-max_combo', '-updated_at')[:100]
+                .order_by('-score', '-accuracy', '-max_combo', '-created_at')
             )
+            seen = set()
+            scores = []
+            for score in qs:
+                if score.user_id in seen:
+                    continue
+                seen.add(score.user_id)
+                scores.append(score)
+                if len(scores) >= 100:
+                    break
 
     return render(
         request,

@@ -86,7 +86,13 @@ function useKaraokePitchHistory({
       }
 
       const history = pitchHistoryRef.current
-      history.push({ t: songTimeSec, userMidi, targetMidi: transposedTargetMidi, rms: result?.rms ?? null })
+      history.push({
+        t: songTimeSec,
+        userMidi,
+        targetMidi: transposedTargetMidi,
+        rms: result?.rms ?? null,
+        f0Hz: Number.isFinite(result?.f0Hz) ? Number(result.f0Hz) : null,
+      })
       const cutoff = songTimeSec - 12
       while (history.length && history[0].t < cutoff) history.shift()
     })

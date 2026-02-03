@@ -19,11 +19,9 @@ class Score(models.Model):
     updated_at = models.DateTimeField(auto_now=True)
 
     class Meta:
-        constraints = [
-            models.UniqueConstraint(fields=['user', 'song'], name='unique_best_score_per_user_song')
-        ]
         indexes = [
             models.Index(fields=['song', '-score', '-updated_at']),
+            models.Index(fields=['user', 'song', '-created_at']),
         ]
 
     def __str__(self):

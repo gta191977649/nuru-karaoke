@@ -12,7 +12,7 @@ function useKaraokeSongIntro({
   currentTime = 0
 }) {
   const [showSongInfo, setShowSongInfo] = useState(false)
-  const [songInfo, setSongInfo] = useState({ title: '', artist: '' })
+  const [songInfo, setSongInfo] = useState({ title: '', artist: '', code: '' })
   const lastIntroMidiUrl = useKaraokeStore((state) => state.lastIntroMidiUrl)
   const setLastIntroMidiUrl = useKaraokeStore((state) => state.setLastIntroMidiUrl)
 
@@ -34,9 +34,13 @@ function useKaraokeSongIntro({
     const title = currentSong?.title || midiName || ''
 
     // Always update song info so it's available for ResultsPage
-    if (title && (songInfo.title !== title || songInfo.artist !== (currentSong?.artist || ''))) {
+    const nextCode = currentSong?.id || currentSong?.code || ''
+    if (
+      title &&
+      (songInfo.title !== title || songInfo.artist !== (currentSong?.artist || '') || songInfo.code !== nextCode)
+    ) {
       // eslint-disable-next-line react-hooks/set-state-in-effect
-      setSongInfo({ title, artist: currentSong?.artist || '' })
+      setSongInfo({ title, artist: currentSong?.artist || '', code: nextCode })
     }
 
     // Only trigger the intro animation if it's a new song load
@@ -60,7 +64,8 @@ function useKaraokeSongIntro({
     lastIntroMidiUrl,
     setLastIntroMidiUrl,
     songInfo.artist,
-    songInfo.title
+    songInfo.title,
+    songInfo.code
   ])
 
   return { showSongInfo, songInfo }

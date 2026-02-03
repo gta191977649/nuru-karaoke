@@ -1,6 +1,6 @@
 from django.contrib import admin
 
-from .models import FavoriteSong, PlayHistory, UserProfile
+from .models import FavoriteSong, ScoreHistory, UserProfile
 
 
 @admin.register(UserProfile)
@@ -15,7 +15,7 @@ class FavoriteSongAdmin(admin.ModelAdmin):
     search_fields = ('user__username', 'song__title', 'song__artist')
 
 
-@admin.register(PlayHistory)
-class PlayHistoryAdmin(admin.ModelAdmin):
+@admin.register(ScoreHistory)
+class ScoreHistoryAdmin(admin.ModelAdmin):
     list_display = ('user', 'song', 'score', 'created_at')
     search_fields = ('user__username', 'song__title', 'song__artist')

@@ -6,6 +6,8 @@ import useAlertStore from '../state/alertStore.js'
 import WiiDialog from '../components/WiiDialog.jsx'
 import { enqueueSongAndPlay } from '../engine/playerController.js'
 import ConnectionAlert from '../components/ConnectionAlert.jsx'
+import useUserStore from '../state/userStore.js'
+import { addFavorite } from '../services/favorites.js'
 
 function InfoRow({ icon, label, value }) {
   return (
@@ -29,6 +31,8 @@ export default function ComfirmSong({ onBack, onConfirm }) {
   const state = useKaraokeStore()
   const song = state.pendingSong
   const showAlert = useAlertStore((state) => state.showAlert)
+  const authStatus = useUserStore((state) => state.status)
+  const accessToken = useUserStore((state) => state.accessToken)
   const [previewText, setPreviewText] = useState('—')
   const [showLyrics, setShowLyrics] = useState(false)
   const [lyricsText, setLyricsText] = useState('')
@@ -171,7 +175,29 @@ export default function ComfirmSong({ onBack, onConfirm }) {
 
           <Col xs={12} lg={3}>
             <Stack gap={2} className="h-100">
-              <Button variant="info" className="fw-semibold" type="button">
+              <Button
+                variant="info"
+                className="fw-semibold"
+                type="button"
+                disabled={authStatus !== 'authenticated'}
+                onClick={async () => {
+                  if (!song || authStatus !== 'authenticated') return
+                  try {
+                    await addFavorite(song.id, accessToken)
+                    showAlert({
+                      message: `${song.title} をマイうたに追加しました`,
+                      variant: 'success',
+                      timeoutMs: 2500,
+                    })
+                  } catch (error) {
+                    showAlert({
+                      message: String(error?.message || 'Failed to add favorite'),
+                      variant: 'danger',
+                      timeoutMs: 3500,
+                    })
+                  }
+                }}
+              >
                 マイうたに
                 <br />
                 登録

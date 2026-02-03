@@ -84,6 +84,7 @@ function SingingPage({ onFinish }) {
     const setLiveScore = usePlayerScoreStore((store) => store.setLiveScore)
     const setTechniqueCounts = usePlayerScoreStore((store) => store.setTechniqueCounts)
     const setResults = usePlayerScoreStore((store) => store.setResults)
+    const setF0Curve = usePlayerScoreStore((store) => store.setF0Curve)
     const resetPlayerScore = usePlayerScoreStore((store) => store.resetPlayerScore)
     const setSongInfo = usePlayerScoreStore((store) => store.setSongInfo)
     const showKeyChangeAlert = useKeyChangeAlertStore((store) => store.showKeyChangeAlert)
@@ -260,6 +261,10 @@ function SingingPage({ onFinish }) {
     }, [setSongInfo, songInfo])
 
     useEffect(() => {
+        setF0Curve(null)
+    }, [setF0Curve, state.midiName, state.queueIndex])
+
+    useEffect(() => {
         let cancelled = false
         const start = async () => {
             try {
@@ -298,11 +303,20 @@ function SingingPage({ onFinish }) {
             if (onFinish) {
                 const finalScore = getScore()
                 const finalTechniques = { ...techniqueCountsRef.current }
-                setResults({ score: finalScore, techniques: finalTechniques, songInfo })
-                onFinish({ score: finalScore, techniques: finalTechniques, songInfo })
+                const history = Array.isArray(pitchHistoryRef.current) ? pitchHistoryRef.current : []
+                const f0Curve = history
+                    .filter((point) => Number.isFinite(point?.t))
+                    .map((point) => ({
+                        t: Number(point.t),
+                        f0Hz: Number.isFinite(point?.f0Hz) ? Number(point.f0Hz) : null,
+                        midi: Number.isFinite(point?.userMidi) ? Number(point.userMidi) : null,
+                    }))
+                setResults({ score: finalScore, techniques: finalTechniques, songInfo, f0Curve })
+                setF0Curve(f0Curve)
+                onFinish({ score: finalScore, techniques: finalTechniques, songInfo, f0Curve })
             }
         }
-    }, [state.currentTime, state.duration, onFinish, getScore, songInfo, state.status, setResults])
+    }, [state.currentTime, state.duration, onFinish, getScore, songInfo, state.status, setResults, setF0Curve])
 
     return (
         <div className={`karaokePage${showSongInfo ? ' karaokePage--intro' : ''}`}>

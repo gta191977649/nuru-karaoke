@@ -4,9 +4,13 @@ import { fetchSongs, fetchTags } from '../services/songLibrary.js'
 import ConnectionAlert from '../components/ConnectionAlert.jsx'
 import { enqueueSongAndPlay } from '../engine/playerController.js'
 import useAlertStore from '../state/alertStore.js'
+import useUserStore from '../state/userStore.js'
+import { addFavorite } from '../services/favorites.js'
 
 function FindSongKeywords({ onBack, onSelectSong, onConfirm }) {
     const showAlert = useAlertStore((state) => state.showAlert)
+    const authStatus = useUserStore((state) => state.status)
+    const accessToken = useUserStore((state) => state.accessToken)
     const [term, setTerm] = useState('')
     const [results, setResults] = useState([])
     const [totalCount, setTotalCount] = useState(0)
@@ -45,6 +49,25 @@ function FindSongKeywords({ onBack, onSelectSong, onConfirm }) {
             setConnectionMessage(message)
             showAlert({
                 message,
+                variant: 'danger',
+                timeoutMs: 3500,
+            })
+        }
+    }
+
+    const handleFavorite = async (song, e) => {
+        e.stopPropagation()
+        if (!song || authStatus !== 'authenticated') return
+        try {
+            await addFavorite(song.id, accessToken)
+            showAlert({
+                message: `${song.title} をマイうたに追加しました`,
+                variant: 'success',
+                timeoutMs: 2500,
+            })
+        } catch (error) {
+            showAlert({
+                message: String(error?.message || 'Failed to add favorite'),
                 variant: 'danger',
                 timeoutMs: 3500,
             })
@@ -189,10 +212,8 @@ function FindSongKeywords({ onBack, onSelectSong, onConfirm }) {
                                     <div className="d-flex gap-2 ms-auto">
                                         <Button
                                             className="wiiList__actionBtn"
-                                            onClick={(e) => {
-                                                e.stopPropagation()
-                                                // TODO: Implement My Song logic
-                                            }}
+                                            disabled={authStatus !== 'authenticated'}
+                                            onClick={(e) => handleFavorite(song, e)}
                                         >
                                             <span className="me-1 text-warning" style={{ textShadow: '0 1px 0 rgba(0,0,0,0.2)' }}>★</span>
                                             マイうた

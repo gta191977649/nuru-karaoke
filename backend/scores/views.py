@@ -1,11 +1,9 @@
-from decimal import Decimal
-
 from rest_framework.permissions import AllowAny, IsAuthenticated
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
 from .models import Score
-from users.models import PlayHistory
+from users.models import ScoreHistory
 from .serializers import ScoreSerializer, ScoreSubmitSerializer
 
 
@@ -25,52 +23,17 @@ class ScoreSubmitAPIView(APIView):
             'version': serializer.validated_data.get('version', ''),
         }
 
-        obj, created = Score.objects.get_or_create(
-            user=request.user, song=song,
-            defaults=incoming,
-        )
-
-        if created:
-            PlayHistory.objects.create(
-                user=request.user,
-                song=song,
-                score=incoming['score'],
-                accuracy=incoming.get('accuracy'),
-                max_combo=incoming.get('max_combo'),
-            )
-            return Response({'status': 'created'})
-
-        def to_decimal(v):
-            if v is None:
-                return Decimal('0')
-            if isinstance(v, Decimal):
-                return v
-            return Decimal(str(v))
-
-        existing_tuple = (obj.score, to_decimal(obj.accuracy), obj.max_combo or 0)
-        incoming_tuple = (incoming['score'], to_decimal(incoming['accuracy']), incoming['max_combo'] or 0)
-
-        if incoming_tuple > existing_tuple:
-            for key, value in incoming.items():
-                setattr(obj, key, value)
-            obj.save(update_fields=['score', 'accuracy', 'max_combo', 'play_mode', 'difficulty', 'version', 'updated_at'])
-            PlayHistory.objects.create(
-                user=request.user,
-                song=song,
-                score=incoming['score'],
-                accuracy=incoming.get('accuracy'),
-                max_combo=incoming.get('max_combo'),
-            )
-            return Response({'status': 'updated'})
-
-        PlayHistory.objects.create(
+        Score.objects.create(user=request.user, song=song, **incoming)
+        ScoreHistory.objects.create(
             user=request.user,
             song=song,
             score=incoming['score'],
             accuracy=incoming.get('accuracy'),
             max_combo=incoming.get('max_combo'),
+            f0_curve=serializer.validated_data.get('f0_curve'),
+            technique_counts=serializer.validated_data.get('technique_counts'),
         )
-        return Response({'status': 'ignored'})
+        return Response({'status': 'created'})
 
 
 class LeaderboardAPIView(APIView):
@@ -81,14 +44,22 @@ class LeaderboardAPIView(APIView):
         if not song_code:
             return Response({'detail': 'song is required.'}, status=400)
 
-        qs = Score.objects.filter(song__code=song_code).select_related('user')
-        qs = qs.order_by('-score', '-accuracy', '-max_combo', '-updated_at')[:100]
-
+        qs = (
+            Score.objects.filter(song__code=song_code)
+            .select_related('user')
+            .order_by('-score', '-accuracy', '-max_combo', '-created_at')
+        )
+        seen = set()
         data = []
-        for idx, score in enumerate(qs, start=1):
+        for score in qs:
+            if score.user_id in seen:
+                continue
+            seen.add(score.user_id)
             item = ScoreSerializer(score).data
-            item['rank'] = idx
+            item['rank'] = len(data) + 1
             data.append(item)
+            if len(data) >= 100:
+                break
 
         return Response({
             'song': song_code,
