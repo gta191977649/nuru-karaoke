@@ -6,7 +6,9 @@ import ViewSelectedSong from './ViewSelectedSong.jsx'
 import FindSongKeywords from './FindSongKeywords.jsx'
 import Leaderboard from './Leaderboard.jsx'
 import ScoringPage from './ScoringPage.jsx'
+import AuthScreen from './AuthScreen.jsx'
 import logo from '../assets/logo.png'
+import useUserStore from '../state/userStore.js'
 
 const SCREENS = {
   home: 'home',
@@ -20,6 +22,7 @@ const SCREENS = {
   queue: 'queue',
   findSongKeywords: 'findSongKeywords',
   leaderboard: 'leaderboard',
+  auth: 'auth',
 }
 
 function WiiScreen({ title, subtitle, onBack }) {
@@ -39,6 +42,9 @@ function WiiScreen({ title, subtitle, onBack }) {
 }
 
 function WiiHomeMain({ screen, onNavigate, onOpenKaraoke, karaokeTargetRef, mainRef }) {
+  const user = useUserStore((state) => state.user)
+  const status = useUserStore((state) => state.status)
+  const logout = useUserStore((state) => state.logout)
   if (screen !== SCREENS.home) {
     switch (screen) {
       case SCREENS.findSongs:
@@ -126,6 +132,12 @@ function WiiHomeMain({ screen, onNavigate, onOpenKaraoke, karaokeTargetRef, main
             <Leaderboard onBack={() => onNavigate(SCREENS.home)} />
           </main>
         )
+      case SCREENS.auth:
+        return (
+          <main className="wiiHome__main" ref={mainRef}>
+            <AuthScreen onBack={() => onNavigate(SCREENS.home)} />
+          </main>
+        )
 
       default:
         return (
@@ -146,6 +158,7 @@ function WiiHomeMain({ screen, onNavigate, onOpenKaraoke, karaokeTargetRef, main
 
           </span>
         </div>
+
       </div>
 
       <Row className="g-3 joyHero">

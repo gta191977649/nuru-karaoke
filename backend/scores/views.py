@@ -5,6 +5,7 @@ from rest_framework.response import Response
 from rest_framework.views import APIView
 
 from .models import Score
+from users.models import PlayHistory
 from .serializers import ScoreSerializer, ScoreSubmitSerializer
 
 
@@ -30,6 +31,13 @@ class ScoreSubmitAPIView(APIView):
         )
 
         if created:
+            PlayHistory.objects.create(
+                user=request.user,
+                song=song,
+                score=incoming['score'],
+                accuracy=incoming.get('accuracy'),
+                max_combo=incoming.get('max_combo'),
+            )
             return Response({'status': 'created'})
 
         def to_decimal(v):
@@ -46,8 +54,22 @@ class ScoreSubmitAPIView(APIView):
             for key, value in incoming.items():
                 setattr(obj, key, value)
             obj.save(update_fields=['score', 'accuracy', 'max_combo', 'play_mode', 'difficulty', 'version', 'updated_at'])
+            PlayHistory.objects.create(
+                user=request.user,
+                song=song,
+                score=incoming['score'],
+                accuracy=incoming.get('accuracy'),
+                max_combo=incoming.get('max_combo'),
+            )
             return Response({'status': 'updated'})
 
+        PlayHistory.objects.create(
+            user=request.user,
+            song=song,
+            score=incoming['score'],
+            accuracy=incoming.get('accuracy'),
+            max_combo=incoming.get('max_combo'),
+        )
         return Response({'status': 'ignored'})
 
 
