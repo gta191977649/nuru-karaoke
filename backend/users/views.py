@@ -8,11 +8,11 @@ from rest_framework.views import APIView
 from rest_framework_simplejwt.tokens import RefreshToken
 
 from scores.models import Score
-from .models import FavoriteSong, PlayHistory
+from .models import FavoriteSong, ScoreHistory
 from .serializers import (
     FavoriteCreateSerializer,
     FavoriteSongSerializer,
-    PlayHistorySerializer,
+    ScoreHistorySerializer,
     RegisterSerializer,
     ScoreSerializer,
     UserProfileSerializer,
@@ -115,7 +115,7 @@ class MyScoresAPIView(APIView):
     permission_classes = [IsAuthenticated]
 
     def get(self, request):
-        scores = Score.objects.filter(user=request.user).order_by('-updated_at')
+        scores = Score.objects.filter(user=request.user).order_by('-created_at')
         return Response(ScoreSerializer(scores, many=True).data)
 
 
@@ -147,11 +147,11 @@ class MyHistoryAPIView(APIView):
 
     def get(self, request):
         song_code = request.query_params.get('song')
-        qs = PlayHistory.objects.filter(user=request.user).select_related('song')
+        qs = ScoreHistory.objects.filter(user=request.user).select_related('song')
         if song_code:
             qs = qs.filter(song__code=song_code)
         qs = qs.order_by('-created_at')[:200]
-        return Response(PlayHistorySerializer(qs, many=True).data)
+        return Response(ScoreHistorySerializer(qs, many=True).data)
 
 
 class PersonalVsNationalAPIView(APIView):
@@ -161,8 +161,25 @@ class PersonalVsNationalAPIView(APIView):
         song_code = request.query_params.get('song')
         if not song_code:
             return Response({'detail': 'song is required.'}, status=400)
-        personal = Score.objects.filter(user=request.user, song__code=song_code).first()
-        national = Score.objects.filter(song__code=song_code).order_by('-score', '-accuracy', '-max_combo')[:10]
+        personal = (
+            Score.objects.filter(user=request.user, song__code=song_code)
+            .order_by('-score', '-accuracy', '-max_combo', '-created_at')
+            .first()
+        )
+        national_qs = (
+            Score.objects.filter(song__code=song_code)
+            .select_related('user')
+            .order_by('-score', '-accuracy', '-max_combo', '-created_at')
+        )
+        seen = set()
+        national = []
+        for score in national_qs:
+            if score.user_id in seen:
+                continue
+            seen.add(score.user_id)
+            national.append(score)
+            if len(national) >= 10:
+                break
         return Response({
             'personal': ScoreSerializer(personal).data if personal else None,
             'national_top': ScoreSerializer(national, many=True).data,

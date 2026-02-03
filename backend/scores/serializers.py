@@ -12,6 +12,8 @@ class ScoreSubmitSerializer(serializers.Serializer):
     play_mode = serializers.CharField(required=False, allow_blank=True)
     difficulty = serializers.CharField(required=False, allow_blank=True)
     version = serializers.CharField(required=False, allow_blank=True)
+    f0_curve = serializers.JSONField(required=False)
+    technique_counts = serializers.JSONField(required=False)
 
     def validate_song(self, value):
         try:

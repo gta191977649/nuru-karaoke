@@ -1,10 +1,12 @@
-import React, { useMemo } from 'react'
+import React, { useEffect, useMemo, useRef } from 'react'
 import './ResultsPage.css'
 import { LiquidTube } from './components/LiquidTube'
 import { CenterScore } from './components/CenterScore'
 import { SongInfo } from './components/SongInfo'
 import { BottomPanel } from './components/BottomPanel'
 import { usePlayerScoreStore } from '../../state/playerScoreStore.js'
+import useUserStore from '../../state/userStore.js'
+import { submitScore } from '../../services/scores.js'
 
 // Importing icons for components if needed, but components likely handle their own or use text/emoji for now.
 import { Play, Pause } from 'lucide-react'
@@ -14,6 +16,11 @@ function ResultsPage({ score, techniques, songInfo, onNext }) {
     //const finalScore = 30
     const techniqueCounts = usePlayerScoreStore((store) => store.techniqueCounts)
     const storedSongInfo = usePlayerScoreStore((store) => store.songInfo)
+    const f0Curve = usePlayerScoreStore((store) => store.f0Curve)
+    const authStatus = useUserStore((store) => store.status)
+    const isGuest = useUserStore((store) => store.isGuest)
+    const accessToken = useUserStore((store) => store.accessToken)
+    const submitOnceRef = useRef(false)
 
     // Mock Analysis Data (since we don't have real analytics for these yet)
     // In the future this should come from the backend/analysis engine
@@ -31,6 +38,7 @@ function ResultsPage({ score, techniques, songInfo, onNext }) {
     const resolvedScore = Number.isFinite(score) ? score : finalScore
     const resolvedTechniques = techniques || techniqueCounts
     const resolvedSongInfo = songInfo || storedSongInfo
+    const resolvedSongCode = resolvedSongInfo?.code || resolvedSongInfo?.id || ''
     const scoreRatio = (Number(resolvedScore) || 0) / 100;
 
     const bottomPanelCounts = useMemo(() => ({
@@ -39,6 +47,27 @@ function ResultsPage({ score, techniques, songInfo, onNext }) {
         shakuri: resolvedTechniques?.glissup || 0,
         vibrato: resolvedTechniques?.vibrato || 0
     }), [resolvedTechniques]);
+
+    useEffect(() => {
+        if (submitOnceRef.current) return
+        if (authStatus !== 'authenticated' || isGuest) return
+        if (!accessToken) return
+        if (!resolvedSongCode) return
+        const numericScore = Number(resolvedScore)
+        if (!Number.isFinite(numericScore)) return
+        submitOnceRef.current = true
+        const payload = {
+            song: resolvedSongCode,
+            score: Math.round(numericScore),
+            technique_counts: resolvedTechniques || {},
+        }
+        if (Array.isArray(f0Curve) && f0Curve.length) {
+            payload.f0_curve = f0Curve
+        }
+        submitScore(payload, accessToken).catch((error) => {
+            console.error('Failed to submit score', error)
+        })
+    }, [authStatus, isGuest, accessToken, resolvedSongCode, resolvedScore, resolvedTechniques, f0Curve])
 
     return (
         <div className="resultsPageNew">

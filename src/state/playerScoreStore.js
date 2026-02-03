@@ -17,6 +17,7 @@ const initialScoreState = {
     totalWeightedBeats: 0,
   },
   songInfo: null,
+  f0Curve: null,
   hasResults: false,
 }
 
@@ -48,6 +49,7 @@ const usePlayerScoreStore = create((set) => ({
       },
     }),
   setSongInfo: (songInfo) => set({ songInfo: songInfo || null }),
+  setF0Curve: (curve) => set({ f0Curve: curve || null }),
   setResults: (payload = {}) =>
     set({
       finalScore: Number.isFinite(payload.score) ? payload.score : 0,
@@ -60,6 +62,7 @@ const usePlayerScoreStore = create((set) => ({
         ...(payload.scoreMeta || {}),
       },
       songInfo: payload.songInfo || null,
+      f0Curve: payload.f0Curve || null,
       hasResults: true,
     }),
 }))
