@@ -811,6 +811,10 @@ function MelodyGuideCanvas({
 
             const totalBeats = (t1Tick - t0Tick) / ticksPerBeat
             let correctBeats = 0
+            const configTol = Number(DEFAULT_CONFIG.f0TimeToleranceSec)
+            const f0ToleranceSec = Number.isFinite(configTol)
+              ? Math.max(0, configTol)
+              : Math.min(0.08, Math.max(0.03, edgeToleranceSec))
 
             for (let i = 0; i < history.length; i += 1) {
               const point = history[i]
@@ -824,13 +828,16 @@ function MelodyGuideCanvas({
               const pointRms = Number.isFinite(point.rms) ? Number(point.rms) : null
               if (Number.isFinite(pointRms) && pointRms < snap.rmsGate) continue
 
-              const sliceStartTick = snap.reference.getTickAtTime(sliceStart)
-              const sliceEndTick = snap.reference.getTickAtTime(sliceEnd)
+              const sliceStartTick = snap.reference.getTickAtTime(sliceStart - f0ToleranceSec)
+              const sliceEndTick = snap.reference.getTickAtTime(sliceEnd + f0ToleranceSec)
               const dtBeat = Math.max(0, (sliceEndTick - sliceStartTick) / ticksPerBeat)
               if (!Number.isFinite(dtBeat) || dtBeat <= 0) continue
 
               const midT = (sliceStart + sliceEnd) * 0.5
-              const rawTarget = getTargetMidiAt(midT)
+              const rawTarget =
+                getTargetMidiAt(midT) ??
+                getTargetMidiAt(midT - f0ToleranceSec) ??
+                getTargetMidiAt(midT + f0ToleranceSec)
               const targetMidiPoint = Number.isFinite(rawTarget) ? rawTarget + transposition : null
               if (!Number.isFinite(targetMidiPoint)) continue
 
