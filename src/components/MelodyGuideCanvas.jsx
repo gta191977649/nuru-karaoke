@@ -1,7 +1,7 @@
 import { useEffect, useRef, forwardRef, useState } from 'react'
-import { Application, Container, Graphics, Sprite, Texture, Assets, Text, TextStyle } from 'pixi.js'
+import { Application, Container, Graphics, Sprite, Text, TextStyle } from 'pixi.js'
 import { BloomFilter } from 'pixi-filters'
-import { getTargetNoteAtBeat, mergeAdjacentNotesByPitch } from '../engine/audio/midi/referenceMelody.js'
+import { getTargetNoteAtTick, mergeAdjacentNotesByPitch } from '../engine/audio/midi/referenceMelody.js'
 import { DEFAULT_CONFIG } from '../engine/audioEngine.js'
 import { DEFAULT_PARTICLE_CONFIG, createParticleSystem, createComboSystem } from './particles/particleSystem.js'
 
@@ -222,7 +222,7 @@ function MelodyGuideCanvas({
   style,
   onTechniqueCountsChange,
   showSolfeges = true,
-  debug = false,
+  debug = true,
 }) {
   const containerRef = useRef(null)
 
@@ -501,12 +501,14 @@ function MelodyGuideCanvas({
 
 
             if (snap.reference) {
-              // Technique validation rule 1: Strict note duration
-              const beat = snap.reference?.getBeatAtTime ? snap.reference.getBeatAtTime(songTime) : songTime
+              // Technique validation rule 1: Strict note duration (tick-aligned)
+              const ticksPerBeat = Number(snap.reference?.timeDivision) || 480
+              const tick = snap.reference?.getTickAtTime ? snap.reference.getTickAtTime(songTime) : songTime
               const bpsNow = snap.reference?.getBeatsPerSecond ? snap.reference.getBeatsPerSecond(songTime) : 2
-              const edgeToleranceBeat = 0
-              const maxGap = 0 * (Number.isFinite(bpsNow) ? bpsNow : 2)
-              const targetNote = getTargetNoteAtBeat(snap.reference, beat, { maxGap, edgeToleranceBeat })
+              const ticksPerSec = (Number.isFinite(bpsNow) ? bpsNow : 2) * ticksPerBeat
+              const edgeToleranceTick = 0
+              const maxGapTick = 0 * ticksPerSec
+              const targetNote = getTargetNoteAtTick(snap.reference, tick, { maxGapTick, edgeToleranceTick })
 
               if (targetNote) {
                 const targetMidi = targetNote.midi
@@ -561,8 +563,9 @@ function MelodyGuideCanvas({
               const type = event.type
               event.isValid = false
               event.isPending = true
-              if (snap.reference?.getBeatAtTime) {
-                const beatIdx = Math.floor(snap.reference.getBeatAtTime(songTime))
+              if (snap.reference?.getTickAtTime) {
+                const ticksPerBeat = Number(snap.reference?.timeDivision) || 480
+                const beatIdx = Math.floor(snap.reference.getTickAtTime(songTime) / ticksPerBeat)
                 event._beatIdx = beatIdx
               }
               event._type = type
@@ -753,13 +756,15 @@ function MelodyGuideCanvas({
         const scoringReference = snap.reference ? { ...snap.reference, notes: scoringNotes } : null
         const getTargetNoteAt = (t, opts = {}) => {
           if (!scoringReference) return null
-          const beat = scoringReference.getBeatAtTime ? scoringReference.getBeatAtTime(t) : t
+          const ticksPerBeat = Number(scoringReference?.timeDivision) || 480
+          const tick = scoringReference.getTickAtTime ? scoringReference.getTickAtTime(t) : t
           const bpsNow = scoringReference.getBeatsPerSecond ? scoringReference.getBeatsPerSecond(t) : 2
-          const maxGap = breakToleranceSec * (Number.isFinite(bpsNow) ? bpsNow : 2)
-          const edgeToleranceBeat = edgeToleranceSec * (Number.isFinite(bpsNow) ? bpsNow : 2)
-          return getTargetNoteAtBeat(scoringReference, beat, {
-            maxGap,
-            edgeToleranceBeat,
+          const ticksPerSec = (Number.isFinite(bpsNow) ? bpsNow : 2) * ticksPerBeat
+          const maxGapTick = breakToleranceSec * ticksPerSec
+          const edgeToleranceTick = edgeToleranceSec * ticksPerSec
+          return getTargetNoteAtTick(scoringReference, tick, {
+            maxGapTick,
+            edgeToleranceTick,
             ...opts,
           })
         }
@@ -777,26 +782,36 @@ function MelodyGuideCanvas({
         }
 
         const beatStates = []
-        if (snap.reference && typeof snap.reference.getBeatAtTime === 'function') {
-          const beatStart = Math.floor(snap.reference.getBeatAtTime(visibleStart))
-          let beatEnd = Math.ceil(snap.reference.getBeatAtTime(visibleEnd))
+        if (snap.reference && typeof snap.reference.getTickAtTime === 'function') {
+          const ticksPerBeat = Number(snap.reference.timeDivision) || 480
+          const ticksToSeconds = typeof snap.reference.ticksToSeconds === 'function'
+            ? (tick) => snap.reference.ticksToSeconds(tick)
+            : (tick) =>
+                typeof snap.reference.beatsToSeconds === 'function'
+                  ? snap.reference.beatsToSeconds(tick / ticksPerBeat)
+                  : 0
+
+          const startTick = snap.reference.getTickAtTime(visibleStart)
+          const endTick = snap.reference.getTickAtTime(visibleEnd)
+          const beatStart = Math.floor(startTick / ticksPerBeat)
+          let beatEnd = Math.ceil(endTick / ticksPerBeat)
           // Safety clamp to prevent infinite or massive loops if timing calculation goes wrong
           if (beatEnd - beatStart > 500) {
             beatEnd = beatStart + 500
           }
+
           for (let b = beatStart; b < beatEnd; b += 1) {
-            const t0 = typeof snap.reference.beatsToSeconds === 'function'
-              ? snap.reference.beatsToSeconds(b)
-              : songTimeSec + (b - snap.reference.getBeatAtTime(songTimeSec)) / bps
-            const t1 = typeof snap.reference.beatsToSeconds === 'function'
-              ? snap.reference.beatsToSeconds(b + 1)
-              : songTimeSec + (b + 1 - snap.reference.getBeatAtTime(songTimeSec)) / bps
+            const t0Tick = b * ticksPerBeat
+            const t1Tick = (b + 1) * ticksPerBeat
+            const t0 = ticksToSeconds(t0Tick)
+            const t1 = ticksToSeconds(t1Tick)
             if (!Number.isFinite(t0) || !Number.isFinite(t1)) continue
             if (t1 < visibleStart || t0 > visibleEnd) continue
             if (songTimeSec < t1) continue
 
-            let total = 0
-            let correct = 0
+            const totalBeats = (t1Tick - t0Tick) / ticksPerBeat
+            let correctBeats = 0
+
             for (let i = 0; i < history.length; i += 1) {
               const point = history[i]
               if (point.t < t0 || point.t >= t1) continue
@@ -805,21 +820,29 @@ function MelodyGuideCanvas({
               const sliceEnd = Math.min(next, t1)
               if (sliceEnd <= sliceStart) continue
               const userMidi = Number.isFinite(point.userMidi) ? Number(point.userMidi) : null
-              const targetMidiPoint = Number.isFinite(point.targetMidi) ? Number(point.targetMidi) : null
-              if (!Number.isFinite(userMidi) || !Number.isFinite(targetMidiPoint)) continue
+              if (!Number.isFinite(userMidi)) continue
               const pointRms = Number.isFinite(point.rms) ? Number(point.rms) : null
               if (Number.isFinite(pointRms) && pointRms < snap.rmsGate) continue
+
+              const sliceStartTick = snap.reference.getTickAtTime(sliceStart)
+              const sliceEndTick = snap.reference.getTickAtTime(sliceEnd)
+              const dtBeat = Math.max(0, (sliceEndTick - sliceStartTick) / ticksPerBeat)
+              if (!Number.isFinite(dtBeat) || dtBeat <= 0) continue
+
+              const midT = (sliceStart + sliceEnd) * 0.5
+              const rawTarget = getTargetMidiAt(midT)
+              const targetMidiPoint = Number.isFinite(rawTarget) ? rawTarget + transposition : null
+              if (!Number.isFinite(targetMidiPoint)) continue
+
               const userQuant = Math.round(userMidi)
               const targetQuant = Math.round(targetMidiPoint)
               const distance = mod12Distance(userQuant, targetQuant)
-              const dt = sliceEnd - sliceStart
-              total += dt
               if (Number.isFinite(distance) && Math.abs(distance) <= NOTE_MERGE_CONFIG.pitchToleranceSemis) {
-                correct += dt
+                correctBeats += dtBeat
               }
             }
-            if (total <= 0) continue
-            const ratio = correct / total
+
+            const ratio = totalBeats > 0 ? correctBeats / totalBeats : 0
             beatStates.push({
               t0,
               t1,
@@ -1057,6 +1080,23 @@ function MelodyGuideCanvas({
             state.debugTrace.beginPath()
 
             let started = false
+
+            // Tempo change markers
+            if (snap.reference?.tempoChanges?.length && typeof snap.reference.ticksToSeconds === 'function') {
+              state.debugTrace.setStrokeStyle({ width: 2, color: 0xFFC400, alpha: 0.6 })
+              state.debugTrace.beginPath()
+              snap.reference.tempoChanges.forEach((change) => {
+                const tick = Number(change?.ticks)
+                if (!Number.isFinite(tick)) return
+                const t = snap.reference.ticksToSeconds(tick)
+                if (!Number.isFinite(t)) return
+                if (t < visibleStart || t > visibleEnd) return
+                const x = playheadX + (t - songTimeSec) * pixelsPerSec
+                state.debugTrace.moveTo(x, 0)
+                state.debugTrace.lineTo(x, h)
+              })
+              state.debugTrace.stroke()
+            }
 
             // Draw Beat Alignment Regions
             beatStates.forEach(beat => {

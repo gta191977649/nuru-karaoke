@@ -43,7 +43,7 @@ const formatHexColor = (value) => {
   return `#${num.toString(16).padStart(6, '0')}`
 }
 
-const parseHexColor = (value, fallback) => {
+  const parseHexColor = (value, fallback) => {
   if (typeof value !== 'string') return fallback
   let hex = value.trim()
   if (hex.startsWith('#')) hex = hex.slice(1)
@@ -112,6 +112,110 @@ const extractSysExMessages = (midiData) => {
     })
   })
   return messages
+}
+
+const buildBeatMapData = (reference, opts = {}) => {
+  const noteSource = Array.isArray(reference?.rawNotes) && reference.rawNotes.length
+    ? reference.rawNotes
+    : reference?.notes
+  if (!noteSource?.length) return null
+  const width = Number.isFinite(opts.width) ? opts.width : 760
+  const height = Number.isFinite(opts.height) ? opts.height : 180
+  const ticksPerBeat = Number.isFinite(reference.timeDivision) && reference.timeDivision > 0
+    ? reference.timeDivision
+    : 480
+
+  let minMidi = Infinity
+  let maxMidi = -Infinity
+  let maxNoteTick = 0
+  noteSource.forEach((note) => {
+    const midi = Number(note.midi)
+    if (!Number.isFinite(midi)) return
+    const endTick = Number(note.t1Tick)
+    if (Number.isFinite(endTick)) {
+      maxNoteTick = Math.max(maxNoteTick, endTick)
+    }
+    minMidi = Math.min(minMidi, midi)
+    maxMidi = Math.max(maxMidi, midi)
+  })
+  if (!Number.isFinite(minMidi) || !Number.isFinite(maxMidi) || minMidi === maxMidi) {
+    minMidi = 48
+    maxMidi = 72
+  }
+
+  let maxTempoTick = 0
+  const tempoChanges = Array.isArray(reference.tempoChanges) ? reference.tempoChanges : []
+  if (tempoChanges.length && Number.isFinite(reference.timeDivision)) {
+    tempoChanges.forEach((change) => {
+      const ticks = Number(change?.ticks)
+      if (!Number.isFinite(ticks)) return
+      maxTempoTick = Math.max(maxTempoTick, ticks)
+    })
+  }
+
+  const totalTicks = Math.max(1, Math.ceil(Math.max(maxNoteTick, maxTempoTick)))
+  const totalBeats = Math.max(1, Math.ceil(totalTicks / ticksPerBeat))
+  const maxBeatLines = Number.isFinite(opts.maxBeatLines) ? Math.max(1, opts.maxBeatLines) : 2000
+  const beatStep = Math.max(1, Math.ceil(totalBeats / maxBeatLines))
+  const beatAxisLines = []
+  for (let b = 0; b <= totalBeats; b += beatStep) {
+    beatAxisLines.push({ beat: b, tick: b * ticksPerBeat })
+  }
+
+  const tempoLinesTick = []
+  const tempoSegmentsTick = []
+  const tempoDebug = []
+  if (tempoChanges.length && Number.isFinite(reference.timeDivision)) {
+    const sortedChanges = tempoChanges
+      .map((change) => ({
+        ticks: Number(change?.ticks),
+        tempo: Number(change?.tempo),
+      }))
+      .filter((change) => Number.isFinite(change.ticks))
+      .sort((a, b) => a.ticks - b.ticks)
+
+    sortedChanges.forEach((change, idx) => {
+      const ticks = Number(change?.ticks)
+      if (!Number.isFinite(ticks)) return
+      const beat = ticks / ticksPerBeat
+      tempoLinesTick.push({ tick: ticks, tempo: Number(change?.tempo) })
+      tempoDebug.push({
+        index: idx,
+        ticks,
+        beat,
+        tempo: Number(change?.tempo),
+      })
+    })
+
+    const sortedTick = tempoLinesTick.slice().sort((a, b) => a.tick - b.tick)
+    for (let i = 0; i < sortedTick.length; i += 1) {
+      const segStart = sortedTick[i].tick
+      const segEnd = i + 1 < sortedTick.length ? sortedTick[i + 1].tick : totalTicks
+      if (!Number.isFinite(segStart) || !Number.isFinite(segEnd)) continue
+      tempoSegmentsTick.push({
+        startTick: segStart,
+        endTick: segEnd,
+        tempo: sortedTick[i].tempo,
+      })
+    }
+  }
+
+  return {
+    width,
+    height,
+    ticksPerBeat,
+    totalTicks,
+    totalBeats,
+    maxNoteTick,
+    maxTempoTick,
+    minMidi,
+    maxMidi,
+    beatAxisLines,
+    tempoLinesTick,
+    tempoSegmentsTick,
+    tempoDebug,
+    notes: noteSource,
+  }
 }
 
 function Synth({ onNavigateHome }) {
@@ -202,6 +306,26 @@ function Synth({ onNavigateHome }) {
     if (pc == null) return 'n/a'
     return `${noteNames[pc]} (pc ${pc})`
   }
+
+  const beatMapData = useMemo(() => {
+    return buildBeatMapData(reference, { width: 760, height: 180, maxBeatLines: 2000 })
+  }, [reference])
+
+  useEffect(() => {
+    if (!beatMapData) return
+    console.log('[Beatmap Debug] reference stats', {
+      ticksPerBeat: beatMapData.ticksPerBeat,
+      totalTicks: beatMapData.totalTicks,
+      maxNoteTick: beatMapData.maxNoteTick,
+      maxTempoTick: beatMapData.maxTempoTick,
+      notes: beatMapData.notes.length,
+      tempoChanges: Array.isArray(reference?.tempoChanges) ? reference.tempoChanges.length : 0,
+      totalBeats: beatMapData.totalBeats,
+    })
+    if (beatMapData.tempoDebug?.length) {
+      console.log('[Beatmap Debug] tempo changes', beatMapData.tempoDebug)
+    }
+  }, [beatMapData, reference])
 
   const getCssVar = (el, name, fallback) => {
     if (!el) return fallback
@@ -1633,6 +1757,185 @@ function Synth({ onNavigateHome }) {
                   ) : (
                     <div style={{ width: '100%', height: 180, borderRadius: 8, background: '#0f1115' }} />
                   )}
+                </div>
+              </Tab>
+              <Tab eventKey="beatmap-debug" title="Beatmap Debug">
+                <div className="fw-semibold mb-2">Beat Map Debug</div>
+                {beatMapData ? (
+                  <svg
+                    width={beatMapData.width}
+                    height={beatMapData.height}
+                    viewBox={`0 0 ${beatMapData.width} ${beatMapData.height}`}
+                    style={{ width: '100%', height: beatMapData.height, background: '#0f1115', borderRadius: 8 }}
+                  >
+                    <rect width={beatMapData.width} height={beatMapData.height} fill="#0f1115" />
+                    {beatMapData.tempoSegmentsTick.map((seg, idx) => {
+                      const x0 = (seg.startTick / beatMapData.totalTicks) * beatMapData.width
+                      const x1 = (seg.endTick / beatMapData.totalTicks) * beatMapData.width
+                      const w = Math.max(0, x1 - x0)
+                      const fill = idx % 2 === 0 ? 'rgba(255,255,255,0.03)' : 'rgba(255,255,255,0.08)'
+                      return (
+                        <rect
+                          key={`seg-${idx}`}
+                          x={x0}
+                          y={0}
+                          width={w}
+                          height={beatMapData.height}
+                          fill={fill}
+                        />
+                      )
+                    })}
+                    {Number.isFinite(beatMapData.maxNoteTick) && beatMapData.maxNoteTick > 0 ? (
+                      <line
+                        x1={(beatMapData.maxNoteTick / beatMapData.totalTicks) * beatMapData.width}
+                        x2={(beatMapData.maxNoteTick / beatMapData.totalTicks) * beatMapData.width}
+                        y1={0}
+                        y2={beatMapData.height}
+                        stroke="rgba(0,200,255,0.7)"
+                        strokeWidth={2}
+                      />
+                    ) : null}
+                    <line
+                      x1={beatMapData.width - 1}
+                      x2={beatMapData.width - 1}
+                      y1={0}
+                      y2={beatMapData.height}
+                      stroke="rgba(255,0,255,0.7)"
+                      strokeWidth={2}
+                    />
+                    {beatMapData.beatAxisLines.map((line) => {
+                      const x = (line.tick / beatMapData.totalTicks) * beatMapData.width
+                      return (
+                        <line
+                          key={`beat-${line.beat}`}
+                          x1={x}
+                          x2={x}
+                          y1={0}
+                          y2={beatMapData.height}
+                          stroke="rgba(255,255,255,0.08)"
+                          strokeWidth={1}
+                        />
+                      )
+                    })}
+                    {beatMapData.tempoLinesTick.map((line, idx) => {
+                      const x = (line.tick / beatMapData.totalTicks) * beatMapData.width
+                      return (
+                        <line
+                          key={`tempo-${idx}`}
+                          x1={x}
+                          x2={x}
+                          y1={0}
+                          y2={beatMapData.height}
+                          stroke="rgba(255,196,0,0.5)"
+                          strokeWidth={2}
+                        />
+                      )
+                    })}
+                    {beatMapData.notes.map((note, idx) => {
+                      const midi = Number(note.midi)
+                      const t0Tick = Number(note.t0Tick)
+                      const t1Tick = Number(note.t1Tick)
+                      if (!Number.isFinite(t0Tick) || !Number.isFinite(t1Tick) || !Number.isFinite(midi)) return null
+                      const x0 = (t0Tick / beatMapData.totalTicks) * beatMapData.width
+                      const x1 = (t1Tick / beatMapData.totalTicks) * beatMapData.width
+                      const pitchSpan = Math.max(1, beatMapData.maxMidi - beatMapData.minMidi)
+                      const y =
+                        beatMapData.height -
+                        ((midi - beatMapData.minMidi) / pitchSpan) * beatMapData.height
+                      const barH = Math.max(2, beatMapData.height / (pitchSpan + 1))
+                      const barW = Math.max(1, x1 - x0)
+                        return (
+                          <rect
+                            key={`note-${idx}`}
+                            x={x0}
+                            y={y - barH / 2}
+                            width={barW}
+                            height={barH}
+                            fill="rgba(255,255,255,0.8)"
+                          />
+                        )
+                      })}
+                    </svg>
+                  ) : (
+                  <div style={{ width: '100%', height: 180, borderRadius: 8, background: '#0f1115' }} />
+                )}
+                <div
+                  className="small text-muted mt-2 d-flex flex-wrap align-items-center gap-3"
+                  style={{ lineHeight: 1.4 }}
+                >
+                  <div className="d-flex align-items-center gap-2">
+                    <span
+                      style={{
+                        width: 10,
+                        height: 10,
+                        background: 'rgba(255,255,255,0.8)',
+                        display: 'inline-block',
+                        boxShadow: '0 0 0 1px rgba(0,0,0,0.6)',
+                      }}
+                    />
+                    <span>Melody notes</span>
+                  </div>
+                  <div className="d-flex align-items-center gap-2">
+                    <span
+                      style={{
+                        width: 10,
+                        height: 10,
+                        background: 'rgba(255,255,255,0.08)',
+                        display: 'inline-block',
+                        boxShadow: '0 0 0 1px rgba(0,0,0,0.6)',
+                      }}
+                    />
+                    <span>Beats</span>
+                  </div>
+                  <div className="d-flex align-items-center gap-2">
+                    <span
+                      style={{
+                        width: 10,
+                        height: 10,
+                        background: 'rgba(255,196,0,0.5)',
+                        display: 'inline-block',
+                        boxShadow: '0 0 0 1px rgba(0,0,0,0.6)',
+                      }}
+                    />
+                    <span>Tempo changes</span>
+                  </div>
+                  <div className="d-flex align-items-center gap-2">
+                    <span
+                      style={{
+                        width: 10,
+                        height: 10,
+                        background: 'rgba(0,200,255,0.7)',
+                        display: 'inline-block',
+                        boxShadow: '0 0 0 1px rgba(0,0,0,0.6)',
+                      }}
+                    />
+                    <span>Max note tick</span>
+                  </div>
+                  <div className="d-flex align-items-center gap-2">
+                    <span
+                      style={{
+                        width: 10,
+                        height: 10,
+                        background: 'rgba(255,0,255,0.7)',
+                        display: 'inline-block',
+                        boxShadow: '0 0 0 1px rgba(0,0,0,0.6)',
+                      }}
+                    />
+                    <span>Tick range end</span>
+                  </div>
+                  <div className="d-flex align-items-center gap-2">
+                    <span
+                      style={{
+                        width: 10,
+                        height: 10,
+                        display: 'inline-block',
+                        background:
+                          'repeating-linear-gradient(90deg, rgba(255,255,255,0.03), rgba(255,255,255,0.03) 3px, rgba(255,255,255,0.08) 3px, rgba(255,255,255,0.08) 6px)',
+                        boxShadow: '0 0 0 1px rgba(0,0,0,0.6)',
+                      }}
+                    />
+                    <span>Tempo segments</span>
+                  </div>
                 </div>
               </Tab>
             </Tabs>

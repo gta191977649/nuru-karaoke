@@ -1,5 +1,5 @@
 import { useEffect, useRef, useCallback } from 'react'
-import { getTargetNoteAtBeat } from '../../engine/audio/midi/referenceMelody.js'
+import { getTargetNoteAtTick } from '../../engine/audio/midi/referenceMelody.js'
 import { DEFAULT_CONFIG } from '../../engine/audioEngine.js'
 import { SimpleScoreCalculator } from '../scoring/SimpleScoreCalculator.js'
 
@@ -70,13 +70,15 @@ export function useKaraokeScoring({
             lastProcessedTimeRef.current = alignedTime
 
             const ref = scoringRef.current || reference
-            const beat = ref?.getBeatAtTime ? ref.getBeatAtTime(alignedTime) : alignedTime
+            const ticksPerBeat = Number(ref?.timeDivision) || 480
+            const tick = ref?.getTickAtTime ? ref.getTickAtTime(alignedTime) : alignedTime
             const bpsNow = ref?.getBeatsPerSecond ? ref.getBeatsPerSecond(alignedTime) : 2
-            const maxGapBeat = calculatorRef.current.getMaxGapSec() * (Number.isFinite(bpsNow) ? bpsNow : 2)
-            const edgeToleranceBeat = calculatorRef.current.getEdgeToleranceSec() * (Number.isFinite(bpsNow) ? bpsNow : 2)
-            const rawTargetNote = getTargetNoteAtBeat(ref, beat, {
-                maxGap: maxGapBeat,
-                edgeToleranceBeat,
+            const ticksPerSec = (Number.isFinite(bpsNow) ? bpsNow : 2) * ticksPerBeat
+            const maxGapTick = calculatorRef.current.getMaxGapSec() * ticksPerSec
+            const edgeToleranceTick = calculatorRef.current.getEdgeToleranceSec() * ticksPerSec
+            const rawTargetNote = getTargetNoteAtTick(ref, tick, {
+                maxGapTick,
+                edgeToleranceTick,
             })
             // Note: rawTargetNote is null if no note is active
 
@@ -107,6 +109,7 @@ export function useKaraokeScoring({
             const transposition = transpositionRef.current || 0
 
             // Delegate to calculator
+            const beat = Number.isFinite(tick) ? tick / ticksPerBeat : alignedTime
             calculatorRef.current.process({
                 targetNote: rawTargetNote,
                 userPitch,
