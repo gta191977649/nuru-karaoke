@@ -516,6 +516,12 @@ export function mergeAdjacentNotesByPitch(notes = [], opts = {}) {
         const nBeat = Number.isFinite(next.t1Beat) ? next.t1Beat : next.t1Sec
         current.t1Beat = Math.max(cBeat, nBeat)
       }
+      if (Number.isFinite(current.t1Tick) || Number.isFinite(next.t1Tick)) {
+        const cTick = Number.isFinite(current.t1Tick) ? current.t1Tick : -Infinity
+        const nTick = Number.isFinite(next.t1Tick) ? next.t1Tick : -Infinity
+        const mergedTick = Math.max(cTick, nTick)
+        if (Number.isFinite(mergedTick)) current.t1Tick = mergedTick
+      }
     } else {
       merged.push(current)
       current = { ...next }

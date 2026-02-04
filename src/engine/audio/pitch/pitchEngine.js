@@ -135,11 +135,16 @@ class PitchEngine {
 
       console.log('[PitchEngine] sampleRate', audioContext.sampleRate)
 
+      const micConstraints = this._config?.micConstraints || DEFAULT_CONFIG.micConstraints || {}
+      const echoCancellation = micConstraints.echoCancellation === true
+      const noiseSuppression = micConstraints.noiseSuppression === true
+      const autoGainControl = micConstraints.autoGainControl === true
+
       const stream = await navigator.mediaDevices.getUserMedia({
         audio: {
-          echoCancellation: false,
-          noiseSuppression: false,
-          autoGainControl: false,
+          echoCancellation,
+          noiseSuppression,
+          autoGainControl,
         },
       })
 

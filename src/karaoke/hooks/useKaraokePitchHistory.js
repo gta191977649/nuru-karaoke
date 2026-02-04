@@ -12,6 +12,7 @@ function useKaraokePitchHistory({
 }) {
   const lastPitchRef = useRef(null)
   const pitchHistoryRef = useRef([])
+  const fullHistoryRef = useRef([])
   const lastValidPitchRef = useRef(null)
   const lastValidPitchTimeRef = useRef(null)
   const mergedReferenceRef = useRef(null)
@@ -19,6 +20,7 @@ function useKaraokePitchHistory({
 
   useEffect(() => {
     pitchHistoryRef.current = []
+    fullHistoryRef.current = []
     lastPitchRef.current = null
     lastValidPitchRef.current = null
     lastValidPitchTimeRef.current = null
@@ -88,20 +90,22 @@ function useKaraokePitchHistory({
       }
 
       const history = pitchHistoryRef.current
-      history.push({
+      const point = {
         t: songTimeSec,
         userMidi,
         targetMidi: transposedTargetMidi,
         rms: result?.rms ?? null,
         f0Hz: Number.isFinite(result?.f0Hz) ? Number(result.f0Hz) : null,
-      })
+      }
+      history.push(point)
+      fullHistoryRef.current.push(point)
       const cutoff = songTimeSec - 12
       while (history.length && history[0].t < cutoff) history.shift()
     })
     return () => unsubscribe()
   }, [pitchEngine, reference, rmsGate, currentTimeRef, transpositionRef])
 
-  return { lastPitchRef, pitchHistoryRef }
+  return { lastPitchRef, pitchHistoryRef, fullHistoryRef }
 }
 
 export { useKaraokePitchHistory }

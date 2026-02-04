@@ -8,7 +8,9 @@ from songs.models import Song
 from .models import ScoreHistory
 
 
-def _build_reference_curve(song, times):
+
+
+def _build_reference_curve(song):
     if not song or not song.midi_file:
         return [], {'segments': 0, 'min_t': None, 'max_t': None}
     midi_path = getattr(song.midi_file, 'path', '')
@@ -50,27 +52,56 @@ def _build_reference_curve(song, times):
     if not segments:
         return [], {'segments': 0, 'min_t': None, 'max_t': None}
 
-    times_sorted = sorted(times)
-    times_min = times_sorted[0] if times_sorted else None
-    offset = segments[0][0] - times_min if times_min is not None else 0.0
-    idx = 0
     results = []
-    for t in times_sorted:
-        t_lookup = t + offset
-        while idx < len(segments) and t_lookup >= segments[idx][1]:
-            idx += 1
-        note = None
-        if idx < len(segments) and segments[idx][0] <= t_lookup < segments[idx][1]:
-            note = segments[idx][2]
+    total_end = max(seg[1] for seg in segments)
+    cursor = 0.0
+    for start, end, note in segments:
+        if start > cursor:
+            results.append({'t': cursor, 'midi': None})
+            results.append({'t': start, 'midi': None})
+        results.append({'t': start, 'midi': note})
+        results.append({'t': end, 'midi': note})
+        cursor = max(cursor, end)
 
-        results.append({
-            't': t,
-            'midi': note,
-        })
-    min_t = segments[0][0] if segments else None
-    max_t = segments[-1][1] if segments else None
+    if cursor < total_end:
+        results.append({'t': cursor, 'midi': None})
+        results.append({'t': total_end, 'midi': None})
 
-    return results, {'segments': len(segments), 'min_t': min_t, 'max_t': max_t}
+    return results, {'segments': len(segments), 'min_t': 0.0, 'max_t': total_end}
+
+
+def _build_user_curve_with_gaps(f0_curve):
+    if not isinstance(f0_curve, list):
+        return []
+    points = []
+    for point in f0_curve:
+        if isinstance(point, dict) and isinstance(point.get('t'), (int, float)):
+            t = float(point['t'])
+            midi = point.get('midi')
+            midi = float(midi) if isinstance(midi, (int, float)) else None
+            points.append({'t': t, 'midi': midi})
+    if not points:
+        return []
+    points.sort(key=lambda item: item['t'])
+    # Estimate typical step to detect gaps
+    deltas = [points[i + 1]['t'] - points[i]['t'] for i in range(len(points) - 1)]
+    deltas = [d for d in deltas if d > 0]
+    if deltas:
+        deltas.sort()
+        mid = len(deltas) // 2
+        median = deltas[mid] if len(deltas) % 2 else (deltas[mid - 1] + deltas[mid]) / 2
+    else:
+        median = 0.0
+    gap_threshold = max(0.05, median * 3) if median > 0 else 0.2
+
+    results = [points[0]]
+    for prev, curr in zip(points, points[1:]):
+        if curr['t'] - prev['t'] > gap_threshold:
+            # Insert a null break to avoid connecting across missing time
+            results.append({'t': prev['t'], 'midi': None})
+            results.append({'t': curr['t'], 'midi': None})
+        results.append(curr)
+    return results
 
 
 @login_required
@@ -146,12 +177,8 @@ def user_score_detail(request, pk, song_id, history_id):
     song = get_object_or_404(Song, pk=song_id)
     history = get_object_or_404(ScoreHistory, pk=history_id, user=user, song=song)
     f0_curve = history.f0_curve or []
-    times = []
-    if isinstance(f0_curve, list):
-        for point in f0_curve:
-            if isinstance(point, dict) and isinstance(point.get('t'), (int, float)):
-                times.append(float(point['t']))
-    reference_curve, ref_debug = _build_reference_curve(song, times) if times else ([], {'segments': 0, 'min_t': None, 'max_t': None})
+    f0_curve_display = _build_user_curve_with_gaps(f0_curve)
+    reference_curve, ref_debug = _build_reference_curve(song)
     return render(
         request,
         'users/user_score_detail.html',
@@ -160,6 +187,7 @@ def user_score_detail(request, pk, song_id, history_id):
             'song': song,
             'history': history,
             'reference_curve': reference_curve,
+            'f0_curve_display': f0_curve_display,
             'ref_debug': ref_debug,
             'midi_path': getattr(song.midi_file, 'path', ''),
         },

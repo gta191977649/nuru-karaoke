@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useEffect, useMemo, useRef, useState, useCallback } from 'react'
 import { Button, Col, Container, Form, Row, Tab, Tabs } from 'react-bootstrap'
 import { extractReferenceMelodyFromMidiData, getTargetMidiAtTime } from './audio/midi/referenceMelody.js'
 import { sharedPitchEngine, startSharedMic, stopSharedMic } from './audio/pitch/sharedPitchEngine.js'
@@ -244,6 +244,15 @@ function Synth({ onNavigateHome }) {
   const [rmsGate, setRmsGate] = useState(DEFAULT_CONFIG.rmsGate)
   const [latencyCompMs, setLatencyCompMs] = useState(0)
   const [userPitchOffsetMs, setUserPitchOffsetMs] = useState(300)
+  const [micEchoCancellation, setMicEchoCancellation] = useState(
+    DEFAULT_CONFIG.micConstraints?.echoCancellation ?? false,
+  )
+  const [micNoiseSuppression, setMicNoiseSuppression] = useState(
+    DEFAULT_CONFIG.micConstraints?.noiseSuppression ?? false,
+  )
+  const [micAutoGainControl, setMicAutoGainControl] = useState(
+    DEFAULT_CONFIG.micConstraints?.autoGainControl ?? false,
+  )
   const [enableDoubleExponentialSmoothing, setEnableDoubleExponentialSmoothing] = useState(DEFAULT_CONFIG.enableDoubleExponentialSmoothing)
   const [algoId, setAlgoId] = useState(DEFAULT_CONFIG.pitchAlgoId || 'essentia-yin')
   const [enableDcRemoval, setEnableDcRemoval] = useState(DEFAULT_CONFIG.enableDcRemoval !== false)
@@ -286,6 +295,7 @@ function Synth({ onNavigateHome }) {
   const fullPitchHistoryRef = useRef([])
   const currentTimeRef = useRef(0)
   const transpositionRef = useRef(0)
+  const micActiveRef = useRef(false)
   const rawF0HistoryRef = useRef([])
   const postF0HistoryRef = useRef([])
   const pitchEngine = sharedPitchEngine
@@ -306,6 +316,44 @@ function Synth({ onNavigateHome }) {
     if (pc == null) return 'n/a'
     return `${noteNames[pc]} (pc ${pc})`
   }
+
+  const startMicWithDebug = useCallback(async () => {
+    try {
+      await startSharedMic()
+      const analyser = pitchEngine.ensureDebugAnalyser?.({
+        fftSize: 2048,
+        smoothingTimeConstant: 0,
+        enableHpf,
+        hpfCutoffHz: DEFAULT_CONFIG.hpfCutoffHz,
+      })
+      if (!analyser) {
+        console.warn('[Synth] debugAnalyser not ready after start')
+      }
+      if (analyser && analyser instanceof AnalyserNode && analyser.frequencyBinCount > 0) {
+        setDebugAnalyser(analyser)
+      } else {
+        console.warn('[Synth] Got invalid debugAnalyser from startMic', analyser)
+        setDebugAnalyser(null)
+      }
+      const audioContext = pitchEngine.getAudioContext?.()
+      setDebugInfo((prev) => ({
+        ...prev,
+        micSampleRate: audioContext?.sampleRate ?? null,
+      }))
+      setMicActive(true)
+    } catch (err) {
+      console.error(err)
+    }
+  }, [enableHpf, pitchEngine])
+
+  const stopMicWithDebug = useCallback(() => {
+    stopSharedMic()
+    setDebugInfo((prev) => ({
+      ...prev,
+      micSampleRate: null,
+    }))
+    setMicActive(false)
+  }, [])
 
   const beatMapData = useMemo(() => {
     return buildBeatMapData(reference, { width: 760, height: 180, maxBeatLines: 2000 })
@@ -341,6 +389,31 @@ function Synth({ onNavigateHome }) {
       unsubscribe()
     }
   }, [pitchEngine])
+
+  useEffect(() => {
+    micActiveRef.current = micActive
+  }, [micActive])
+
+  useEffect(() => {
+    pitchEngine.configureDetector({
+      micConstraints: {
+        echoCancellation: Boolean(micEchoCancellation),
+        noiseSuppression: Boolean(micNoiseSuppression),
+        autoGainControl: Boolean(micAutoGainControl),
+      },
+    })
+    if (micActiveRef.current) {
+      stopMicWithDebug()
+      startMicWithDebug()
+    }
+  }, [
+    micEchoCancellation,
+    micNoiseSuppression,
+    micAutoGainControl,
+    pitchEngine,
+    startMicWithDebug,
+    stopMicWithDebug,
+  ])
 
   useEffect(() => {
     currentTimeRef.current = state.currentTime
@@ -1042,35 +1115,7 @@ function Synth({ onNavigateHome }) {
                     <Button
                       type="button"
                       disabled={!state.ready || micActive}
-                      onClick={async () => {
-                        try {
-                          await startSharedMic()
-                          const analyser = pitchEngine.ensureDebugAnalyser?.({
-                            fftSize: 2048,
-                            smoothingTimeConstant: 0,
-                            enableHpf,
-                            hpfCutoffHz: DEFAULT_CONFIG.hpfCutoffHz,
-                          })
-                          if (!analyser) {
-                            console.warn('[Synth] debugAnalyser not ready after start')
-                          }
-                          // Extended validation
-                          if (analyser && analyser instanceof AnalyserNode && analyser.frequencyBinCount > 0) {
-                            setDebugAnalyser(analyser)
-                          } else {
-                            console.warn('[Synth] Got invalid debugAnalyser from startMic', analyser)
-                            setDebugAnalyser(null)
-                          }
-                          const audioContext = pitchEngine.getAudioContext?.()
-                          setDebugInfo((prev) => ({
-                            ...prev,
-                            micSampleRate: audioContext?.sampleRate ?? null,
-                          }))
-                          setMicActive(true)
-                        } catch (err) {
-                          console.error(err)
-                        }
-                      }}
+                      onClick={startMicWithDebug}
                     >
                       Start Mic
                     </Button>
@@ -1080,14 +1125,7 @@ function Synth({ onNavigateHome }) {
                       type="button"
                       variant="secondary"
                       disabled={!micActive}
-                      onClick={() => {
-                        stopSharedMic()
-                        setDebugInfo((prev) => ({
-                          ...prev,
-                          micSampleRate: null,
-                        }))
-                        setMicActive(false)
-                      }}
+                      onClick={stopMicWithDebug}
                     >
                       Stop Mic
                     </Button>
@@ -1126,6 +1164,31 @@ function Synth({ onNavigateHome }) {
                       value={rmsGate}
                       onChange={(e) => setRmsGate(Number(e.currentTarget.value))}
                     />
+
+                    <div className="mt-3">
+                      <div className="small text-muted mb-1">Mic Constraints</div>
+                      <Form.Check
+                        type="switch"
+                        id="mic-echo-cancellation"
+                        label="Echo Cancellation"
+                        checked={micEchoCancellation}
+                        onChange={(e) => setMicEchoCancellation(e.currentTarget.checked)}
+                      />
+                      <Form.Check
+                        type="switch"
+                        id="mic-noise-suppression"
+                        label="Noise Suppression"
+                        checked={micNoiseSuppression}
+                        onChange={(e) => setMicNoiseSuppression(e.currentTarget.checked)}
+                      />
+                      <Form.Check
+                        type="switch"
+                        id="mic-auto-gain"
+                        label="Auto Gain Control"
+                        checked={micAutoGainControl}
+                        onChange={(e) => setMicAutoGainControl(e.currentTarget.checked)}
+                      />
+                    </div>
                   </Col>
 
                   <Col xs={12} md={6}>

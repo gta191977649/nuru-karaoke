@@ -43,6 +43,28 @@
 </div>
 
 <div class="row g-4">
+  <div class="col-12">
+    <div class="card p-4">
+      <h2 class="h6 fw-semibold mb-3">F0 Curve</h2>
+      {% if history.f0_curve %}
+        <div class="w-100" style="height: 280px;">
+          <canvas id="f0CurveChart" style="width: 100%; height: 100%;"></canvas>
+        </div>
+        <div class="d-flex gap-2 mt-3">
+          <button id="toggleZoom" class="btn btn-outline-primary btn-sm">Toggle zoom</button>
+          <button id="togglePan" class="btn btn-outline-primary btn-sm">Toggle pan</button>
+          <button id="resetZoom" class="btn btn-outline-secondary btn-sm">Reset zoom</button>
+        </div>
+        {{ f0_curve_display|json_script:"f0CurveData" }}
+        {{ reference_curve|json_script:"refCurveData" }}
+      {% else %}
+        <div class="text-muted">No f0 curve data.</div>
+      {% endif %}
+    </div>
+  </div>
+</div>
+
+<div class="row g-4 mt-0">
   <div class="col-12 col-lg-6">
     <div class="card p-4 h-100">
       <h2 class="h6 fw-semibold mb-3">Technique Counts</h2>
@@ -56,24 +78,11 @@
       {% endif %}
     </div>
   </div>
-  <div class="col-12 col-lg-6">
-    <div class="card p-4 h-100">
-      <h2 class="h6 fw-semibold mb-3">F0 Curve</h2>
-      {% if history.f0_curve %}
-        <div class="ratio ratio-16x9">
-          <canvas id="f0CurveChart"></canvas>
-        </div>
-        {{ history.f0_curve|json_script:"f0CurveData" }}
-        {{ reference_curve|json_script:"refCurveData" }}
-      {% else %}
-        <div class="text-muted">No f0 curve data.</div>
-      {% endif %}
-    </div>
-  </div>
 </div>
 
 {% if history.f0_curve %}
   <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/chartjs-plugin-zoom/2.0.1/chartjs-plugin-zoom.min.js"></script>
   <script>
     (function () {
       const countsRaw = document.getElementById('techniqueCountsData')
@@ -116,53 +125,74 @@
       }
       const raw = JSON.parse(document.getElementById('f0CurveData').textContent || '[]')
       const refRaw = JSON.parse(document.getElementById('refCurveData').textContent || '[]')
-      const toCents = (midi) => {
-        if (!Number.isFinite(midi)) return null
-        return 1200 * (Number(midi) - 69)
-      }
-      const points = Array.isArray(raw)
-        ? raw
-            .filter((item) => Number.isFinite(item?.t) && Number.isFinite(item?.midi))
-            .map((item) => ({ x: Number(item.t), y: toCents(item.midi) }))
-        : []
+      const toMidi = (midi) => (Number.isFinite(midi) ? Number(midi) : null)
+
       const refPoints = Array.isArray(refRaw)
         ? refRaw
-            .filter((item) => Number.isFinite(item?.t) && Number.isFinite(item?.midi))
-            .map((item) => ({ x: Number(item.t), y: toCents(item.midi) }))
+            .filter((item) => Number.isFinite(item?.t))
+            .map((item) => ({ x: Number(item.t), y: toMidi(item?.midi) }))
+        : []
+
+      // Build a simple time-ordered reference lookup (piecewise constant)
+      refPoints.sort((a, b) => a.x - b.x)
+      const getRefMidiAt = (() => {
+        let idx = 0
+        let current = null
+        return (t) => {
+          while (idx < refPoints.length && refPoints[idx].x <= t) {
+            current = refPoints[idx].y
+            idx += 1
+          }
+          return current
+        }
+      })()
+
+      const normalizeToRefOctave = (userMidi, refMidi) => {
+        if (!Number.isFinite(userMidi) || !Number.isFinite(refMidi)) return userMidi
+        let adjusted = userMidi
+        while (adjusted - refMidi > 6) adjusted -= 12
+        while (adjusted - refMidi < -6) adjusted += 12
+        return adjusted
+      }
+
+      const points = Array.isArray(raw)
+        ? raw
+            .filter((item) => Number.isFinite(item?.t))
+            .map((item) => ({ t: Number(item.t), midi: toMidi(item?.midi) }))
+            .sort((a, b) => a.t - b.t)
+            .map((item) => {
+              const refMidi = getRefMidiAt(item.t)
+              return { x: item.t, y: normalizeToRefOctave(item.midi, refMidi) }
+            })
         : []
       const ctx = document.getElementById('f0CurveChart')
       if (!ctx) return
-      const pointsMin = points.length ? points[0].x : null
-      const refMin = refPoints.length ? refPoints[0].x : null
-      if (Number.isFinite(refMin)) {
-        for (const p of refPoints) {
-          p.x = p.x - refMin
-        }
-      }
-      if (Number.isFinite(pointsMin)) {
-        for (const p of points) {
-          p.x = p.x - pointsMin
-        }
-      }
-      new Chart(ctx, {
+      const chart = new Chart(ctx, {
         type: 'line',
         data: {
           datasets: [
             {
-              label: 'User (Normalized)',
+              label: 'User F0',
               data: points,
-              borderColor: '#e60000',
-              borderWidth: 2,
+              borderColor: '#0000FF',
+              borderWidth: 1,
               pointRadius: 0,
               tension: 0.15,
+              spanGaps: false,
             },
             {
-              label: 'Reference (Channel 0)',
+              label: 'Melody(Channel 0)',
               data: refPoints,
-              borderColor: '#0ea5e9',
-              borderWidth: 2,
+              borderColor: '#FF9500',
+              borderWidth: 6,
               pointRadius: 0,
-              tension: 0.15,
+              tension: 0,
+              stepped: 'before',
+              spanGaps: false,
+              segment: {
+                borderCapStyle: 'butt',
+                borderJoinStyle: 'miter',
+              },
             },
           ],
         },
@@ -175,14 +205,66 @@
               title: { display: true, text: 'Time (s)' },
             },
             y: {
-              title: { display: true, text: 'Pitch (cents, A4=0)' },
+              title: { display: true, text: 'Pitch (MIDI)' },
             },
           },
           plugins: {
             legend: { display: true },
+            zoom: {
+              zoom: {
+                wheel: { enabled: true },
+                pinch: { enabled: true },
+                mode: 'x',
+              },
+              pan: {
+                enabled: true,
+                mode: 'x',
+                modifierKey: null,
+              },
+              limits: {
+                x: { min: 'original', max: 'original' },
+              },
+            },
           },
         },
       })
+      ctx.addEventListener('dblclick', () => chart.resetZoom())
+      const zoomBtn = document.getElementById('toggleZoom')
+      const panBtn = document.getElementById('togglePan')
+      const resetBtn = document.getElementById('resetZoom')
+
+      const setBtnState = (btn, enabled) => {
+        if (!btn) return
+        btn.classList.toggle('btn-outline-primary', !enabled)
+        btn.classList.toggle('btn-primary', enabled)
+      }
+
+      if (zoomBtn) {
+        zoomBtn.addEventListener('click', () => {
+          const enabled = !chart.options.plugins.zoom.zoom.wheel.enabled
+          chart.options.plugins.zoom.zoom.wheel.enabled = enabled
+          chart.options.plugins.zoom.zoom.pinch.enabled = enabled
+          chart.update('none')
+          setBtnState(zoomBtn, enabled)
+        })
+      }
+
+      if (panBtn) {
+        panBtn.addEventListener('click', () => {
+          const enabled = !chart.options.plugins.zoom.pan.enabled
+          chart.options.plugins.zoom.pan.enabled = enabled
+          chart.update('none')
+          setBtnState(panBtn, enabled)
+        })
+      }
+
+      if (resetBtn) {
+        resetBtn.addEventListener('click', () => chart.resetZoom())
+      }
+
+      // Initialize button states
+      setBtnState(zoomBtn, chart.options.plugins.zoom.zoom.wheel.enabled)
+      setBtnState(panBtn, chart.options.plugins.zoom.pan.enabled)
     })()
   </script>
 {% endif %}

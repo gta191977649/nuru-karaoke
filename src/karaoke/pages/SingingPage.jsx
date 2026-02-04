@@ -68,6 +68,96 @@ function renderRubySegments(segments) {
     )
 }
 
+const medianNumber = (values) => {
+    if (!values.length) return null
+    const sorted = [...values].sort((a, b) => a - b)
+    const mid = Math.floor(sorted.length / 2)
+    return sorted.length % 2 ? sorted[mid] : (sorted[mid - 1] + sorted[mid]) / 2
+}
+
+const buildF0CurveByBeat = ({ history, reference, rmsGate }) => {
+    if (!Array.isArray(history) || !history.length) return []
+    if (!reference || typeof reference.getTickAtTime !== 'function') {
+        return history
+            .filter((point) => Number.isFinite(point?.t))
+            .map((point) => ({
+                t: Number(point.t),
+                f0Hz: Number.isFinite(point?.f0Hz) ? Number(point.f0Hz) : null,
+                midi: Number.isFinite(point?.userMidi) ? Number(point.userMidi) : null,
+            }))
+    }
+
+    const ticksPerBeat = Number(reference.timeDivision) || 480
+    const ticksToSeconds = typeof reference.ticksToSeconds === 'function'
+        ? (tick) => reference.ticksToSeconds(tick)
+        : (tick) =>
+            typeof reference.beatsToSeconds === 'function'
+                ? reference.beatsToSeconds(tick / ticksPerBeat)
+                : 0
+
+    const endTime = Number.isFinite(reference.durationSec)
+        ? Number(reference.durationSec)
+        : Number(history[history.length - 1]?.t) || 0
+    const endTick = reference.getTickAtTime(endTime)
+    const beatEnd = Math.ceil(endTick / ticksPerBeat)
+
+    const notes = Array.isArray(reference.notes) ? reference.notes : []
+    const curve = []
+    let historyIdx = 0
+    let noteIdx = 0
+    for (let b = 0; b < beatEnd; b += 1) {
+        const t0Tick = b * ticksPerBeat
+        const t1Tick = (b + 1) * ticksPerBeat
+        const t0 = ticksToSeconds(t0Tick)
+        const t1 = ticksToSeconds(t1Tick)
+        if (!Number.isFinite(t0) || !Number.isFinite(t1)) continue
+        if (t0 > endTime) break
+
+        while (noteIdx < notes.length && notes[noteIdx].t1Sec <= t0) noteIdx += 1
+        let hasTargetNote = false
+        for (let n = noteIdx; n < notes.length; n += 1) {
+            const note = notes[n]
+            if (note.t0Sec >= t1) break
+            if (note.t1Sec > t0 && note.t0Sec < t1) {
+                hasTargetNote = true
+                break
+            }
+        }
+
+        if (!hasTargetNote) continue
+
+        const f0HzValues = []
+        const midiValues = []
+
+        while (historyIdx < history.length && history[historyIdx].t < t0) historyIdx += 1
+        for (let i = historyIdx; i < history.length; i += 1) {
+            const point = history[i]
+            if (!Number.isFinite(point?.t) || point.t >= t1) {
+                if (Number.isFinite(point?.t) && point.t >= t1) break
+                continue
+            }
+            const pointRms = Number.isFinite(point?.rms) ? Number(point.rms) : null
+            if (Number.isFinite(pointRms) && pointRms < rmsGate) continue
+            if (Number.isFinite(point?.f0Hz) && point.f0Hz > 0) {
+                f0HzValues.push(Number(point.f0Hz))
+            }
+            if (Number.isFinite(point?.userMidi)) {
+                midiValues.push(Number(point.userMidi))
+            }
+        }
+
+        const f0Hz = medianNumber(f0HzValues)
+        const midi = medianNumber(midiValues)
+        curve.push({
+            t: (t0 + t1) * 0.5,
+            f0Hz: Number.isFinite(f0Hz) ? f0Hz : null,
+            midi: Number.isFinite(midi) ? midi : null,
+        })
+    }
+
+    return curve
+}
+
 function SingingPage({ onFinish }) {
     const state = useKaraokeStore()
     const pitchEngine = sharedPitchEngine
@@ -104,7 +194,22 @@ function SingingPage({ onFinish }) {
         reference,
         currentTime: state.currentTime,
     })
-    const { pitchHistoryRef, lastPitchRef } = useKaraokePitchHistory({
+
+    const scoringSegments = useMemo(() => {
+        return groupNotesToSegments(reference?.notes, 0.4)
+    }, [reference?.notes])
+
+    const isScoring = useMemo(() => {
+        if (!scoringSegments || state.currentTime == null) return false
+        const t = state.currentTime
+        // Check if current time is within any segment
+        // Optimized: find first segment ending after t
+        const seg = scoringSegments.find((s) => s.t1Sec >= t)
+        if (!seg) return false
+        return seg.t0Sec <= t
+    }, [scoringSegments, state.currentTime])
+
+    const { pitchHistoryRef, fullHistoryRef, lastPitchRef } = useKaraokePitchHistory({
         pitchEngine,
         reference,
         currentTimeRef,
@@ -140,20 +245,13 @@ function SingingPage({ onFinish }) {
 
 
 
-    const scoringSegments = useMemo(() => {
-        return groupNotesToSegments(reference?.notes, 0.4)
-    }, [reference?.notes])
-
-    const isScoring = useMemo(() => {
-        if (!scoringSegments || state.currentTime == null) return false
-        const t = state.currentTime
-        // Check if current time is within any segment
-        // Optimized: find first segment ending after t
-        const seg = scoringSegments.find((s) => s.t1Sec >= t)
-        if (!seg) return false
-        return seg.t0Sec <= t
-    }, [scoringSegments, state.currentTime])
-
+    useEffect(() => {
+        if (!pitchEngine) return
+        pitchEngine.configureDetector({
+            rmsGate: micRmsGate,
+            enableRmsGate: micRmsGate > 0,
+        })
+    }, [pitchEngine, micRmsGate])
     // Live score now updates via onScoreChange from the scoring hook.
 
     const progressPercent = Math.round((state.karaokeProgress ?? 0) * 1000) / 10
@@ -303,20 +401,29 @@ function SingingPage({ onFinish }) {
             if (onFinish) {
                 const finalScore = getScore()
                 const finalTechniques = { ...techniqueCountsRef.current }
-                const history = Array.isArray(pitchHistoryRef.current) ? pitchHistoryRef.current : []
-                const f0Curve = history
-                    .filter((point) => Number.isFinite(point?.t))
-                    .map((point) => ({
-                        t: Number(point.t),
-                        f0Hz: Number.isFinite(point?.f0Hz) ? Number(point.f0Hz) : null,
-                        midi: Number.isFinite(point?.userMidi) ? Number(point.userMidi) : null,
-                    }))
+                const history = Array.isArray(fullHistoryRef.current) ? fullHistoryRef.current : []
+                const f0Curve = buildF0CurveByBeat({
+                    history,
+                    reference,
+                    rmsGate: micRmsGate,
+                })
                 setResults({ score: finalScore, techniques: finalTechniques, songInfo, f0Curve })
                 setF0Curve(f0Curve)
                 onFinish({ score: finalScore, techniques: finalTechniques, songInfo, f0Curve })
             }
         }
-    }, [state.currentTime, state.duration, onFinish, getScore, songInfo, state.status, setResults, setF0Curve])
+    }, [
+        state.currentTime,
+        state.duration,
+        onFinish,
+        getScore,
+        songInfo,
+        state.status,
+        setResults,
+        setF0Curve,
+        reference,
+        micRmsGate,
+    ])
 
     return (
         <div className={`karaokePage${showSongInfo ? ' karaokePage--intro' : ''}`}>
@@ -353,6 +460,7 @@ function SingingPage({ onFinish }) {
                                 transpositionRef={transpositionRef}
                                 rmsGate={micRmsGate}
                                 gateUserByTarget
+                                forceUserOnScoring={isScoring}
                                 width={800}
                                 height={220}
                                 techniqueEventsRef={techniqueEventsRef}
