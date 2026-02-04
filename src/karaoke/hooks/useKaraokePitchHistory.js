@@ -1,5 +1,5 @@
 import { useEffect, useRef } from 'react'
-import { getTargetNoteAtBeat, mergeAdjacentNotesByPitch } from '../../engine/audio/midi/referenceMelody.js'
+import { getTargetNoteAtTick, mergeAdjacentNotesByPitch } from '../../engine/audio/midi/referenceMelody.js'
 import { DEFAULT_CONFIG } from '../../engine/audioEngine.js'
 
 function useKaraokePitchHistory({
@@ -54,14 +54,16 @@ function useKaraokePitchHistory({
         }
       }
       const ref = mergedReferenceRef.current || reference
-      const beat = ref?.getBeatAtTime ? ref.getBeatAtTime(songTimeSec) : songTimeSec
+      const ticksPerBeat = Number(ref?.timeDivision) || 480
+      const tick = ref?.getTickAtTime ? ref.getTickAtTime(songTimeSec) : songTimeSec
       const bpsNow = ref?.getBeatsPerSecond ? ref.getBeatsPerSecond(songTimeSec) : 2
-      const maxGapBeat = breakToleranceSec * (Number.isFinite(bpsNow) ? bpsNow : 2)
-      const edgeToleranceBeat = edgeToleranceSec * (Number.isFinite(bpsNow) ? bpsNow : 2)
+      const ticksPerSec = (Number.isFinite(bpsNow) ? bpsNow : 2) * ticksPerBeat
+      const maxGapTick = breakToleranceSec * ticksPerSec
+      const edgeToleranceTick = edgeToleranceSec * ticksPerSec
       const rawTargetNote = ref
-        ? getTargetNoteAtBeat(ref, beat, {
-            maxGap: maxGapBeat,
-            edgeToleranceBeat,
+        ? getTargetNoteAtTick(ref, tick, {
+            maxGapTick,
+            edgeToleranceTick,
           })
         : null
       const rawTargetMidi = rawTargetNote ? rawTargetNote.midi : null
