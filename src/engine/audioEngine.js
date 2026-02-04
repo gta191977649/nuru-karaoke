@@ -10,7 +10,7 @@ const DEFAULT_CONFIG = {
   f0MinHz: 80, //  Detection Range for vocal low bound (Hz)
   f0MaxHz: 1000, // Detection Range for vocal high bound (Hz)
   pitchToleranceSemis: 1.5, // Semitone tolerance for melody correctness
-  f0TimeToleranceSec: 0.06, // F0 time tolerance (seconds) for visual scoring smoothing
+  //f0TimeToleranceSec: 0.1, // F0 time tolerance (seconds) for visual scoring smoothing
   // allkaraoke-like stability knobs
   breakToleranceMs: 100, // Short unvoiced gap tolerance (~100ms)
   medianWindowSize: 3, // 中值滤波窗口大小（抗尖刺）
@@ -24,6 +24,11 @@ const DEFAULT_CONFIG = {
   enableRmsGate: true,
   enableF0Validate: true,
   enableTemporalSmooth: false, // Keep false; allkaraoke-like stability uses breakTolerance/snap
+  micConstraints: {
+    echoCancellation: false,
+    noiseSuppression: false,
+    autoGainControl: false,
+  },
   debugPipeline: false,
   debugPipelineStride: 4,
   pitchAlgoId: 'pitchy',

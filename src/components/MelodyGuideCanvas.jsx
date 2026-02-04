@@ -203,6 +203,7 @@ function MelodyGuideCanvas({
   transpositionRef,
   rmsGate = 0,
   gateUserByTarget = false,
+  forceUserOnScoring = false,
   userOffsetSec = 0,
   width = 900,
   height = 220,
@@ -278,6 +279,7 @@ function MelodyGuideCanvas({
     transpositionRef,
     rmsGate,
     gateUserByTarget,
+    forceUserOnScoring,
     userOffsetSec,
     windowSec,
     minMidi,
@@ -313,6 +315,7 @@ function MelodyGuideCanvas({
       transpositionRef,
       rmsGate,
       gateUserByTarget,
+      forceUserOnScoring,
       userOffsetSec,
       windowSec,
       minMidi,
@@ -335,6 +338,7 @@ function MelodyGuideCanvas({
     transpositionRef,
     rmsGate,
     gateUserByTarget,
+    forceUserOnScoring,
     userOffsetSec,
     windowSec,
     minMidi,
@@ -1185,7 +1189,8 @@ function MelodyGuideCanvas({
           if (snap.reference) {
             targetMidi = getTargetMidiForUserTime(songTimeSec)
           }
-          if (!(snap.gateUserByTarget && snap.reference && targetMidi == null)) {
+          const allowNoTarget = snap.forceUserOnScoring === true
+          if (!(snap.gateUserByTarget && snap.reference && targetMidi == null && !allowNoTarget)) {
             const transposedTarget = targetMidi != null ? targetMidi + transposition : null
             const mappedMidi = Number.isFinite(transposedTarget)
               ? mapUserMidiToTargetOctave(userMidi, transposedTarget)
