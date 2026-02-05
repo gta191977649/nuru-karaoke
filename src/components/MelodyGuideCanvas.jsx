@@ -117,6 +117,10 @@ const NOTE_MERGE_CONFIG = {
 
 // Visual in-tune tolerance for trail + particles
 const VISUAL_TOLERANCE_SEMIS = 1.0
+// Beat stability threshold in semitones (std dev of userMidi samples within the beat).
+// Measured as standard deviation in MIDI semitones; lower = stricter, higher = looser.
+// Typical range: 0.2 (very strict) to 0.8 (very loose). Not normalized to 0–1.
+const STABILITY_STD_SEMIS = 1
 
 const SOLFEGE_NAMES = ['ﾄﾞ', 'ﾄﾞ#', 'ﾚ', 'ﾚ#', 'ﾐ', 'ﾌｧ', 'ﾌｧ#', 'ｿ', 'ｿ#', 'ﾗ', 'ﾗ#', 'ｼ']
 const SOLFEGE_TEXT_STYLE = new TextStyle({
@@ -815,6 +819,7 @@ function MelodyGuideCanvas({
 
             const totalBeats = (t1Tick - t0Tick) / ticksPerBeat
             let correctBeats = 0
+            const beatMidiValues = []
             const configTol = Number(DEFAULT_CONFIG.f0TimeToleranceSec)
             const f0ToleranceSec = Number.isFinite(configTol)
               ? Math.max(0, configTol)
@@ -831,6 +836,17 @@ function MelodyGuideCanvas({
               if (!Number.isFinite(userMidi)) continue
               const pointRms = Number.isFinite(point.rms) ? Number(point.rms) : null
               if (Number.isFinite(pointRms) && pointRms < snap.rmsGate) continue
+
+              // Match yellow F0 trail filter: require target + in-tune within VISUAL_TOLERANCE_SEMIS
+              const targetMidiForPoint = getTargetMidiForUserTime(point.t)
+              const isTargetDefined = Number.isFinite(targetMidiForPoint)
+              if (isTargetDefined) {
+                const mapped = mapUserMidiToTargetOctave(userMidi, targetMidiForPoint + transposition)
+                const diff = Math.abs(mapped - (targetMidiForPoint + transposition))
+                if (diff <= VISUAL_TOLERANCE_SEMIS) {
+                  beatMidiValues.push(userMidi)
+                }
+              }
 
               const sliceStartTick = snap.reference.getTickAtTime(sliceStart - f0ToleranceSec)
               const sliceEndTick = snap.reference.getTickAtTime(sliceEnd + f0ToleranceSec)
@@ -854,11 +870,18 @@ function MelodyGuideCanvas({
             }
 
             const ratio = totalBeats > 0 ? correctBeats / totalBeats : 0
+            let isStable = true
+            if (beatMidiValues.length >= 2) {
+              const mean = beatMidiValues.reduce((sum, v) => sum + v, 0) / beatMidiValues.length
+              const variance = beatMidiValues.reduce((sum, v) => sum + (v - mean) ** 2, 0) / beatMidiValues.length
+              const std = Math.sqrt(variance)
+              isStable = std <= STABILITY_STD_SEMIS
+            }
             beatStates.push({
               t0,
               t1,
               beatIdx: b,
-              correct: ratio >= NOTE_MERGE_CONFIG.coverageRatio,
+              correct: ratio >= NOTE_MERGE_CONFIG.coverageRatio && isStable,
               showAt: t1 + RESULT_DELAY_SEC,
             })
           }
@@ -1041,7 +1064,7 @@ function MelodyGuideCanvas({
             penDown = false
             continue
           }
-          const rms = Number(pt.rms)
+          const rms = Number.isFinite(pt.rms) ? Number(pt.rms) : 0
           if (rms < snap.rmsGate) {
             penDown = false
             continue
@@ -1224,8 +1247,8 @@ function MelodyGuideCanvas({
             // We verify if the time t covers any correct segment.
             // Since correctSegments are time-ranges, we check overlap.
             const userMidi = Number(p1.userMidi)
-            const rms = Number.isFinite(p1.rms) ? Number(p1.rms) : null
-            if (Number.isFinite(rms) && rms < (Number(snap.rmsGate) || 0)) continue
+            const rms = Number.isFinite(p1.rms) ? Number(p1.rms) : 0
+            if (rms < (Number(snap.rmsGate) || 0)) continue
             const targetMidi = getTargetMidiForUserTime(p1.t)
             if (!Number.isFinite(userMidi) || !Number.isFinite(targetMidi)) continue
             const transposedTarget = targetMidi + transposition
