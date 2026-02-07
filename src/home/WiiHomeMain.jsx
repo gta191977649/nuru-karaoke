@@ -7,6 +7,8 @@ import FindSongKeywords from './FindSongKeywords.jsx'
 import Leaderboard from './Leaderboard.jsx'
 import ScoringPage from './ScoringPage.jsx'
 import AuthScreen from './AuthScreen.jsx'
+import Maintenance from './メンテナンス.jsx'
+import MyUta from './マイうた.jsx'
 import logo from '../assets/logo.png'
 import useUserStore from '../state/userStore.js'
 
@@ -74,17 +76,13 @@ function WiiHomeMain({ screen, onNavigate, onOpenKaraoke, karaokeTargetRef, main
       case SCREENS.singWithGamepad:
         return (
           <main className="wiiHome__main" ref={mainRef}>
-            <WiiScreen
-              title="Sing with the Wii U GamePad!"
-              subtitle="TODO: gamepad pairing/help screen"
-              onBack={() => onNavigate(SCREENS.home)}
-            />
+            <MyUta onBack={() => onNavigate(SCREENS.home)} />
           </main>
         )
       case SCREENS.ticket:
         return (
           <main className="wiiHome__main" ref={mainRef}>
-            <WiiScreen title="Ticket" subtitle="TODO: subscription/ticket info" onBack={() => onNavigate(SCREENS.home)} />
+            <Maintenance onBack={() => onNavigate(SCREENS.home)} />
           </main>
         )
       case SCREENS.comfirmSongs:

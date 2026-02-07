@@ -8,6 +8,7 @@ import { enqueueSongAndPlay } from '../engine/playerController.js'
 import ConnectionAlert from '../components/ConnectionAlert.jsx'
 import useUserStore from '../state/userStore.js'
 import { addFavorite } from '../services/favorites.js'
+import NationalRanking from './NationalRanking.jsx'
 
 function InfoRow({ icon, label, value }) {
   return (
@@ -39,6 +40,7 @@ export default function ComfirmSong({ onBack, onConfirm }) {
   const [connectionOpen, setConnectionOpen] = useState(false)
   const [connectionStatus, setConnectionStatus] = useState('loading')
   const [connectionMessage, setConnectionMessage] = useState('')
+  const [view, setView] = useState('info') // 'info' or 'ranking'
 
   const buildNetworkMessage = (error) => String(error?.message || 'Unknown error')
 
@@ -97,6 +99,10 @@ export default function ComfirmSong({ onBack, onConfirm }) {
       ignore = true
     }
   }, [song])
+
+  if (view === 'ranking') {
+    return <NationalRanking song={song} onBack={() => setView('info')} />
+  }
 
   return (
     <Container fluid className="py-3">
@@ -202,7 +208,12 @@ export default function ComfirmSong({ onBack, onConfirm }) {
                 <br />
                 登録
               </Button>
-              <Button variant="info" className="fw-semibold" type="button">
+              <Button
+                variant="info"
+                className="fw-semibold"
+                type="button"
+                onClick={() => setView('ranking')}
+              >
                 全国ランキング
               </Button>
 
