@@ -207,8 +207,9 @@ function App({ onNavigate }) {
             >
               <Tab eventKey={SCREENS.home} title="曲を選ぶ" />
               <Tab eventKey={SCREENS.moreModes} title="採点" />
+              <Tab eventKey={SCREENS.singWithGamepad} title="マイうた" />
               <Tab eventKey={SCREENS.ticket} title="メンテナンス" />
-              <Tab eventKey={SCREENS.singWithGamepad} title="遊ぶ♪" />
+
             </Tabs>
 
             <div className="joyTopStatus">
