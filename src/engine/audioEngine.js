@@ -9,10 +9,10 @@ const DEFAULT_CONFIG = {
   smoothBeta: 0.1, // Trend smoothing factor
   f0MinHz: 80, //  Detection Range for vocal low bound (Hz)
   f0MaxHz: 1000, // Detection Range for vocal high bound (Hz)
-  pitchToleranceSemis: 1, // Semitone tolerance for melody correctness
-  //f0TimeToleranceSec: 0.1, // F0 time tolerance (seconds) for visual scoring smoothing
+  pitchToleranceSemis:2, // Semitone tolerance for melody correctness
+  f0TimeToleranceSec: 0.12, // F0 time tolerance (seconds) for visual scoring smoothing
   // allkaraoke-like stability knobs
-  breakToleranceMs: 100, // Short unvoiced gap tolerance (~100ms)
+  breakToleranceMs: 160, // Short unvoiced gap tolerance (~100ms)
   medianWindowSize: 3, // 中值滤波窗口大小（抗尖刺）
   maxJumpSemitones: 6, // 半音跳变约束（MIDI domain） 人声物理约束。
   holdFrames: 0, // Will be derived from breakToleranceMs unless overridden
