@@ -1254,6 +1254,8 @@ function Synth({ onNavigateHome }) {
                       debug={showPitchDebug}
                       debugAnalyser={debugAnalyser}
                       debugF0Hz={pipelineMetrics?.result?.f0Hz ?? debugInfo?.f0Hz}
+                      debugRawF0Hz={pipelineMetrics?.rawF0Hz}
+                      debugUserMidi={lastPitchRef.current?.midi}
                       width={830}
                       height={220}
                       style={{ width: '100%', height: 220 }}

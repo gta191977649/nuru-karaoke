@@ -54,6 +54,10 @@ function Spectrogram({
   analyser,
   f0Hz,
   f0Color = '#ffffff',
+  rawF0Hz,
+  rawF0Color = '#00ffff',
+  userMidi,
+  userMidiColor = '#00ffff',
   height = 140,
   minHz = DEFAULT_MIN_HZ,
   maxHz = DEFAULT_MAX_HZ,
@@ -63,10 +67,13 @@ function Spectrogram({
   const containerRef = useRef(null)
   const canvasRef = useRef(null)
 
-
   const analyserRef = useRef(analyser)
   const f0Ref = useRef(f0Hz)
   const f0ColorRef = useRef(f0Color)
+  const rawF0Ref = useRef(rawF0Hz)
+  const rawF0ColorRef = useRef(rawF0Color)
+  const userMidiRef = useRef(userMidi)
+  const userMidiColorRef = useRef(userMidiColor)
   const reqRef = useRef(0)
 
   // State for rendering
@@ -94,6 +101,24 @@ function Spectrogram({
   useEffect(() => {
     f0ColorRef.current = f0Color
   }, [f0Color])
+
+  useEffect(() => {
+    rawF0Ref.current = rawF0Hz
+  }, [rawF0Hz])
+
+  useEffect(() => {
+    rawF0ColorRef.current = rawF0Color
+  }, [rawF0Color])
+
+  useEffect(() => {
+    userMidiRef.current = userMidi
+  }, [userMidi])
+
+  useEffect(() => {
+    userMidiColorRef.current = userMidiColor
+  }, [userMidiColor])
+
+  const midiToHz = (midi) => 440 * (2 ** ((midi - 69) / 12))
 
   useEffect(() => {
     const canvas = canvasRef.current
@@ -215,6 +240,29 @@ function Spectrogram({
         const y = h - 1 - (norm * (h - 1))
         ctx.fillStyle = f0ColorRef.current
         ctx.fillRect(x, y - 1, 1, 3)
+      }
+
+      // Draw RAW F0 (cyan)
+      const rawF0 = rawF0Ref.current
+      if (Number.isFinite(rawF0) && rawF0 > 0 && rawF0 >= effectiveMinHz && rawF0 <= effectiveMaxHz) {
+        const mel = hzToMel(rawF0)
+        const norm = (mel - melMin) / melSpan
+        const y = h - 1 - (norm * (h - 1))
+        ctx.fillStyle = rawF0ColorRef.current
+        ctx.fillRect(x, y - 1, 1, 3)
+      }
+
+      // Draw User MIDI (cyan)
+      const userMidiValue = userMidiRef.current
+      if (Number.isFinite(userMidiValue)) {
+        const userHz = midiToHz(userMidiValue)
+        if (userHz > 0 && userHz >= effectiveMinHz && userHz <= effectiveMaxHz) {
+          const mel = hzToMel(userHz)
+          const norm = (mel - melMin) / melSpan
+          const y = h - 1 - (norm * (h - 1))
+          ctx.fillStyle = userMidiColorRef.current
+          ctx.fillRect(x, y - 1, 1, 3)
+        }
       }
     }
 

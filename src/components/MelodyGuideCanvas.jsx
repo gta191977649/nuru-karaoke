@@ -201,6 +201,32 @@ function mapUserMidiToTargetOctave(userMidi, targetMidi) {
   return base + userPc + detune
 }
 
+function getTargetMidiAtTime(reference, t, opts = {}) {
+  if (!reference) return null
+  const ticksPerBeat = Number(reference?.timeDivision) || 480
+  const getTick = (time) => (reference.getTickAtTime ? reference.getTickAtTime(time) : time)
+  const bpsNow = reference.getBeatsPerSecond ? reference.getBeatsPerSecond(t) : 2
+  const ticksPerSec = (Number.isFinite(bpsNow) ? bpsNow : 2) * ticksPerBeat
+  const breakToleranceSec = Number(opts.breakToleranceSec) || 0
+  const edgeToleranceSec = Number(opts.edgeToleranceSec) || 0
+  const maxGapTick = breakToleranceSec * ticksPerSec
+  const edgeToleranceTick = edgeToleranceSec * ticksPerSec
+
+  const getTarget = (time) => {
+    const tick = getTick(time)
+    return getTargetNoteAtTick(reference, tick, {
+      maxGapTick,
+      edgeToleranceTick,
+    })
+  }
+
+  if (opts.gateUserByTarget) {
+    const offset = Math.max(0, Number(opts.userOffsetSec) || 0)
+    return getTarget(t - offset) ?? getTarget(t + offset)
+  }
+  return getTarget(t)
+}
+
 function MelodyGuideCanvas({
   reference,
   historyRef,
@@ -232,6 +258,8 @@ function MelodyGuideCanvas({
   debug = true,
   debugAnalyser = null,
   debugF0Hz = null,
+  debugRawF0Hz = null,
+  debugUserMidi = null,
   debugF0Color = '#ffffff',
   debugSpectrogramHeight = 90,
 }) {
@@ -250,6 +278,7 @@ function MelodyGuideCanvas({
     glissdown: 0,
     vibrato: 0
   })
+  const [debugPanel, setDebugPanel] = useState(null)
   // Just standard usage:
   // const [validCounts, setValidCounts] = useState({...})
 
@@ -380,6 +409,80 @@ function MelodyGuideCanvas({
       onTechniqueCountsChange(validCounts)
     }
   }, [validCounts, onTechniqueCountsChange])
+
+  useEffect(() => {
+    if (!debug) {
+      setDebugPanel(null)
+      return () => { }
+    }
+    const breakToleranceSec = Number(DEFAULT_CONFIG.breakToleranceMs) / 1000
+    const edgeToleranceSec = Math.min(0.08, Math.max(0, breakToleranceSec / 2))
+    const windowSec = 0.6
+    const interval = window.setInterval(() => {
+      const songTimeSec = currentTimeRef?.current ?? 0
+      const transposition = transpositionRef?.current ?? 0
+      const history = historyRef?.current || []
+      const lastPitch = lastPitchRef?.current
+      const lastPoint = history.length ? history[history.length - 1] : null
+
+      const userMidi = Number.isFinite(lastPitch?.midi)
+        ? Number(lastPitch.midi)
+        : (Number.isFinite(lastPoint?.userMidi) ? Number(lastPoint.userMidi) : null)
+      const rms = Number.isFinite(lastPitch?.rms)
+        ? Number(lastPitch.rms)
+        : (Number.isFinite(lastPoint?.rms) ? Number(lastPoint.rms) : null)
+      const f0Hz = Number.isFinite(lastPitch?.f0Hz) ? Number(lastPitch.f0Hz) : null
+      const rawF0Hz = Number.isFinite(debugRawF0Hz) ? Number(debugRawF0Hz) : null
+
+      const targetNote = getTargetMidiAtTime(reference, songTimeSec, {
+        breakToleranceSec,
+        edgeToleranceSec,
+        gateUserByTarget,
+        userOffsetSec,
+      })
+      const targetMidi = Number.isFinite(targetNote?.midi)
+        ? Number(targetNote.midi) + transposition
+        : null
+      const distance = (Number.isFinite(userMidi) && Number.isFinite(targetMidi))
+        ? mod12Distance(Math.round(userMidi), Math.round(targetMidi))
+        : null
+
+      const start = songTimeSec - windowSec
+      const values = history
+        .filter((pt) => pt.t >= start && pt.t <= songTimeSec)
+        .filter((pt) => Number.isFinite(pt.userMidi))
+        .filter((pt) => !Number.isFinite(pt.rms) || pt.rms >= rmsGate)
+        .map((pt) => Number(pt.userMidi))
+      let stabilityStd = null
+      if (values.length >= 2) {
+        const mean = values.reduce((sum, v) => sum + v, 0) / values.length
+        const variance = values.reduce((sum, v) => sum + (v - mean) ** 2, 0) / values.length
+        stabilityStd = Math.sqrt(variance)
+      }
+
+      setDebugPanel({
+        userMidi,
+        targetMidi,
+        distance,
+        rms,
+        f0Hz,
+        rawF0Hz,
+        stabilityStd,
+      })
+    }, 200)
+    return () => window.clearInterval(interval)
+  }, [
+    debug,
+    reference,
+    gateUserByTarget,
+    userOffsetSec,
+    rmsGate,
+    debugRawF0Hz,
+    currentTimeRef,
+    transpositionRef,
+    lastPitchRef,
+    historyRef,
+  ])
 
   useEffect(() => {
     let active = true
@@ -825,11 +928,12 @@ function MelodyGuideCanvas({
 
             const totalBeats = (t1Tick - t0Tick) / ticksPerBeat
             let correctBeats = 0
-            const beatMidiValues = []
+            let lastInTuneTime = null
             const configTol = Number(DEFAULT_CONFIG.f0TimeToleranceSec)
             const f0ToleranceSec = Number.isFinite(configTol)
               ? Math.max(0, configTol)
               : Math.min(0.08, Math.max(0.03, edgeToleranceSec))
+            const bridgeGapSec = breakToleranceSec
 
             for (let i = 0; i < history.length; i += 1) {
               const point = history[i]
@@ -838,26 +942,25 @@ function MelodyGuideCanvas({
               const sliceStart = Math.max(point.t, t0)
               const sliceEnd = Math.min(next, t1)
               if (sliceEnd <= sliceStart) continue
-              const userMidi = Number.isFinite(point.userMidi) ? Number(point.userMidi) : null
-              if (!Number.isFinite(userMidi)) continue
-              const pointRms = Number.isFinite(point.rms) ? Number(point.rms) : null
-              if (Number.isFinite(pointRms) && pointRms < snap.rmsGate) continue
-
-              // Match yellow F0 trail filter: require target + in-tune within VISUAL_TOLERANCE_SEMIS
-              const targetMidiForPoint = getTargetMidiForUserTime(point.t)
-              const isTargetDefined = Number.isFinite(targetMidiForPoint)
-              if (isTargetDefined) {
-                const mapped = mapUserMidiToTargetOctave(userMidi, targetMidiForPoint + transposition)
-                const diff = Math.abs(mapped - (targetMidiForPoint + transposition))
-                if (diff <= VISUAL_TOLERANCE_SEMIS) {
-                  beatMidiValues.push(userMidi)
-                }
-              }
-
               const sliceStartTick = snap.reference.getTickAtTime(sliceStart - f0ToleranceSec)
               const sliceEndTick = snap.reference.getTickAtTime(sliceEnd + f0ToleranceSec)
               const dtBeat = Math.max(0, (sliceEndTick - sliceStartTick) / ticksPerBeat)
               if (!Number.isFinite(dtBeat) || dtBeat <= 0) continue
+
+              const userMidi = Number.isFinite(point.userMidi) ? Number(point.userMidi) : null
+              if (!Number.isFinite(userMidi)) {
+                if (Number.isFinite(lastInTuneTime) && sliceStart - lastInTuneTime <= bridgeGapSec) {
+                  correctBeats += dtBeat
+                }
+                continue
+              }
+              const pointRms = Number.isFinite(point.rms) ? Number(point.rms) : null
+              if (Number.isFinite(pointRms) && pointRms < snap.rmsGate) {
+                if (Number.isFinite(lastInTuneTime) && sliceStart - lastInTuneTime <= bridgeGapSec) {
+                  correctBeats += dtBeat
+                }
+                continue
+              }
 
               const midT = (sliceStart + sliceEnd) * 0.5
               const rawTarget =
@@ -865,29 +968,28 @@ function MelodyGuideCanvas({
                 getTargetMidiAt(midT - f0ToleranceSec) ??
                 getTargetMidiAt(midT + f0ToleranceSec)
               const targetMidiPoint = Number.isFinite(rawTarget) ? rawTarget + transposition : null
-              if (!Number.isFinite(targetMidiPoint)) continue
+              if (!Number.isFinite(targetMidiPoint)) {
+                lastInTuneTime = null
+                continue
+              }
 
               const userQuant = Math.round(userMidi)
               const targetQuant = Math.round(targetMidiPoint)
               const distance = mod12Distance(userQuant, targetQuant)
               if (Number.isFinite(distance) && Math.abs(distance) <= NOTE_MERGE_CONFIG.pitchToleranceSemis) {
                 correctBeats += dtBeat
+                lastInTuneTime = sliceEnd
+              } else {
+                lastInTuneTime = null
               }
             }
 
             const ratio = totalBeats > 0 ? correctBeats / totalBeats : 0
-            let isStable = true
-            if (beatMidiValues.length >= 2) {
-              const mean = beatMidiValues.reduce((sum, v) => sum + v, 0) / beatMidiValues.length
-              const variance = beatMidiValues.reduce((sum, v) => sum + (v - mean) ** 2, 0) / beatMidiValues.length
-              const std = Math.sqrt(variance)
-              isStable = std <= STABILITY_STD_SEMIS
-            }
             beatStates.push({
               t0,
               t1,
               beatIdx: b,
-              correct: ratio >= NOTE_MERGE_CONFIG.coverageRatio && isStable,
+              correct: ratio >= NOTE_MERGE_CONFIG.coverageRatio,
               showAt: t1 + RESULT_DELAY_SEC,
             })
           }
@@ -1469,6 +1571,14 @@ function MelodyGuideCanvas({
     : Number.isFinite(lastPitchRef?.current?.f0Hz)
       ? lastPitchRef.current.f0Hz
       : null
+  const resolvedRawF0Hz = Number.isFinite(debugRawF0Hz)
+    ? debugRawF0Hz
+    : null
+  const resolvedUserMidi = Number.isFinite(debugUserMidi)
+    ? debugUserMidi
+    : Number.isFinite(lastPitchRef?.current?.midi)
+      ? lastPitchRef.current.midi
+      : null
   const effectiveAnalyser = debugAnalyser || getSharedDebugAnalyser?.()
   const showDebugSpectrogram = Boolean(
     debug
@@ -1490,6 +1600,9 @@ function MelodyGuideCanvas({
         kobushiRef={kobushiRef}
         fallRef={fallRef}
         vibratoRef={vibratoRef}
+        debugInfo={debugPanel}
+        showDebug={debug}
+        rmsGate={rmsGate}
       />
       {showDebugSpectrogram ? (
         <div
@@ -1510,6 +1623,10 @@ function MelodyGuideCanvas({
             analyser={effectiveAnalyser}
             f0Hz={resolvedF0Hz}
             f0Color={debugF0Color}
+            rawF0Hz={resolvedRawF0Hz}
+            userMidi={resolvedUserMidi}
+            rawF0Color="#00ffff"
+            userMidiColor="#00ffff"
             height={debugSpectrogramHeight}
             minHz={DEFAULT_CONFIG.f0MinHz}
             maxHz={DEFAULT_CONFIG.f0MaxHz}
@@ -1568,6 +1685,27 @@ const OVERLAY_STYLE = {
       boxShadow: 'none',
     },
   },
+  debugPanel: {
+    container: {
+      alignSelf: 'flex-end',
+      display: 'flex',
+      flexDirection: 'column',
+      gap: 4,
+      background: 'rgba(0,0,0,0.55)',
+      border: '1px solid rgba(255,255,255,0.15)',
+      borderRadius: 6,
+      padding: '6px 8px',
+      color: '#e6e6e6',
+      fontSize: 12,
+      lineHeight: 1.2,
+      textShadow: '0 1px 2px rgba(0,0,0,0.8)',
+      minWidth: 220,
+    },
+    row: { display: 'flex', gap: 8, flexWrap: 'wrap' },
+    label: { color: '#9fd7ff' },
+    value: { color: '#fff' },
+    warn: { color: '#ffcc66' },
+  },
   countBox: {
     container: {
       display: 'flex',
@@ -1611,7 +1749,12 @@ function KaraokeOverlay({
   kobushiRef,
   fallRef,
   vibratoRef,
+  debugInfo,
+  showDebug = false,
+  rmsGate = 0,
 }) {
+  const formatNumber = (value, digits = 2) =>
+    Number.isFinite(value) ? Number(value).toFixed(digits) : 'n/a'
   const counts = {
     glissup: glissandoUpCount,
     kobushi: kobushiCount,
@@ -1643,6 +1786,62 @@ function KaraokeOverlay({
           )
         })}
       </div>
+      {showDebug && debugInfo ? (
+        <div style={OVERLAY_STYLE.debugPanel.container}>
+          <div style={OVERLAY_STYLE.debugPanel.row}>
+            <span style={OVERLAY_STYLE.debugPanel.label}>User</span>
+            <span style={OVERLAY_STYLE.debugPanel.value}>
+              {formatNumber(debugInfo.userMidi, 2)}
+            </span>
+            <span style={OVERLAY_STYLE.debugPanel.label}>Target</span>
+            <span style={OVERLAY_STYLE.debugPanel.value}>
+              {formatNumber(debugInfo.targetMidi, 2)}
+            </span>
+            <span style={OVERLAY_STYLE.debugPanel.label}>Diff</span>
+            <span style={OVERLAY_STYLE.debugPanel.value}>
+              {formatNumber(debugInfo.distance, 2)}
+            </span>
+          </div>
+          <div style={OVERLAY_STYLE.debugPanel.row}>
+            <span style={OVERLAY_STYLE.debugPanel.label}>RMS</span>
+            <span
+              style={
+                Number.isFinite(debugInfo.rms) && Number.isFinite(rmsGate) && debugInfo.rms >= rmsGate
+                  ? OVERLAY_STYLE.debugPanel.value
+                  : OVERLAY_STYLE.debugPanel.warn
+              }
+            >
+              {formatNumber(debugInfo.rms, 3)}
+            </span>
+            <span style={OVERLAY_STYLE.debugPanel.label}>F0</span>
+            <span style={OVERLAY_STYLE.debugPanel.value}>
+              {formatNumber(debugInfo.f0Hz, 2)}
+            </span>
+            <span style={OVERLAY_STYLE.debugPanel.label}>RAW</span>
+            <span style={OVERLAY_STYLE.debugPanel.value}>
+              {formatNumber(debugInfo.rawF0Hz, 2)}
+            </span>
+          </div>
+          <div style={OVERLAY_STYLE.debugPanel.row}>
+            <span style={OVERLAY_STYLE.debugPanel.label}>Stability</span>
+            <span style={OVERLAY_STYLE.debugPanel.value}>
+              {formatNumber(debugInfo.stabilityStd, 2)}
+            </span>
+            <span style={OVERLAY_STYLE.debugPanel.label}>State</span>
+            <span
+              style={
+                Number.isFinite(debugInfo.stabilityStd) && debugInfo.stabilityStd > STABILITY_STD_SEMIS
+                  ? OVERLAY_STYLE.debugPanel.warn
+                  : OVERLAY_STYLE.debugPanel.value
+              }
+            >
+              {Number.isFinite(debugInfo.stabilityStd)
+                ? (debugInfo.stabilityStd > STABILITY_STD_SEMIS ? 'Shaky' : 'Stable')
+                : 'n/a'}
+            </span>
+          </div>
+        </div>
+      ) : null}
 
       <div style={OVERLAY_STYLE.countBox.container}>
         {Object.values(TECHNIQUE_CONFIG).map((conf) => (
