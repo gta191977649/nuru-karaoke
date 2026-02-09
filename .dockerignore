@@ -1,0 +1,14 @@
+node_modules
+backend/.venv
+backend/__pycache__
+backend/media
+backend/db.sqlite3
+backend/staticfiles
+.dist
+*.log
+.DS_Store
+dist
+.git
+.gitignore
+.env
+.vscode
