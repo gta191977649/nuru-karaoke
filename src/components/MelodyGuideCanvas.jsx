@@ -4,6 +4,8 @@ import { BloomFilter } from 'pixi-filters'
 import { getTargetNoteAtTick, mergeAdjacentNotesByPitch } from '../engine/audio/midi/referenceMelody.js'
 import { DEFAULT_CONFIG } from '../engine/audioEngine.js'
 import { DEFAULT_PARTICLE_CONFIG, createParticleSystem, createComboSystem } from './particles/particleSystem.js'
+import Spectrogram from './Spectrogram.jsx'
+import { getSharedDebugAnalyser } from '../engine/audio/pitch/sharedPitchEngine.js'
 
 const TECHNIQUE_CONFIG = {
   glissup: {
@@ -228,6 +230,10 @@ function MelodyGuideCanvas({
   onTechniqueCountsChange,
   showSolfeges = true,
   debug = true,
+  debugAnalyser = null,
+  debugF0Hz = null,
+  debugF0Color = '#ffffff',
+  debugSpectrogramHeight = 90,
 }) {
   const containerRef = useRef(null)
 
@@ -1458,6 +1464,18 @@ function MelodyGuideCanvas({
     app.renderer.resize(width, height)
   }, [width, height])
 
+  const resolvedF0Hz = Number.isFinite(debugF0Hz)
+    ? debugF0Hz
+    : Number.isFinite(lastPitchRef?.current?.f0Hz)
+      ? lastPitchRef.current.f0Hz
+      : null
+  const effectiveAnalyser = debugAnalyser || getSharedDebugAnalyser?.()
+  const showDebugSpectrogram = Boolean(
+    debug
+    && effectiveAnalyser
+    && effectiveAnalyser.frequencyBinCount > 0
+  )
+
   return (
     <div className={className} style={{ ...style, position: 'relative' }}>
       <div ref={containerRef} style={{ width: '100%', height: '100%' }} />
@@ -1473,6 +1491,31 @@ function MelodyGuideCanvas({
         fallRef={fallRef}
         vibratoRef={vibratoRef}
       />
+      {showDebugSpectrogram ? (
+        <div
+          style={{
+            position: 'absolute',
+            right: 8,
+            bottom: 8,
+            width: '32%',
+            height: debugSpectrogramHeight,
+            borderRadius: 6,
+            overflow: 'hidden',
+            border: '1px solid rgba(255,255,255,0.2)',
+            background: '#000',
+            boxShadow: '0 6px 16px rgba(0,0,0,0.4)',
+          }}
+        >
+          <Spectrogram
+            analyser={effectiveAnalyser}
+            f0Hz={resolvedF0Hz}
+            f0Color={debugF0Color}
+            height={debugSpectrogramHeight}
+            minHz={DEFAULT_CONFIG.f0MinHz}
+            maxHz={DEFAULT_CONFIG.f0MaxHz}
+          />
+        </div>
+      ) : null}
     </div>
   )
 }

@@ -1252,6 +1252,8 @@ function Synth({ onNavigateHome }) {
                       gateUserByTarget={false}
                       windowSec={8}
                       debug={showPitchDebug}
+                      debugAnalyser={debugAnalyser}
+                      debugF0Hz={pipelineMetrics?.result?.f0Hz ?? debugInfo?.f0Hz}
                       width={830}
                       height={220}
                       style={{ width: '100%', height: 220 }}
