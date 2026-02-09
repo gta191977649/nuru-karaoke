@@ -1,0 +1,30 @@
+version: "3.9"
+
+services:
+  backend:
+    build:
+      context: ./backend
+    environment:
+      DEBUG: "0"
+      SECRET_KEY: "${SECRET_KEY:-replace-this-in-production}"
+      ALLOWED_HOSTS: "*"
+      DB_PATH: /data/db.sqlite3
+      MEDIA_ROOT: /data/media
+    volumes:
+      - backend_data:/data
+    restart: unless-stopped
+
+  web:
+    build:
+      context: .
+      dockerfile: Dockerfile.frontend
+      args:
+        VITE_API_BASE_URL: /api
+    depends_on:
+      - backend
+    ports:
+      - "8000:80"
+    restart: unless-stopped
+
+volumes:
+  backend_data:
