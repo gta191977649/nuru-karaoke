@@ -17,6 +17,7 @@ COPY requirements.txt ./
 RUN pip install -r requirements.txt
 
 COPY . ./
+RUN chmod +x entrypoint.sh
 
 ENV DJANGO_SETTINGS_MODULE=karaoke_backend.settings
 RUN python manage.py collectstatic --noinput
