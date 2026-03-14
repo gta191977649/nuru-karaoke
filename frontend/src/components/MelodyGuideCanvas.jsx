@@ -110,7 +110,6 @@ const SOLFEGE_FONT_SIZE = 12
 const RESULT_DELAY_SEC = 0.2
 const USER_GLOW_FILL_SPEED = 1.5 // speed for correct note fill animation
 const JITTER_WINDOW_SEC = 0.3 // 200-500 ms suggested; default 300 ms
-const JITTER_NOTE_MAX_SEC = 0.5
 const JITTER_PLOT_MAX_CENTS = 50
 const NOTE_MERGE_CONFIG = {
   // Semitone tolerance for considering the user's pitch "in range" of the target.
@@ -279,6 +278,7 @@ function getTargetMidiAtTime(reference, t, opts = {}) {
 function MelodyGuideCanvas({
   reference,
   historyRef,
+  pitchFrameHistoryRef = null,
   lastPitchRef,
   currentTimeRef,
   transpositionRef,
@@ -313,7 +313,6 @@ function MelodyGuideCanvas({
   debugSpectrogramHeight = 90,
 }) {
   const containerRef = useRef(null)
-  const f0SamplesRef = useRef([]) // [{ t: sec, f0Hz }]
   const jitterHistoryRef = useRef([]) // normalized -1..1 for WaveformPixi
 
   // Refs for animation targets
@@ -453,7 +452,6 @@ function MelodyGuideCanvas({
       pixiRef.current.lastTechniqueEventIndex = 0
       pixiRef.current.lastCounts = { shakuri: 0, kobushi: 0, fall: 0, vibrato: 0 }
     }
-    f0SamplesRef.current = []
     jitterHistoryRef.current = []
     setJitterTrace(new Float32Array(0))
     setValidCounts({ glissup: 0, kobushi: 0, glissdown: 0, vibrato: 0 })
@@ -477,6 +475,7 @@ function MelodyGuideCanvas({
       const songTimeSec = currentTimeRef?.current ?? 0
       const transposition = transpositionRef?.current ?? 0
       const history = historyRef?.current || []
+      const stabilityHistory = pitchFrameHistoryRef?.current || history
       const lastPitch = lastPitchRef?.current
       const lastPoint = history.length ? history[history.length - 1] : null
 
@@ -515,28 +514,24 @@ function MelodyGuideCanvas({
         stabilityStd = Math.sqrt(variance)
       }
 
-      const f0History = f0SamplesRef.current || []
-      const f0WinStart = songTimeSec - JITTER_WINDOW_SEC
-      const f0InWindow = f0History
-        .filter((pt) => pt.t >= f0WinStart && pt.t <= songTimeSec)
-        .map((pt) => pt.f0Hz)
-      const jitterWin = jitterFromF0Hz(f0InWindow)
-
-      let jitterNote = { n: 0, stdCents: null, robustCents: null }
-      const noteT0 = Number.isFinite(targetNote?.t0Sec) ? Number(targetNote.t0Sec) : null
-      if (Number.isFinite(noteT0)) {
-        const noteStart = Math.max(noteT0, songTimeSec - JITTER_NOTE_MAX_SEC)
-        const f0InNote = f0History
-          .filter((pt) => pt.t >= noteStart && pt.t <= songTimeSec)
-          .map((pt) => pt.f0Hz)
-        jitterNote = jitterFromF0Hz(f0InNote)
-      }
+      // Jitter-like "F0 stability": robust std of relative cents within a short window.
+      // Use rawF0Hz when available (before snap/hold/smoothing), and gate by RMS.
+      const tStartWindow = songTimeSec - JITTER_WINDOW_SEC
+      const t0Note = Number.isFinite(targetNote?.t0Sec) ? Number(targetNote.t0Sec) : null
+      const t1Note = Number.isFinite(targetNote?.t1Sec) ? Number(targetNote.t1Sec) : null
+      const tStart = Number.isFinite(t0Note) ? Math.max(tStartWindow, t0Note) : tStartWindow
+      const tEnd = Number.isFinite(t1Note) ? Math.min(songTimeSec, t1Note) : songTimeSec
+      const f0Values = stabilityHistory
+        .filter((pt) => Number.isFinite(pt?.t) && pt.t >= tStart && pt.t <= tEnd)
+        .filter((pt) => !Number.isFinite(pt?.rms) || !Number.isFinite(rmsGate) || pt.rms >= rmsGate)
+        .map((pt) => (Number.isFinite(pt?.rawF0Hz) ? Number(pt.rawF0Hz) : Number(pt?.f0Hz)))
+      const jitterWin = jitterFromF0Hz(f0Values)
 
       // Keep a short normalized jitter history for the debug plot.
       {
         const arr = jitterHistoryRef.current
         let next = arr.length ? arr[arr.length - 1] : -1
-        if (Number.isFinite(jitterWin.robustCents)) {
+        if (Number.isFinite(jitterWin?.robustCents)) {
           next = jitterCentsToWaveform(jitterWin.robustCents, JITTER_PLOT_MAX_CENTS)
         }
         arr.push(next)
@@ -555,9 +550,6 @@ function MelodyGuideCanvas({
         jitterStdCents: jitterWin.stdCents,
         jitterRobustCents: jitterWin.robustCents,
         jitterN: jitterWin.n,
-        noteJitterStdCents: jitterNote.stdCents,
-        noteJitterRobustCents: jitterNote.robustCents,
-        noteJitterN: jitterNote.n,
       })
     }, 200)
     return () => window.clearInterval(interval)
@@ -571,6 +563,7 @@ function MelodyGuideCanvas({
     currentTimeRef,
     transpositionRef,
     lastPitchRef,
+    pitchFrameHistoryRef,
     historyRef,
   ])
 
@@ -781,33 +774,7 @@ function MelodyGuideCanvas({
           state.lastTechniqueEventIndex = events.length
         }
 
-
         const songTimeSec = snap.currentTimeRef?.current ?? 0
-
-        // Keep a short F0 history for jitter measurement (Hz -> relative cents dispersion later).
-        {
-          const lastPitch = snap.lastPitchRef?.current
-          const f0Hz = Number.isFinite(lastPitch?.f0Hz) ? Number(lastPitch.f0Hz) : null
-          const rms = Number.isFinite(lastPitch?.rms) ? Number(lastPitch.rms) : null
-          const gate = Number(snap.rmsGate) || 0
-          const passesGate = Number.isFinite(f0Hz) && f0Hz > 0 && (!Number.isFinite(rms) || rms >= gate)
-          if (passesGate && Number.isFinite(songTimeSec)) {
-            const arr = f0SamplesRef.current
-            const last = arr.length ? arr[arr.length - 1] : null
-            if (last && songTimeSec < last.t - 0.25) {
-              // Likely a seek/song restart; drop history to avoid unbounded growth.
-              arr.length = 0
-            }
-            if (!last || songTimeSec > last.t) {
-              arr.push({ t: songTimeSec, f0Hz })
-            } else {
-              // Same timestamp or seek: overwrite last.
-              arr[arr.length - 1] = { t: songTimeSec, f0Hz }
-            }
-            const cutoff = songTimeSec - Math.max(3, snap.windowSec || 8)
-            while (arr.length && arr[0].t < cutoff) arr.shift()
-          }
-        }
         const breakToleranceSec = Number(DEFAULT_CONFIG.breakToleranceMs) / 1000
         const edgeToleranceSec = Math.min(0.08, Math.max(0, breakToleranceSec / 2))
         const transposition = snap.transpositionRef?.current ?? 0
@@ -1750,7 +1717,24 @@ function MelodyGuideCanvas({
                   textShadow: '0 1px 2px rgba(0,0,0,0.8)',
                 }}
               >
-                F0 稳定度 (robust, cents)
+                F0 稳定度 (robust std, cents)
+              </div>
+              <div
+                style={{
+                  position: 'absolute',
+                  top: 4,
+                  right: 6,
+                  zIndex: 2,
+                  pointerEvents: 'none',
+                  fontSize: 11,
+                  lineHeight: 1,
+                  color: 'rgba(255,255,255,0.85)',
+                  textShadow: '0 1px 2px rgba(0,0,0,0.8)',
+                  textAlign: 'right',
+                }}
+              >
+                σ~:{Number.isFinite(debugPanel?.jitterRobustCents) ? debugPanel.jitterRobustCents.toFixed(2) : 'n/a'}c{' '}
+                n:{Number.isFinite(debugPanel?.jitterN) ? debugPanel.jitterN : 0}
               </div>
               <WaveformPixi data={jitterTrace} height={jitterPlotHeight} color="#ffcc66" background="#000" />
             </div>
@@ -1967,7 +1951,7 @@ function KaraokeOverlay({
             </span>
             <span style={OVERLAY_STYLE.debugPanel.label}>F0 稳定度</span>
             <span style={OVERLAY_STYLE.debugPanel.value}>
-              {formatNumber(debugInfo.jitterRobustCents, 1)}c
+              {formatNumber(debugInfo.jitterRobustCents, 2)}c
             </span>
             <span style={OVERLAY_STYLE.debugPanel.label}>State</span>
             <span

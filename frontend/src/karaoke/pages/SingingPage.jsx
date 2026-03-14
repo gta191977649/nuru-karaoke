@@ -209,7 +209,7 @@ function SingingPage({ onFinish }) {
         return seg.t0Sec <= t
     }, [scoringSegments, state.currentTime])
 
-    const { pitchHistoryRef, fullHistoryRef, lastPitchRef } = useKaraokePitchHistory({
+    const { pitchHistoryRef, fullHistoryRef, lastPitchRef, framePitchHistoryRef } = useKaraokePitchHistory({
         pitchEngine,
         reference,
         currentTimeRef,
@@ -455,6 +455,7 @@ function SingingPage({ onFinish }) {
                                 className="melodyGuideCanvas"
                                 reference={reference}
                                 historyRef={pitchHistoryRef}
+                                pitchFrameHistoryRef={framePitchHistoryRef}
                                 lastPitchRef={lastPitchRef}
                                 currentTimeRef={currentTimeRef}
                                 transpositionRef={transpositionRef}
