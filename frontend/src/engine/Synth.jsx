@@ -293,6 +293,7 @@ function Synth({ onNavigateHome }) {
   const lastPitchRef = useRef(null)
   const fullPitchCanvasRef = useRef(null)
   const fullPitchHistoryRef = useRef([])
+  const pitchFrameHistoryRef = useRef([])
   const currentTimeRef = useRef(0)
   const transpositionRef = useRef(0)
   const micActiveRef = useRef(false)
@@ -384,6 +385,29 @@ function Synth({ onNavigateHome }) {
   useEffect(() => {
     const unsubscribe = pitchEngine.onPitch((result) => {
       lastPitchRef.current = result
+
+      const songTimeSec = currentTimeRef.current
+      if (!Number.isFinite(songTimeSec)) return
+      const tAcSec = Number.isFinite(result?.tAcSec) ? Number(result.tAcSec) : null
+      const frames = pitchFrameHistoryRef.current
+      frames.push({
+        t: songTimeSec,
+        tAcSec,
+        f0Hz: Number.isFinite(result?.f0Hz) ? Number(result.f0Hz) : null,
+        rawF0Hz: Number.isFinite(result?.rawF0Hz) ? Number(result.rawF0Hz) : null,
+        confidence: Number.isFinite(result?.confidence) ? Number(result.confidence) : 0,
+        rawConfidence: Number.isFinite(result?.rawConfidence) ? Number(result.rawConfidence) : 0,
+        rms: result?.rms ?? null,
+      })
+      const nowKey = Number.isFinite(tAcSec) ? tAcSec : songTimeSec
+      const cutoff = nowKey - 12.0
+      while (frames.length) {
+        const head = frames[0]
+        const headKey = Number.isFinite(head?.tAcSec) ? head.tAcSec : head?.t
+        if (!Number.isFinite(headKey) || headKey >= cutoff) break
+        frames.shift()
+      }
+      if (frames.length > 4096) frames.splice(0, frames.length - 4096)
     })
     return () => {
       unsubscribe()
@@ -610,6 +634,8 @@ function Synth({ onNavigateHome }) {
         userMidi,
         targetMidi: transposedTargetMidi,
         rms: last?.rms ?? null,
+        f0Hz: Number.isFinite(last?.f0Hz) ? Number(last.f0Hz) : null,
+        confidence: Number.isFinite(last?.confidence) ? Number(last.confidence) : 0,
       })
       const maxLen = 2000
       if (fullHistory.length > maxLen) fullHistory.splice(0, fullHistory.length - maxLen)
@@ -1245,6 +1271,7 @@ function Synth({ onNavigateHome }) {
                       className="melodyGuideCanvas"
                       reference={reference}
                       historyRef={fullPitchHistoryRef}
+                      pitchFrameHistoryRef={pitchFrameHistoryRef}
                       lastPitchRef={lastPitchRef}
                       currentTimeRef={currentTimeRef}
                       transpositionRef={transpositionRef}
@@ -1810,6 +1837,7 @@ function Synth({ onNavigateHome }) {
                       className="melodyGuideCanvas"
                       reference={reference}
                       historyRef={fullPitchHistoryRef}
+                      pitchFrameHistoryRef={pitchFrameHistoryRef}
                       lastPitchRef={lastPitchRef}
                       currentTimeRef={currentTimeRef}
                       transpositionRef={transpositionRef}

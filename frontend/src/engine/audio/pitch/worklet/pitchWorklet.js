@@ -333,6 +333,8 @@ class PitchFrameProcessor extends AudioWorkletProcessor {
 
   _postProcess(raw, frameRms) {
     let { f0Hz, confidence } = raw
+    const rawF0Hz = f0Hz
+    const rawConfidence = confidence
     const f0MinHz = Number(this._config.f0MinHz)
     const f0MaxHz = Number(this._config.f0MaxHz)
     const medianWindowSize = Number.isFinite(this._config.medianWindowSize)
@@ -442,8 +444,10 @@ class PitchFrameProcessor extends AudioWorkletProcessor {
     return {
       tAcSec: currentTime,
       f0Hz: f0Hz ?? null,
+      rawF0Hz: Number.isFinite(rawF0Hz) ? rawF0Hz : null,
       midi: midi ?? null,
       confidence: usedHold || !Number.isFinite(f0Hz) ? 0 : Number.isFinite(confidence) ? confidence : 0,
+      rawConfidence: Number.isFinite(rawConfidence) ? rawConfidence : 0,
       rms: frameRms,
       algoId: this._algoId,
     }

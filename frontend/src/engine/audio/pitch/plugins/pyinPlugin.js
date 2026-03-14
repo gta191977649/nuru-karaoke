@@ -5,11 +5,18 @@ const DEFAULTS = {
   pyinPs: 0.99,
   pyinSpacing: Math.pow(2, 1 / 120),
   pyinDf: 30,
-  pyinThreshold: 0.1,
+  // CMNDF valley threshold. KTV-ish default: 0.15 (common range: 0.1-0.2).
+  pyinThreshold: 0.15,
   pyinProbabilityThreshold: 0.1,
   pyinMaxCandidates: 8,
   fminHz: 50,
   fmaxHz: 2000,
+}
+
+function clamp01(x) {
+  const n = Number(x)
+  if (!Number.isFinite(n)) return 0
+  return Math.max(0, Math.min(1, n))
 }
 
 class PyinPlugin {
@@ -84,11 +91,19 @@ class PyinPlugin {
 
     const frameRms = Number.isFinite(frame?.rms) ? frame.rms : rms(samples)
 
-    const candidates = this._getYinCandidates(samples)
+    const yin = this._getYinCandidates(samples)
+    const candidates = yin?.candidates || []
+    const dmin = Number.isFinite(yin?.dmin) ? Number(yin.dmin) : null
+    const hasValley = Boolean(yin?.hasValley)
+
+    // Always update causal states, but apply a hard unvoiced rule when YIN has no valid valley.
     const voicedResult = this._updateCausalStates(candidates)
-    const f0Hz = voicedResult?.f0Hz ?? null
+    const f0Hz = hasValley ? (voicedResult?.f0Hz ?? null) : null
     const midi = Number.isFinite(f0Hz) ? hzToMidi(f0Hz) : null
-    const confidence = Number.isFinite(f0Hz) ? Math.min(1, frameRms * 6) : 0
+
+    // Confidence from YIN CMNDF minimum: conf = clamp(1 - dmin, 0..1)
+    // When no valid valley is detected, force unvoiced with confidence=0.
+    const confidence = hasValley && Number.isFinite(dmin) ? clamp01(1 - dmin) : 0
 
     return {
       f0Hz: Number.isFinite(f0Hz) ? f0Hz : null,
@@ -131,6 +146,23 @@ class PyinPlugin {
       yinBuffer[t] *= t / runningSum
     }
 
+    // dmin = min(CMNDF) within the allowed lag range
+    const minTau = Math.max(2, Math.floor(this._sampleRate / Math.max(1, fmax)))
+    const maxTau = Math.min(yinBufferLength - 2, Math.ceil(this._sampleRate / Math.max(1, fmin)))
+    let dmin = Infinity
+    if (minTau <= maxTau) {
+      for (let t = minTau; t <= maxTau; t += 1) {
+        const v = yinBuffer[t]
+        if (Number.isFinite(v) && v < dmin) dmin = v
+      }
+    } else {
+      for (let t = 2; t < yinBufferLength - 1; t += 1) {
+        const v = yinBuffer[t]
+        if (Number.isFinite(v) && v < dmin) dmin = v
+      }
+    }
+    if (!Number.isFinite(dmin)) dmin = null
+
     const candidates = []
     for (let t = 2; t < yinBufferLength - 1; t += 1) {
       if (yinBuffer[t] >= threshold) continue
@@ -145,9 +177,11 @@ class PyinPlugin {
       candidates.push({ f0, yin: yinBuffer[t] })
     }
 
-    if (!candidates.length) return []
+    if (!candidates.length) {
+      return { candidates: [], dmin, hasValley: false }
+    }
     candidates.sort((a, b) => a.yin - b.yin)
-    return candidates.slice(0, maxCandidates)
+    return { candidates: candidates.slice(0, maxCandidates), dmin, hasValley: true }
   }
 
   _parabolicTau(yinBuffer, tau) {
