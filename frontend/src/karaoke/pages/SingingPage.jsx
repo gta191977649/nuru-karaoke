@@ -2,6 +2,7 @@ import '../Karaoke.css'
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { useKaraokeStore } from '../../state/karaokeStore.js'
 import { synthEngine } from '../../engine/SynthEngine.js'
+import { parseLyricSegments } from '../../engine/lrc.js'
 import { sharedPitchEngine, startSharedMic, stopSharedMic } from '../../engine/audio/pitch/sharedPitchEngine.js'
 import { groupNotesToSegments } from '../../engine/audio/midi/noteUtils.js'
 import MelodyGuideCanvas from '../../components/MelodyGuideCanvas.jsx'
@@ -16,56 +17,43 @@ import RealtimeScoreCounter from '../../components/RealtimeScoreCounter.jsx'
 import { usePlayerScoreStore } from '../../state/playerScoreStore.js'
 import logoTitle from '../../assets/logo_title.png'
 
-function splitRubySegments(text) {
-    const raw = String(text ?? '')
-    if (!raw.includes('<')) return { segments: [{ text: raw, ruby: '' }], hasRuby: false }
-
-    const segments = []
-    let cursor = 0
-    while (cursor < raw.length) {
-        const open = raw.indexOf('<', cursor)
-        if (open === -1) {
-            segments.push({ text: raw.slice(cursor), ruby: '' })
-            break
-        }
-        const close = raw.indexOf('>', open + 1)
-        if (close === -1) {
-            segments.push({ text: raw.slice(cursor), ruby: '' })
-            break
-        }
-        const base = raw.slice(cursor, open)
-        const ruby = raw.slice(open + 1, close)
-        if (base) {
-            const wordMatch = base.match(/[A-Za-z][A-Za-z0-9'-]*$/)
-            if (wordMatch) {
-                const word = wordMatch[0]
-                const prefix = base.slice(0, base.length - word.length)
-                if (prefix) segments.push({ text: prefix, ruby: '' })
-                segments.push({ text: word, ruby })
-            } else {
-                const prefix = base.slice(0, -1)
-                const lastChar = base.slice(-1)
-                if (prefix) segments.push({ text: prefix, ruby: '' })
-                segments.push({ text: lastChar, ruby })
-            }
-        }
-        cursor = close + 1
-    }
-    const hasRuby = segments.some((seg) => seg.ruby)
-    return { segments, hasRuby }
-}
-
-function renderRubySegments(segments) {
-    return segments.map((seg, idx) =>
-        seg.ruby ? (
-            <ruby key={`${seg.text}-${idx}`}>
+function renderLyricSegments(segments, layer = 'base') {
+    const layerClass = layer === 'fill' ? 'karaokeRun--fill' : 'karaokeRun--base'
+    return segments.map((seg, idx) => {
+        const className = `karaokeRun ${layerClass}${seg.falsetto ? ' karaokeRun--falsetto' : ''}`
+        const rubyRtClass = `karaokeRubyRt karaokeRubyRt--${layer}${seg.falsetto ? ' karaokeRubyRt--falsetto' : ''}`
+        return seg.ruby ? (
+            <ruby
+                key={`${layer}-${seg.text}-${seg.ruby}-${seg.falsetto ? 'falsetto' : 'normal'}-${idx}`}
+                className={`karaokeRuby ${className}`}
+            >
                 {seg.text}
-                <rt>{seg.ruby}</rt>
+                <rt className={rubyRtClass}>{seg.ruby}</rt>
             </ruby>
         ) : (
-            <span key={`${seg.text}-${idx}`}>{seg.text}</span>
-        ),
-    )
+            <span
+                key={`${layer}-${seg.text}-${seg.falsetto ? 'falsetto' : 'normal'}-${idx}`}
+                className={className}
+            >
+                {seg.text}
+            </span>
+        )
+    })
+}
+
+function resolveLyricEntry(entry) {
+    if (!entry) return null
+    if (Array.isArray(entry.segments) && entry.segments.length) {
+        return {
+            segments: entry.segments,
+            plainText: typeof entry.plainText === 'string' ? entry.plainText : entry.segments.map((seg) => seg.text).join(''),
+        }
+    }
+    const parsed = parseLyricSegments(entry.text)
+    return {
+        segments: parsed.segments,
+        plainText: parsed.plainText,
+    }
 }
 
 const medianNumber = (values) => {
@@ -259,21 +247,17 @@ function SingingPage({ onFinish }) {
     const { lineRowsTwo, lineRowsThree, measureLeftSegments, measureRightSegments } = useMemo(() => {
         const entries = state.lrcEntries || []
         const i = state.activeLyricIndex ?? -1
-        const placeholder = { segments: [{ text: '…', ruby: '' }], hasRuby: false }
-        const stripRuby = (text) => String(text ?? '').replace(/<[^>]*>/g, '')
-        const safeSegments = (text) => (text ? splitRubySegments(text) : placeholder)
+        const placeholder = { segments: [{ text: '…', ruby: '', falsetto: false }], plainText: '…' }
+        const safeEntry = (entry) => resolveLyricEntry(entry) || placeholder
 
         const pairStart = i >= 0 ? i - (i % 2) : -1
-        const current = pairStart >= 0 ? safeSegments(entries[pairStart]?.text) : placeholder
-        const next =
-            pairStart + 1 < entries.length ? safeSegments(entries[pairStart + 1]?.text) : placeholder
+        const current = pairStart >= 0 ? safeEntry(entries[pairStart]) : placeholder
+        const next = pairStart + 1 < entries.length ? safeEntry(entries[pairStart + 1]) : placeholder
         const activeInPair = i >= 0 ? i % 2 : 0
-        const aText = stripRuby(entries[pairStart]?.text || '')
-        const bText = stripRuby(entries[pairStart + 1]?.text || '')
 
-        const prev = i - 1 >= 0 ? safeSegments(entries[i - 1]?.text) : placeholder
-        const curr = i >= 0 ? safeSegments(entries[i]?.text) : placeholder
-        const nextThree = i + 1 < entries.length ? safeSegments(entries[i + 1]?.text) : placeholder
+        const prev = i - 1 >= 0 ? safeEntry(entries[i - 1]) : placeholder
+        const curr = i >= 0 ? safeEntry(entries[i]) : placeholder
+        const nextThree = i + 1 < entries.length ? safeEntry(entries[i + 1]) : placeholder
 
         return {
             lineRowsTwo: [
@@ -285,8 +269,8 @@ function SingingPage({ onFinish }) {
                 { segments: curr.segments, align: 'text-center', progress: progressPercent },
                 { segments: nextThree.segments, align: 'text-center', progress: 0 },
             ],
-            measureLeftSegments: aText ? splitRubySegments(aText).segments : placeholder.segments,
-            measureRightSegments: bText ? splitRubySegments(bText).segments : placeholder.segments,
+            measureLeftSegments: current.segments,
+            measureRightSegments: next.segments,
         }
     }, [progressPercent, state.activeLyricIndex, state.lrcEntries])
 
@@ -479,12 +463,12 @@ function SingingPage({ onFinish }) {
                             <span className="lyrics-measure" aria-hidden="true">
                                 <span className="text" ref={lyricsMeasureLeftRef}>
                                     <span className="karaokeTextWrap">
-                                        <span className="karaokeTextBase">{renderRubySegments(measureLeftSegments)}</span>
+                                        <span className="karaokeTextBase">{renderLyricSegments(measureLeftSegments, 'base')}</span>
                                     </span>
                                 </span>
                                 <span className="text" ref={lyricsMeasureRightRef}>
                                     <span className="karaokeTextWrap">
-                                        <span className="karaokeTextBase">{renderRubySegments(measureRightSegments)}</span>
+                                        <span className="karaokeTextBase">{renderLyricSegments(measureRightSegments, 'base')}</span>
                                     </span>
                                 </span>
                             </span>
@@ -498,9 +482,9 @@ function SingingPage({ onFinish }) {
                                                     '--karaoke-progress': `${row.progress}%`,
                                                 }}
                                             >
-                                                <span className="karaokeTextBase">{renderRubySegments(row.segments)}</span>
+                                                <span className="karaokeTextBase">{renderLyricSegments(row.segments, 'base')}</span>
                                                 <span className="karaokeTextFill" aria-hidden="true">
-                                                    {renderRubySegments(row.segments)}
+                                                    {renderLyricSegments(row.segments, 'fill')}
                                                 </span>
                                             </span>
                                         </span>
@@ -517,9 +501,9 @@ function SingingPage({ onFinish }) {
                                                     '--karaoke-progress': `${row.progress}%`,
                                                 }}
                                             >
-                                                <span className="karaokeTextBase">{renderRubySegments(row.segments)}</span>
+                                                <span className="karaokeTextBase">{renderLyricSegments(row.segments, 'base')}</span>
                                                 <span className="karaokeTextFill" aria-hidden="true">
-                                                    {renderRubySegments(row.segments)}
+                                                    {renderLyricSegments(row.segments, 'fill')}
                                                 </span>
                                             </span>
                                         </span>

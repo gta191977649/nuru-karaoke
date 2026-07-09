@@ -3,6 +3,86 @@
 {% block title %}Song{% endblock %}
 
 {% block content %}
+  <style>
+    .lyrics-editor-toolbar {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 0.75rem;
+      align-items: center;
+      margin-bottom: 0.75rem;
+    }
+    .lyrics-source-box {
+      min-height: 320px;
+      font-family: Consolas, "SFMono-Regular", Menlo, Monaco, monospace;
+      line-height: 1.5;
+      resize: vertical;
+    }
+    .lyrics-visual-editor {
+      min-height: 320px;
+      max-height: 52vh;
+      overflow: auto;
+      border: 1px solid #dee2e6;
+      border-radius: 0.75rem;
+      background: linear-gradient(180deg, #111827 0%, #0f172a 100%);
+      padding: 1rem;
+      color: #f8fafc;
+      font-size: 1.32rem;
+      line-height: 1.7;
+      outline: none;
+      white-space: pre-wrap;
+      word-break: break-word;
+      box-shadow: inset 0 1px 2px rgba(0, 0, 0, 0.15);
+    }
+    .lyrics-visual-editor:focus {
+      box-shadow: 0 0 0 0.25rem rgba(0, 139, 139, 0.16);
+      border-color: rgba(0, 139, 139, 0.45);
+    }
+    .lyrics-editor-line {
+      min-height: 1.7em;
+      margin-bottom: 0.4rem;
+    }
+    .lyrics-editor-line:last-child {
+      margin-bottom: 0;
+    }
+    .lyrics-editor-line--empty {
+      opacity: 0.35;
+    }
+    .lyrics-editor-token {
+      display: none;
+    }
+    .lyrics-editor-seg {
+      color: #f8fafc;
+    }
+    .lyrics-editor-falsetto,
+    .lyrics-editor-seg--falsetto,
+    .lyrics-editor-falsetto .lyrics-editor-token {
+      color: #008B8B;
+    }
+    .lyrics-editor-falsetto {
+      background: rgba(0, 139, 139, 0.12);
+      border-radius: 0.35rem;
+      padding: 0 0.08em;
+    }
+    .lyrics-visual-editor ruby {
+      ruby-position: over;
+    }
+    .lyrics-visual-editor rt {
+      color: #cbd5e1;
+      font-size: 0.52em;
+      letter-spacing: 0.04em;
+    }
+    .lyrics-editor-help {
+      font-size: 0.86rem;
+      color: #6b7280;
+      line-height: 1.55;
+    }
+    .lyrics-editor-inline-link {
+      font-size: 0.875rem;
+      font-weight: 600;
+      text-decoration: none;
+    }
+  </style>
+
   <div class="card p-4">
     <div class="d-flex flex-wrap gap-3 justify-content-between align-items-center mb-3">
       <div>
@@ -24,6 +104,7 @@
 
     <form method="post" enctype="multipart/form-data">
       {% csrf_token %}
+      {{ form.lrc_text }}
 
       <div class="border rounded-4 p-3 mb-4 bg-light-subtle">
         <div class="d-flex align-items-center gap-2 mb-3">
@@ -93,6 +174,9 @@
               </div>
               {{ form.lrc_file }}
             </div>
+            <div class="form-text mt-2 d-none" id="lyrics-editor-fallback">
+              <a href="#" class="link-danger lyrics-editor-inline-link" id="lyrics-editor-entry-link">[ Lyric Editor ]</a>
+            </div>
           </div>
           <div class="col-md-4">
             <label for="id_cover_image" class="form-label">Cover Image</label>
@@ -149,8 +233,782 @@
       </div>
     </form>
   </div>
+
+  <div class="modal fade" id="lyricsEditorModal" tabindex="-1" aria-labelledby="lyricsEditorModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-xl modal-dialog-centered modal-dialog-scrollable">
+      <div class="modal-content">
+        <div class="modal-header">
+          <div>
+            <h5 class="modal-title mb-1" id="lyricsEditorModalLabel">歌词编辑器</h5>
+            <div class="text-muted small">可视化编辑假声、注音和时间戳，必要时在右侧源码区精调。</div>
+          </div>
+          <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+        </div>
+        <div class="modal-body">
+          <div class="lyrics-editor-toolbar">
+            <button type="button" class="btn btn-outline-info btn-sm" id="lyrics-mark-falsetto">Mark Falsetto</button>
+            <button type="button" class="btn btn-outline-secondary btn-sm" id="lyrics-unmark-falsetto">Clear Falsetto</button>
+            <span class="small text-muted">直接在左侧可视化区域选中文本后操作，效果会同步到 LRC Source。</span>
+          </div>
+          <div class="row g-4">
+            <div class="col-lg-8">
+              <label for="lyrics-visual-editor" class="form-label fw-semibold">Visual Editor</label>
+              <div
+                id="lyrics-visual-editor"
+                class="lyrics-visual-editor"
+                contenteditable="true"
+                spellcheck="false"
+                role="textbox"
+                aria-multiline="true"
+              ></div>
+            </div>
+            <div class="col-lg-4">
+              <label for="lyrics-editor-input" class="form-label fw-semibold">LRC Source</label>
+              <textarea id="lyrics-editor-input" class="form-control lyrics-source-box" spellcheck="false"></textarea>
+              <div class="lyrics-editor-help mt-3">
+                <div><strong>Tips</strong></div>
+                <div>`[00:12.34]` 会保留在 Source 中，左侧只显示歌词内容。</div>
+                <div>`{f}...{/f}` 会显示成青色假声段。</div>
+                <div>`词&lt;かな&gt;` 会显示成 ruby 注音。</div>
+                <div>复杂结构可以直接在 Source 里微调，左侧会自动同步成可视化效果。</div>
+              </div>
+            </div>
+          </div>
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="btn btn-primary" id="lyrics-apply-button">Apply To Form</button>
+          <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Close</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
   <script>
-    (function () {
+    window.addEventListener('DOMContentLoaded', function () {
+      const hiddenLrcInput = document.getElementById('id_lrc_text')
+      const lrcFileInput = document.getElementById('id_lrc_file')
+      const editorModalEl = document.getElementById('lyricsEditorModal')
+      const visualEditor = document.getElementById('lyrics-visual-editor')
+      const sourceEditor = document.getElementById('lyrics-editor-input')
+      const markFalsettoButton = document.getElementById('lyrics-mark-falsetto')
+      const unmarkFalsettoButton = document.getElementById('lyrics-unmark-falsetto')
+      const applyButton = document.getElementById('lyrics-apply-button')
+      const fallbackWrap = document.getElementById('lyrics-editor-fallback')
+      const editorEntryLink = document.getElementById('lyrics-editor-entry-link')
+
+      const bootstrapApi = typeof bootstrap !== 'undefined' ? bootstrap : (window.bootstrap || null)
+      const editorModal = editorModalEl && bootstrapApi && typeof bootstrapApi.Modal === 'function'
+        ? new bootstrapApi.Modal(editorModalEl)
+        : null
+
+      const lrcWrap = lrcFileInput ? lrcFileInput.closest('.dropzone-wrap') : null
+      const currentFileLink = lrcWrap ? lrcWrap.querySelector('a[href]') : null
+      if (editorEntryLink) {
+        if (currentFileLink) {
+          currentFileLink.insertAdjacentText('afterend', ' ')
+          currentFileLink.insertAdjacentElement('afterend', editorEntryLink)
+        } else if (fallbackWrap) {
+          fallbackWrap.classList.remove('d-none')
+        }
+      }
+
+      const escapeHtml = (value) =>
+        String(value || '')
+          .replace(/&/g, '&amp;')
+          .replace(/</g, '&lt;')
+          .replace(/>/g, '&gt;')
+          .replace(/"/g, '&quot;')
+          .replace(/'/g, '&#39;')
+
+      const normalizeText = (value) => String(value || '').replace(/\u00A0/g, ' ').replace(/\u200B/g, '')
+
+      const pushInlinePart = (parts, part) => {
+        if (!part || !part.text) return
+        const last = parts[parts.length - 1]
+        if (
+          last &&
+          last.type === part.type &&
+          last.type === 'text' &&
+          last.falsetto === part.falsetto
+        ) {
+          last.text += part.text
+          return
+        }
+        parts.push(part)
+      }
+
+      const appendPlainPart = (parts, text, falsetto) => {
+        if (!text) return
+        pushInlinePart(parts, { type: 'text', text, falsetto })
+      }
+
+      const appendRubyPart = (parts, base, ruby, falsetto) => {
+        if (!base) return
+        const wordMatch = base.match(/[A-Za-z][A-Za-z0-9'-]*$/)
+        if (wordMatch) {
+          const word = wordMatch[0]
+          const prefix = base.slice(0, base.length - word.length)
+          if (prefix) appendPlainPart(parts, prefix, falsetto)
+          parts.push({ type: 'ruby', text: word, ruby, falsetto })
+          return
+        }
+        const prefix = base.slice(0, -1)
+        const lastChar = base.slice(-1)
+        if (prefix) appendPlainPart(parts, prefix, falsetto)
+        if (lastChar) parts.push({ type: 'ruby', text: lastChar, ruby, falsetto })
+      }
+
+      const findNextTimestampIndex = (text, start) => {
+        const slice = text.slice(start)
+        const match = slice.match(/\[\d{1,3}:\d{2}(?:\.\d{1,3})?\]/)
+        return match ? start + match.index : -1
+      }
+
+      const parseInlineParts = (line) => {
+        const raw = String(line || '')
+        const parts = []
+        let cursor = 0
+        let falsetto = false
+
+        while (cursor < raw.length) {
+          const timestampAtCursor = raw.slice(cursor).match(/^\[\d{1,3}:\d{2}(?:\.\d{1,3})?\]/)
+          if (timestampAtCursor) {
+            parts.push({ type: 'timestamp', text: timestampAtCursor[0], falsetto })
+            cursor += timestampAtCursor[0].length
+            continue
+          }
+
+          const rubyIndex = raw.indexOf('<', cursor)
+          const tagIndex = raw.indexOf('{', cursor)
+          const timestampIndex = findNextTimestampIndex(raw, cursor)
+          const candidates = [rubyIndex, tagIndex, timestampIndex].filter((index) => index >= 0)
+          const nextIndex = candidates.length ? Math.min.apply(null, candidates) : -1
+
+          if (nextIndex === -1) {
+            appendPlainPart(parts, raw.slice(cursor), falsetto)
+            break
+          }
+
+          if (nextIndex === rubyIndex) {
+            const close = raw.indexOf('>', rubyIndex + 1)
+            if (close === -1) {
+              appendPlainPart(parts, raw.slice(cursor), falsetto)
+              break
+            }
+            appendRubyPart(parts, raw.slice(cursor, rubyIndex), raw.slice(rubyIndex + 1, close), falsetto)
+            cursor = close + 1
+            continue
+          }
+
+          if (nextIndex === tagIndex) {
+            appendPlainPart(parts, raw.slice(cursor, tagIndex), falsetto)
+            if (raw.startsWith('{f}', tagIndex)) {
+              falsetto = true
+              cursor = tagIndex + 3
+              continue
+            }
+            if (raw.startsWith('{/f}', tagIndex)) {
+              falsetto = false
+              cursor = tagIndex + 4
+              continue
+            }
+            appendPlainPart(parts, '{', falsetto)
+            cursor = tagIndex + 1
+            continue
+          }
+
+          appendPlainPart(parts, raw.slice(cursor, timestampIndex), falsetto)
+          const token = raw.slice(timestampIndex).match(/^\[\d{1,3}:\d{2}(?:\.\d{1,3})?\]/)
+          if (token) {
+            parts.push({ type: 'timestamp', text: token[0], falsetto })
+            cursor = timestampIndex + token[0].length
+          } else {
+            cursor = timestampIndex + 1
+          }
+        }
+
+        return parts
+      }
+
+      const buildPartHtml = (part) => {
+        if (part.type === 'timestamp') {
+          const classes = ['lyrics-editor-token']
+          if (part.falsetto) classes.push('lyrics-editor-falsetto')
+          return `<span class="${classes.join(' ')}" data-editor-token="timestamp" contenteditable="false" aria-hidden="true">${escapeHtml(part.text)}</span>`
+        }
+        if (part.type === 'ruby') {
+          const classes = ['lyrics-editor-seg']
+          if (part.falsetto) classes.push('lyrics-editor-seg--falsetto')
+          return `<ruby data-editor-ruby="true" data-editor-falsetto="${part.falsetto ? 'true' : 'false'}" class="${classes.join(' ')}" contenteditable="false"><span class="${classes.join(' ')}">${escapeHtml(part.text)}</span><rt>${escapeHtml(part.ruby)}</rt></ruby>`
+        }
+        const classes = ['lyrics-editor-seg']
+        if (part.falsetto) classes.push('lyrics-editor-seg--falsetto')
+        return `<span class="${classes.join(' ')}">${escapeHtml(part.text)}</span>`
+      }
+
+      const wrapFalsettoRuns = (parts) => {
+        const html = []
+        let currentFalsetto = null
+        let buffer = []
+
+        const flush = () => {
+          if (!buffer.length) return
+          const content = buffer.join('')
+          if (currentFalsetto) {
+            html.push(`<span class="lyrics-editor-falsetto" data-editor-falsetto="true">${content}</span>`)
+          } else {
+            html.push(content)
+          }
+          buffer = []
+        }
+
+        parts.forEach((part) => {
+          const partFalsetto = Boolean(part.falsetto)
+          if (currentFalsetto === null) currentFalsetto = partFalsetto
+          if (partFalsetto !== currentFalsetto) {
+            flush()
+            currentFalsetto = partFalsetto
+          }
+          buffer.push(buildPartHtml(part))
+        })
+
+        flush()
+        return html.join('')
+      }
+
+      const buildVisualHtml = (text) => {
+        const lines = String(text || '').replace(/\r\n/g, '\n').split('\n')
+        if (!lines.length) {
+          return '<div class="lyrics-editor-line lyrics-editor-line--empty"><br></div>'
+        }
+        return lines
+          .map((line) => {
+            if (!line) return '<div class="lyrics-editor-line lyrics-editor-line--empty"><br></div>'
+            return `<div class="lyrics-editor-line">${wrapFalsettoRuns(parseInlineParts(line))}</div>`
+          })
+          .join('')
+      }
+
+      const serializeRubyBaseNode = (node) => {
+        if (!node) return ''
+        if (node.nodeType === Node.TEXT_NODE) return normalizeText(node.nodeValue)
+        if (node.nodeType !== Node.ELEMENT_NODE) return ''
+        if (node.tagName === 'RT' || node.tagName === 'BR') return ''
+        if (node.dataset && node.dataset.editorToken === 'timestamp') return normalizeText(node.textContent)
+
+        return Array.from(node.childNodes).map(serializeRubyBaseNode).join('')
+      }
+
+      const serializeInlineNode = (node, falsettoContext = false) => {
+        if (!node) return ''
+        if (node.nodeType === Node.TEXT_NODE) return normalizeText(node.nodeValue)
+        if (node.nodeType !== Node.ELEMENT_NODE) return ''
+
+        if (node.dataset && node.dataset.editorToken === 'timestamp') {
+          return normalizeText(node.textContent)
+        }
+
+        if (node.tagName === 'RUBY' && node.dataset && node.dataset.editorRuby === 'true') {
+          let base = ''
+          let ruby = ''
+          Array.from(node.childNodes).forEach((child) => {
+            if (child.nodeType === Node.ELEMENT_NODE && child.tagName === 'RT') {
+              ruby += normalizeText(child.textContent)
+            } else {
+              base += serializeRubyBaseNode(child)
+            }
+          })
+          return `${base}<${ruby}>`
+        }
+
+        if (node.dataset && node.dataset.editorFalsetto === 'true') {
+          const content = Array.from(node.childNodes).map((child) => serializeInlineNode(child, true)).join('')
+          return falsettoContext ? content : `{f}${content}{/f}`
+        }
+
+        if (node.tagName === 'BR') return ''
+
+        return Array.from(node.childNodes).map((child) => serializeInlineNode(child, falsettoContext)).join('')
+      }
+
+      const serializeVisualEditor = () => {
+        if (!visualEditor) return ''
+        const lines = []
+        const children = Array.from(visualEditor.childNodes)
+        if (!children.length) return ''
+
+        children.forEach((node) => {
+          if (node.nodeType === Node.ELEMENT_NODE && node.classList.contains('lyrics-editor-line')) {
+            lines.push(Array.from(node.childNodes).map((child) => serializeInlineNode(child)).join(''))
+            return
+          }
+          if (node.nodeType === Node.TEXT_NODE) {
+            lines.push(normalizeText(node.nodeValue))
+            return
+          }
+          lines.push(serializeInlineNode(node))
+        })
+
+        return lines.join('\n')
+      }
+
+      const normalizeFalsettoSource = (value) => {
+        const raw = String(value || '')
+        let output = ''
+        let depth = 0
+        let cursor = 0
+
+        while (cursor < raw.length) {
+          if (raw.startsWith('{f}', cursor)) {
+            if (depth === 0) output += '{f}'
+            depth += 1
+            cursor += 3
+            continue
+          }
+
+          if (raw.startsWith('{/f}', cursor)) {
+            if (depth > 0) {
+              depth -= 1
+              if (depth === 0) output += '{/f}'
+            }
+            cursor += 4
+            continue
+          }
+
+          output += raw[cursor]
+          cursor += 1
+        }
+
+        if (depth > 0) output += '{/f}'
+
+        return output.replace(/\{\/f\}\{f\}/g, '')
+      }
+
+      const isFalsettoElement = (node) =>
+        Boolean(node && node.nodeType === Node.ELEMENT_NODE && node.dataset && node.dataset.editorFalsetto === 'true')
+
+      const isEmptyTextNode = (node) => node && node.nodeType === Node.TEXT_NODE && !normalizeText(node.nodeValue)
+
+      const normalizeFalsettoDom = (root) => {
+        if (!root) return
+
+        Array.from(root.querySelectorAll('[data-editor-falsetto="true"] [data-editor-falsetto="true"]')).forEach((node) => {
+          unwrapFalsettoNode(node)
+        })
+
+        const mergeAdjacent = (container) => {
+          Array.from(container.childNodes).forEach((child) => {
+            if (child.nodeType === Node.ELEMENT_NODE) mergeAdjacent(child)
+          })
+
+          let current = container.firstChild
+          while (current) {
+            if (isEmptyTextNode(current)) {
+              const empty = current
+              current = current.nextSibling
+              empty.remove()
+              continue
+            }
+
+            if (!isFalsettoElement(current)) {
+              current = current.nextSibling
+              continue
+            }
+
+            let next = current.nextSibling
+            while (isEmptyTextNode(next)) {
+              const empty = next
+              next = next.nextSibling
+              empty.remove()
+            }
+
+            if (isFalsettoElement(next)) {
+              while (next.firstChild) current.appendChild(next.firstChild)
+              next.remove()
+              continue
+            }
+
+            current = current.nextSibling
+          }
+        }
+
+        mergeAdjacent(root)
+      }
+
+      const syncHiddenFromSource = () => {
+        if (hiddenLrcInput && sourceEditor) hiddenLrcInput.value = sourceEditor.value
+      }
+
+      const loadTextIntoEditors = (text) => {
+        const normalized = String(text || '').replace(/\r\n/g, '\n')
+        if (hiddenLrcInput) hiddenLrcInput.value = normalized
+        if (sourceEditor) sourceEditor.value = normalized
+        if (visualEditor) visualEditor.innerHTML = buildVisualHtml(normalized)
+      }
+
+      const syncSourceFromVisual = () => {
+        if (!sourceEditor || !hiddenLrcInput) return
+        normalizeFalsettoDom(visualEditor)
+        const raw = normalizeFalsettoSource(serializeVisualEditor())
+        sourceEditor.value = raw
+        hiddenLrcInput.value = raw
+      }
+
+      const syncVisualFromSource = () => {
+        if (!sourceEditor || !visualEditor || !hiddenLrcInput) return
+        const raw = String(sourceEditor.value || '').replace(/\r\n/g, '\n')
+        hiddenLrcInput.value = raw
+        visualEditor.innerHTML = buildVisualHtml(raw)
+      }
+
+      const selectionInsideVisualEditor = () => {
+        const selection = window.getSelection()
+        if (!selection || !selection.rangeCount || !visualEditor) return false
+        return visualEditor.contains(selection.anchorNode) && visualEditor.contains(selection.focusNode)
+      }
+
+      const expandSourceSelectionForRuby = (value, start, end) => {
+        const rubyPattern = /([A-Za-z][A-Za-z0-9'-]*|[^\s<>{}\[\]])<([^>\n]*)>/g
+        let expandedStart = start
+        let expandedEnd = end
+        let match
+
+        while ((match = rubyPattern.exec(value)) !== null) {
+          const rubyStart = match.index
+          const rubyEnd = match.index + match[0].length
+          const overlapsSelection = expandedStart < rubyEnd && expandedEnd > rubyStart
+          const cursorInsideRuby = expandedStart === expandedEnd && expandedStart > rubyStart && expandedStart < rubyEnd
+
+          if (overlapsSelection || cursorInsideRuby) {
+            expandedStart = Math.min(expandedStart, rubyStart)
+            expandedEnd = Math.max(expandedEnd, rubyEnd)
+          }
+        }
+
+        return { start: expandedStart, end: expandedEnd }
+      }
+
+      const getSourceFalsettoRanges = (value) => {
+        const ranges = []
+        let depth = 0
+        let openStart = -1
+        let contentStart = -1
+        let cursor = 0
+
+        while (cursor < value.length) {
+          if (value.startsWith('{f}', cursor)) {
+            if (depth === 0) {
+              openStart = cursor
+              contentStart = cursor + 3
+            }
+            depth += 1
+            cursor += 3
+            continue
+          }
+
+          if (value.startsWith('{/f}', cursor)) {
+            if (depth > 0) {
+              depth -= 1
+              if (depth === 0) {
+                ranges.push({
+                  openStart,
+                  contentStart,
+                  closeStart: cursor,
+                  closeEnd: cursor + 4,
+                })
+              }
+            }
+            cursor += 4
+            continue
+          }
+
+          cursor += 1
+        }
+
+        if (depth > 0 && openStart >= 0) {
+          ranges.push({
+            openStart,
+            contentStart,
+            closeStart: value.length,
+            closeEnd: value.length,
+          })
+        }
+
+        return ranges
+      }
+
+      const expandSourceSelectionForFalsetto = (value, start, end) => {
+        let expandedStart = start
+        let expandedEnd = end
+
+        getSourceFalsettoRanges(value).forEach((range) => {
+          const collapsedInside = expandedStart === expandedEnd && expandedStart > range.openStart && expandedStart < range.closeEnd
+          const selectionTouchesRange = expandedStart !== expandedEnd && expandedStart <= range.closeEnd && expandedEnd >= range.openStart
+
+          if (collapsedInside || selectionTouchesRange) {
+            expandedStart = Math.min(expandedStart, range.openStart)
+            expandedEnd = Math.max(expandedEnd, range.closeEnd)
+          }
+        })
+
+        return { start: expandedStart, end: expandedEnd }
+      }
+
+      const clearFalsettoFromSourceSelection = (value, start, end) => {
+        let result = value
+        let changed = false
+        const collapsed = start === end
+
+        getSourceFalsettoRanges(value).reverse().forEach((range) => {
+          const cursorInsideRange = collapsed && start > range.openStart && start < range.closeEnd
+          const selectionIntersectsContent = !collapsed && start < range.closeStart && end > range.contentStart
+          const selectionCoversRange = !collapsed && start <= range.openStart && end >= range.closeEnd
+          if (!cursorInsideRange && !selectionIntersectsContent && !selectionCoversRange) return
+
+          const clearStart = collapsed ? range.contentStart : Math.max(start, range.contentStart)
+          const clearEnd = collapsed ? range.closeStart : Math.min(end, range.closeStart)
+          if (clearStart > clearEnd) return
+
+          const beforeContent = result.slice(range.contentStart, clearStart)
+          const clearedContent = result.slice(clearStart, clearEnd)
+          const afterContent = result.slice(clearEnd, range.closeStart)
+          const replacement = [
+            beforeContent ? `{f}${beforeContent}{/f}` : '',
+            clearedContent,
+            afterContent ? `{f}${afterContent}{/f}` : '',
+          ].join('')
+
+          result = `${result.slice(0, range.openStart)}${replacement}${result.slice(range.closeEnd)}`
+          changed = true
+        })
+
+        return changed ? normalizeFalsettoSource(result) : value
+      }
+
+      const markFalsettoInSourceSelection = (value, start, end) => {
+        const rubyExpanded = expandSourceSelectionForRuby(value, start, end)
+        const falsettoExpanded = expandSourceSelectionForFalsetto(value, rubyExpanded.start, rubyExpanded.end)
+        const markStart = falsettoExpanded.start
+        const markEnd = falsettoExpanded.end
+
+        if (markStart === markEnd) {
+          return {
+            value: `${value.slice(0, markStart)}{f}{/f}${value.slice(markEnd)}`,
+            start: markStart + 3,
+            end: markStart + 3,
+          }
+        }
+
+        const selected = value.slice(markStart, markEnd)
+        const nextValue = normalizeFalsettoSource(`${value.slice(0, markStart)}{f}${selected}{/f}${value.slice(markEnd)}`)
+        return {
+          value: nextValue,
+          start: markStart,
+          end: Math.min(markStart + selected.length, nextValue.length),
+        }
+      }
+
+      const getSourceSelectionFromVisualRange = (range, purpose) => {
+        const markerId = `${Date.now()}_${Math.random().toString(36).slice(2)}`
+        const startMarker = `[[__LRC_${purpose}_START_${markerId}__]]`
+        const endMarker = `[[__LRC_${purpose}_END_${markerId}__]]`
+        const startNode = document.createTextNode(startMarker)
+        const endNode = document.createTextNode(endMarker)
+        const endRange = range.cloneRange()
+
+        endRange.collapse(false)
+        endRange.insertNode(endNode)
+        range.insertNode(startNode)
+
+        const markedRaw = serializeVisualEditor()
+        const markerStart = markedRaw.indexOf(startMarker)
+        const markerEnd = markedRaw.indexOf(endMarker)
+        const raw = markedRaw.replace(startMarker, '').replace(endMarker, '')
+
+        startNode.remove()
+        endNode.remove()
+
+        if (markerStart < 0 || markerEnd < 0 || markerEnd < markerStart) {
+          return null
+        }
+
+        return {
+          raw,
+          start: markerStart,
+          end: markerEnd - startMarker.length,
+        }
+      }
+
+      const getRubyAncestor = (node) => {
+        let current = node && node.nodeType === Node.ELEMENT_NODE ? node : node?.parentNode
+        while (current && current !== visualEditor) {
+          if (current.nodeType === Node.ELEMENT_NODE && current.tagName === 'RUBY' && current.dataset?.editorRuby === 'true') {
+            return current
+          }
+          current = current.parentNode
+        }
+        return null
+      }
+
+      const expandRangeAroundRubyBoundaries = (range) => {
+        const expanded = range.cloneRange()
+        const startRuby = getRubyAncestor(range.startContainer)
+        const endRuby = getRubyAncestor(range.endContainer)
+        if (startRuby) expanded.setStartBefore(startRuby)
+        if (endRuby) expanded.setEndAfter(endRuby)
+        return expanded
+      }
+
+      const wrapSourceSelection = () => {
+        if (!sourceEditor) return
+        const selectionStart = sourceEditor.selectionStart || 0
+        const selectionEnd = sourceEditor.selectionEnd || 0
+        const value = sourceEditor.value || ''
+        const next = markFalsettoInSourceSelection(value, selectionStart, selectionEnd)
+        sourceEditor.value = next.value
+        sourceEditor.focus()
+        sourceEditor.setSelectionRange(next.start, next.end)
+        syncVisualFromSource()
+      }
+
+      const unwrapSourceSelection = () => {
+        if (!sourceEditor) return
+        const value = sourceEditor.value || ''
+        const selectionStart = sourceEditor.selectionStart || 0
+        const selectionEnd = sourceEditor.selectionEnd || 0
+        const expanded = expandSourceSelectionForRuby(value, selectionStart, selectionEnd)
+        const start = expanded.start
+        const end = expanded.end
+        const nextValue = clearFalsettoFromSourceSelection(value, start, end)
+        if (nextValue !== value) {
+          sourceEditor.value = nextValue
+          sourceEditor.focus()
+          sourceEditor.setSelectionRange(Math.min(start, nextValue.length), Math.min(end, nextValue.length))
+          syncVisualFromSource()
+        }
+      }
+
+      const markVisualSelection = () => {
+        const selection = window.getSelection()
+        if (!selection || !selection.rangeCount || !selectionInsideVisualEditor()) return
+        const range = expandRangeAroundRubyBoundaries(selection.getRangeAt(0))
+        if (range.collapsed) return
+
+        const selectedSource = getSourceSelectionFromVisualRange(range, 'MARK')
+        if (!selectedSource) return
+        const next = markFalsettoInSourceSelection(selectedSource.raw, selectedSource.start, selectedSource.end)
+        loadTextIntoEditors(next.value)
+        selection.removeAllRanges()
+      }
+
+      const unwrapFalsettoNode = (node) => {
+        if (!node || !node.parentNode) return
+        while (node.firstChild) {
+          node.parentNode.insertBefore(node.firstChild, node)
+        }
+        node.remove()
+      }
+
+      const findFalsettoAncestor = (node) => {
+        let current = node
+        while (current && current !== visualEditor) {
+          if (current.nodeType === Node.ELEMENT_NODE && current.dataset && current.dataset.editorFalsetto === 'true') {
+            return current
+          }
+          current = current.parentNode
+        }
+        return null
+      }
+
+      const clearVisualFalsetto = () => {
+        const selection = window.getSelection()
+        if (!selection || !selection.rangeCount || !selectionInsideVisualEditor()) return
+        const range = expandRangeAroundRubyBoundaries(selection.getRangeAt(0))
+
+        if (range.collapsed) {
+          const nodes = [findFalsettoAncestor(selection.anchorNode), findFalsettoAncestor(selection.focusNode)].filter(Boolean)
+          const unique = Array.from(new Set(nodes))
+          unique.forEach(unwrapFalsettoNode)
+          normalizeFalsettoDom(visualEditor)
+          syncSourceFromVisual()
+          return
+        }
+
+        const selectedSource = getSourceSelectionFromVisualRange(range, 'CLEAR')
+        if (!selectedSource) return
+        loadTextIntoEditors(clearFalsettoFromSourceSelection(selectedSource.raw, selectedSource.start, selectedSource.end))
+      }
+
+      const handleMarkFalsetto = () => {
+        if (document.activeElement === sourceEditor) {
+          wrapSourceSelection()
+          return
+        }
+        markVisualSelection()
+      }
+
+      const handleClearFalsetto = () => {
+        if (document.activeElement === sourceEditor) {
+          unwrapSourceSelection()
+          return
+        }
+        clearVisualFalsetto()
+      }
+
+      const openEditor = (event) => {
+        if (event) event.preventDefault()
+        loadTextIntoEditors(hiddenLrcInput ? hiddenLrcInput.value : '')
+        if (editorModal) editorModal.show()
+        window.setTimeout(() => {
+          if (visualEditor) visualEditor.focus()
+        }, 60)
+      }
+
+      const openEditorButtons = document.querySelectorAll('#lyrics-editor-entry-link, [data-open-lyrics-editor]')
+      openEditorButtons.forEach((button) => {
+        button.addEventListener('click', openEditor)
+      })
+
+      if (visualEditor) {
+        visualEditor.addEventListener('input', syncSourceFromVisual)
+      }
+
+      if (sourceEditor) {
+        sourceEditor.addEventListener('input', syncVisualFromSource)
+      }
+
+      if (markFalsettoButton) {
+        markFalsettoButton.addEventListener('click', handleMarkFalsetto)
+      }
+
+      if (unmarkFalsettoButton) {
+        unmarkFalsettoButton.addEventListener('click', handleClearFalsetto)
+      }
+
+      if (applyButton) {
+        applyButton.addEventListener('click', () => {
+          if (document.activeElement === sourceEditor) {
+            syncHiddenFromSource()
+          } else {
+            syncSourceFromVisual()
+          }
+          if (editorModal) editorModal.hide()
+        })
+      }
+
+      if (lrcFileInput) {
+        lrcFileInput.addEventListener('change', () => {
+          const file = lrcFileInput.files && lrcFileInput.files[0]
+          if (!file) return
+          const reader = new FileReader()
+          reader.onload = () => {
+            const text = typeof reader.result === 'string' ? reader.result : ''
+            loadTextIntoEditors(text)
+          }
+          reader.readAsText(file, 'utf-8')
+        })
+      }
+
       const zones = document.querySelectorAll('[data-dropzone]')
       zones.forEach((wrap) => {
         const input = wrap.querySelector('input[type="file"]')
@@ -198,6 +1056,14 @@
             dataTransfer.items.add(file)
             input.files = dataTransfer.files
             updateName()
+            if (input.id === 'id_lrc_file') {
+              const reader = new FileReader()
+              reader.onload = () => {
+                const text = typeof reader.result === 'string' ? reader.result : ''
+                loadTextIntoEditors(text)
+              }
+              reader.readAsText(file, 'utf-8')
+            }
           }
         })
         input.addEventListener('change', updateName)
@@ -210,6 +1076,8 @@
         })
         updateName()
       })
-    })()
+
+      loadTextIntoEditors(hiddenLrcInput ? hiddenLrcInput.value : '')
+    })
   </script>
 {% endblock %}

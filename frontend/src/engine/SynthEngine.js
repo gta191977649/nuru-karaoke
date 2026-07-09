@@ -472,8 +472,11 @@ class SynthEngine {
               const nextTokenTime = tokens[idx + 1]?.time ?? end
               const denom = Math.max(0.001, nextTokenTime - token.time)
               const frac = Math.min(1, Math.max(0, (t - token.time) / denom))
-              const progressUnits = Math.min(totalTokens, Math.max(0, idx + frac))
-              karaokeProgress = Math.min(1, Math.max(0, progressUnits / Math.max(1, totalTokens)))
+              const totalWeight = Number.isFinite(entry.tokenTotalWeight) ? entry.tokenTotalWeight : totalTokens
+              const tokenWeightStart = Number.isFinite(token?.weightStart) ? token.weightStart : idx
+              const tokenWeight = Number.isFinite(token?.weight) ? token.weight : 1
+              const progressUnits = Math.min(totalWeight, Math.max(0, tokenWeightStart + frac * tokenWeight))
+              karaokeProgress = Math.min(1, Math.max(0, progressUnits / Math.max(1, totalWeight)))
             }
           } else {
             const start = entry.time

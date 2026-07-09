@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { Sequencer, WorkletSynthesizer } from 'spessasynth_lib'
 import processorUrl from 'spessasynth_lib/dist/spessasynth_processor.min.js?url'
 import defaultSoundFontUrl from '../soundfont/gm2.sf2'
+import { findActiveLyricIndex, parseLrc } from '../engine/lrc.js'
 import './DebugSynth.css'
 
 const DEFAULT_SOUNDFONT_DISPLAY_NAME = 'soundfont/gm2.sf2'
@@ -70,80 +71,6 @@ function resolvePatchName(presetList, patch, channelIndex) {
     (p) => p.program === patch.program && p.bankMSB === patch.bankMSB && p.bankLSB === patch.bankLSB,
   )
   return match?.name || `Program ${patch.program + 1}`
-}
-
-function parseLrcTimestamp(token) {
-  // [mm:ss.xx] or [mm:ss.xxx] or [mm:ss]
-  const match = token.match(/^\[(\d{1,3}):(\d{2})(?:\.(\d{1,3}))?\]$/)
-  if (!match) return null
-  const minutes = Number(match[1])
-  const seconds = Number(match[2])
-  const fraction = match[3] ?? '0'
-  const millis =
-    fraction.length === 3 ? Number(fraction) : fraction.length === 2 ? Number(fraction) * 10 : Number(fraction) * 100
-  if (!Number.isFinite(minutes) || !Number.isFinite(seconds) || !Number.isFinite(millis)) return null
-  return minutes * 60 + seconds + millis / 1000
-}
-
-function parseLrc(text) {
-  const lines = String(text ?? '').replace(/\r\n/g, '\n').split('\n')
-  /** @type {{time:number,text:string}[]} */
-  const entries = []
-  let offsetSeconds = 0
-
-  for (const rawLine of lines) {
-    const line = rawLine.trimEnd()
-    if (!line) continue
-
-    const offsetMatch = line.match(/^\[offset:([+-]?\d+)\]$/i)
-    if (offsetMatch) {
-      const ms = Number(offsetMatch[1])
-      if (Number.isFinite(ms)) offsetSeconds = ms / 1000
-      continue
-    }
-
-    // metadata like [ar:...], [ti:...], ignore for now
-    if (/^\[[a-z]{2,}:[^\]]*\]$/i.test(line) && !/^\[\d/.test(line)) continue
-
-    const timeTokens = line.match(/\[\d{1,3}:\d{2}(?:\.\d{1,3})?\]/g)
-    if (!timeTokens?.length) continue
-
-    const lyricText = line.replace(/\[\d{1,3}:\d{2}(?:\.\d{1,3})?\]/g, '').trim()
-    for (const t of timeTokens) {
-      const time = parseLrcTimestamp(t)
-      if (time == null) continue
-      entries.push({ time: Math.max(0, time + offsetSeconds), text: lyricText })
-    }
-  }
-
-  entries.sort((a, b) => a.time - b.time)
-  // de-dupe exact same timestamps by keeping the last (common in some LRCs)
-  const deduped = []
-  for (const entry of entries) {
-    const last = deduped[deduped.length - 1]
-    if (last && last.time === entry.time) {
-      deduped[deduped.length - 1] = entry
-    } else {
-      deduped.push(entry)
-    }
-  }
-  return deduped
-}
-
-function findActiveLyricIndex(entries, timeSeconds) {
-  if (!entries?.length) return -1
-  if (!Number.isFinite(timeSeconds)) return -1
-  let lo = 0
-  let hi = entries.length - 1
-  if (timeSeconds < entries[0].time) return -1
-  while (lo <= hi) {
-    const mid = (lo + hi) >> 1
-    const t = entries[mid].time
-    if (t === timeSeconds) return mid
-    if (t < timeSeconds) lo = mid + 1
-    else hi = mid - 1
-  }
-  return Math.max(0, lo - 1)
 }
 
 function DebugSynth() {
@@ -556,17 +483,17 @@ function DebugSynth() {
                 return (
                   <>
                     <div className="debugSynth__lyricLine debugSynth__lyricLine--dim">
-                      {prev2 >= 0 ? lrcEntries[prev2].text || '…' : ''}
+                      {prev2 >= 0 ? lrcEntries[prev2].plainText || lrcEntries[prev2].text || '…' : ''}
                     </div>
                     <div className="debugSynth__lyricLine debugSynth__lyricLine--dim">
-                      {prev1 >= 0 ? lrcEntries[prev1].text || '…' : ''}
+                      {prev1 >= 0 ? lrcEntries[prev1].plainText || lrcEntries[prev1].text || '…' : ''}
                     </div>
                     <div className="debugSynth__lyricLine debugSynth__lyricLine--active">
                       {i >= 0 ? (
                         <span className="debugSynth__karaoke" style={{ '--karaoke-progress': String(progress) }}>
-                          <span className="debugSynth__karaokeBase">{lrcEntries[i].text || '…'}</span>
+                          <span className="debugSynth__karaokeBase">{lrcEntries[i].plainText || lrcEntries[i].text || '…'}</span>
                           <span className="debugSynth__karaokeFill" aria-hidden="true">
-                            {lrcEntries[i].text || '…'}
+                            {lrcEntries[i].plainText || lrcEntries[i].text || '…'}
                           </span>
                         </span>
                       ) : (
@@ -574,10 +501,10 @@ function DebugSynth() {
                       )}
                     </div>
                     <div className="debugSynth__lyricLine debugSynth__lyricLine--dim">
-                      {next1 < lrcEntries.length ? lrcEntries[next1].text || '…' : ''}
+                      {next1 < lrcEntries.length ? lrcEntries[next1].plainText || lrcEntries[next1].text || '…' : ''}
                     </div>
                     <div className="debugSynth__lyricLine debugSynth__lyricLine--dim">
-                      {next2 < lrcEntries.length ? lrcEntries[next2].text || '…' : ''}
+                      {next2 < lrcEntries.length ? lrcEntries[next2].plainText || lrcEntries[next2].text || '…' : ''}
                     </div>
                   </>
                 )

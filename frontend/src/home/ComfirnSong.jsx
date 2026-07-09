@@ -58,9 +58,9 @@ export default function ComfirmSong({ onBack, onConfirm }) {
         const entries = parseLrc(text)
         const raw = entries
           .slice(0, 3)
-          .map((entry) => entry.text)
+          .map((entry) => entry.plainText || entry.text)
           .join(' / ')
-        const normalized = raw.replace(/<[^>]*>/g, '').trim()
+        const normalized = raw.trim()
         const maxLen = 28
         const clipped = normalized.length > maxLen ? `${normalized.slice(0, maxLen)}…` : normalized
         if (!ignore) setPreviewText(clipped || '—')
@@ -87,7 +87,7 @@ export default function ComfirmSong({ onBack, onConfirm }) {
         const text = await res.text()
         const entries = parseLrc(text)
         const lines = entries
-          .map((entry) => entry.text.replace(/<[^>]*>/g, '').trim())
+          .map((entry) => String(entry.plainText || entry.text || '').trim())
           .filter(Boolean)
         if (!ignore) setLyricsText(lines.join('\n') || '—')
       } catch {
