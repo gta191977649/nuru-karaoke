@@ -10,6 +10,7 @@ import { getSharedDebugAnalyser } from '../engine/audio/pitch/sharedPitchEngine.
 import {
   getConfirmedSegmentFillEnd,
   getLivePitchTrailSegments,
+  getNearestNoteMidiAtTime,
   getStableHitTargetMidi,
   hasStableTechniqueLanding,
   getTechniqueResolutionTime,
@@ -1250,6 +1251,12 @@ function MelodyGuideCanvas({
             targetMidi = getTargetMidiForUserTime(songTimeSec)
           }
           const allowNoTarget = snap.forceUserOnScoring === true
+          if (targetMidi == null && allowNoTarget) {
+            const targetTimeSec = snap.gateUserByTarget
+              ? songTimeSec - (Number(snap.userOffsetSec) || 0)
+              : songTimeSec
+            targetMidi = getNearestNoteMidiAtTime(scoringNotes, targetTimeSec)
+          }
           if (!(snap.gateUserByTarget && snap.reference && targetMidi == null && !allowNoTarget)) {
             const transposedTargetMidi = Number.isFinite(targetMidi)
               ? Number(targetMidi) + transposition
