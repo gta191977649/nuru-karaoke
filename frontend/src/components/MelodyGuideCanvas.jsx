@@ -18,7 +18,7 @@ import {
   TECHNIQUE_LANDING_WINDOW_SEC,
 } from '../karaoke/scoring/scoringVisualUtils.js'
 import {
-  getLiveHitDisplayMidi,
+  getLiveF0DisplayMidi,
   getNoteFragmentJoinToleranceSec,
   normalizePitchClass,
 } from '../karaoke/scoring/SimpleScoreCalculator.js'
@@ -113,7 +113,7 @@ const STROKE_WIDTH = {
   playheadInner: 2,
 }
 
-const PLAYHEAD_DOT_RADIUS = 6
+const PLAYHEAD_DOT_RADIUS = 9
 const TECHNIQUE_ICON_OFFSET_PX = 20
 const SOLFEGE_LABEL_OFFSET_PX = 3
 const SOLFEGE_FONT_FAMILY = 'MS PGothic'
@@ -1254,9 +1254,9 @@ function MelodyGuideCanvas({
             const transposedTargetMidi = Number.isFinite(targetMidi)
               ? Number(targetMidi) + transposition
               : null
-            const hitDisplayMidi = getLiveHitDisplayMidi(userMidi, transposedTargetMidi)
-            if (Number.isFinite(hitDisplayMidi)) {
-              const { y, inRange } = midiToY(hitDisplayMidi)
+            const liveDisplayMidi = getLiveF0DisplayMidi(userMidi, transposedTargetMidi)
+            if (Number.isFinite(liveDisplayMidi)) {
+              const { y, inRange } = midiToY(liveDisplayMidi)
               if (inRange) {
                 desiredPlayheadDotY = y
               }

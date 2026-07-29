@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest'
 import {
   SCORING_ALGORITHM_VERSION,
   SimpleScoreCalculator,
+  getLiveF0DisplayMidi,
   getLiveHitDisplayMidi,
   getNoteFragmentJoinToleranceSec,
   getPitchClassDistance,
@@ -98,6 +99,14 @@ describe('allkaraoke pitch-class matching', () => {
     expect(getLiveHitDisplayMidi(62, 60)).toBeCloseTo(60.75, 6)
     expect(getLiveHitDisplayMidi(63, 60)).toBeNull()
     expect(getLiveHitDisplayMidi(null, 60)).toBeNull()
+  })
+
+  it('keeps the live F0 marker visible for voiced misses inside a target note', () => {
+    expect(getLiveF0DisplayMidi(36.25, 60)).toBeCloseTo(60.125, 6)
+    expect(getLiveF0DisplayMidi(63, 60)).toBeCloseTo(60.75, 6)
+    expect(getLiveF0DisplayMidi(57, 60)).toBeCloseTo(59.25, 6)
+    expect(getLiveF0DisplayMidi(null, 60)).toBeNull()
+    expect(getLiveF0DisplayMidi(60, null)).toBeNull()
   })
 })
 
