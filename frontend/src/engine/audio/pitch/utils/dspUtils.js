@@ -151,5 +151,98 @@ function smoothDoubleExponential(state, value, alpha = 0.5, beta = 0.1) {
   }
 }
 
-export { rms, hzToMidi, centsError, smoothValue, smoothMovingAverage, pushWindow, medianOfWindow, smoothDoubleExponential }
+function midiToHz(midi) {
+  const value = Number(midi)
+  if (!Number.isFinite(value)) return null
+  return 440 * (2 ** ((value - 69) / 12))
+}
+
+function updateStepAwarePitchSmoother(state, valueHz, rawValueHz, options = {}) {
+  const alpha = Number.isFinite(options.alpha) ? Number(options.alpha) : 0.5
+  const beta = Number.isFinite(options.beta) ? Number(options.beta) : 0.1
+  const thresholdCents = Number.isFinite(options.thresholdCents) ? Number(options.thresholdCents) : 80
+  const clusterCents = Number.isFinite(options.clusterCents) ? Number(options.clusterCents) : 45
+  const confirmFrames = Math.max(2, Math.round(Number(options.confirmFrames) || 2))
+  const previous = state || {}
+  const value = Number.isFinite(valueHz) ? Number(valueHz) : null
+  const rawValue = Number.isFinite(rawValueHz) ? Number(rawValueHz) : null
+
+  if (!Number.isFinite(value)) {
+    return {
+      ...previous,
+      smoothState: smoothDoubleExponential(previous.smoothState, null, alpha, beta),
+      pendingMidis: [],
+      pendingBaselineMidi: null,
+      value: null,
+      reset: false,
+      resetCents: null,
+    }
+  }
+
+  const rawMidi = hzToMidi(rawValue)
+  const smoothedMidi = hzToMidi(previous.smoothState?.value)
+  let pendingBaselineMidi = Number.isFinite(previous.pendingBaselineMidi)
+    ? Number(previous.pendingBaselineMidi)
+    : smoothedMidi
+  const discrepancyCents = Number.isFinite(rawMidi) && Number.isFinite(pendingBaselineMidi)
+    ? Math.abs(rawMidi - pendingBaselineMidi) * 100
+    : 0
+  let pendingMidis = Array.isArray(previous.pendingMidis) ? previous.pendingMidis.slice() : []
+
+  if (Number.isFinite(rawMidi) && discrepancyCents > thresholdCents) {
+    const lastPending = pendingMidis[pendingMidis.length - 1]
+    if (!Number.isFinite(lastPending) || Math.abs(rawMidi - lastPending) * 100 <= clusterCents) {
+      pendingMidis.push(rawMidi)
+    } else {
+      pendingMidis = [rawMidi]
+      pendingBaselineMidi = smoothedMidi
+    }
+    while (pendingMidis.length > confirmFrames) pendingMidis.shift()
+
+    if (pendingMidis.length >= confirmFrames) {
+      const sorted = pendingMidis.slice().sort((a, b) => a - b)
+      const middle = Math.floor(sorted.length / 2)
+      const resetMidi = sorted.length % 2
+        ? sorted[middle]
+        : (sorted[middle - 1] + sorted[middle]) / 2
+      const resetHz = midiToHz(resetMidi)
+      return {
+        smoothState: { level: resetHz, trend: 0, value: resetHz },
+        pendingMidis: [],
+        pendingBaselineMidi: null,
+        value: resetHz,
+        reset: true,
+        resetCents: Number.isFinite(smoothedMidi) ? (resetMidi - smoothedMidi) * 100 : null,
+        resetCount: (Number(previous.resetCount) || 0) + 1,
+      }
+    }
+  } else {
+    pendingMidis = []
+    pendingBaselineMidi = null
+  }
+
+  const smoothState = smoothDoubleExponential(previous.smoothState, value, alpha, beta)
+  return {
+    ...previous,
+    smoothState,
+    pendingMidis,
+    pendingBaselineMidi,
+    value: smoothState.value,
+    reset: false,
+    resetCents: null,
+    resetCount: Number(previous.resetCount) || 0,
+  }
+}
+
+export {
+  rms,
+  hzToMidi,
+  centsError,
+  smoothValue,
+  smoothMovingAverage,
+  pushWindow,
+  medianOfWindow,
+  smoothDoubleExponential,
+  updateStepAwarePitchSmoother,
+}
 export { removeDcOffsetInPlace, createHpfState, updateHpfState, applyHpfInPlace }

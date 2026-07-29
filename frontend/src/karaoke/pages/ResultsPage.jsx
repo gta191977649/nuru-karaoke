@@ -10,6 +10,7 @@ import { submitScore } from '../../services/scores.js'
 import resultBgm from '../../assets/sfx/result.mp3'
 import { UI_CONFIG } from '../../config.js'
 import { getUiAudioEngine } from '../../engine/audioEngine.js'
+import { SCORING_ALGORITHM_VERSION } from '../scoring/SimpleScoreCalculator.js'
 
 // Importing icons for components if needed, but components likely handle their own or use text/emoji for now.
 import { Play, Pause } from 'lucide-react'
@@ -68,6 +69,8 @@ function ResultsPage({ score, techniques, songInfo, onNext }) {
         const payload = {
             song: resolvedSongCode,
             score: Math.round(numericScore),
+            play_mode: 'competitive',
+            version: SCORING_ALGORITHM_VERSION,
             technique_counts: resolvedTechniques || {},
         }
         if (Array.isArray(f0Curve) && f0Curve.length) {

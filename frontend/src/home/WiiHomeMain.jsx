@@ -8,16 +8,15 @@ import Leaderboard from './Leaderboard.jsx'
 import ScoringPage from './ScoringPage.jsx'
 import AuthScreen from './AuthScreen.jsx'
 import Maintenance from './メンテナンス.jsx'
-import MyUta from './マイうた.jsx'
+import MySong from './MySong.jsx'
 import logo from '../assets/logo.png'
-import useUserStore from '../state/userStore.js'
 
 const SCREENS = {
   home: 'home',
   findSongs: 'findSongs',
   myRoom: 'myRoom',
   moreModes: 'moreModes',
-  singWithGamepad: 'singWithGamepad',
+  mySongs: 'mySongs',
   ticket: 'ticket',
   comfirmSongs: 'confirmSongs',
   karaoke: 'karaoke',
@@ -44,9 +43,6 @@ function WiiScreen({ title, subtitle, onBack }) {
 }
 
 function WiiHomeMain({ screen, onNavigate, onOpenKaraoke, karaokeTargetRef, mainRef }) {
-  const user = useUserStore((state) => state.user)
-  const status = useUserStore((state) => state.status)
-  const logout = useUserStore((state) => state.logout)
   if (screen !== SCREENS.home) {
     switch (screen) {
       case SCREENS.findSongs:
@@ -73,10 +69,14 @@ function WiiHomeMain({ screen, onNavigate, onOpenKaraoke, karaokeTargetRef, main
             <ScoringPage onBack={() => onNavigate(SCREENS.home)} />
           </main>
         )
-      case SCREENS.singWithGamepad:
+      case SCREENS.mySongs:
         return (
           <main className="wiiHome__main" ref={mainRef}>
-            <MyUta onBack={() => onNavigate(SCREENS.home)} />
+            <MySong
+              onBack={() => onNavigate(SCREENS.home)}
+              onLogin={() => onNavigate(SCREENS.auth)}
+              onOpenKaraoke={() => onOpenKaraoke && onOpenKaraoke()}
+            />
           </main>
         )
       case SCREENS.ticket:

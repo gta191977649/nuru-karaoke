@@ -11,11 +11,10 @@ import {
   removeDcOffsetInPlace,
   rms,
 
-  smoothDoubleExponential,
+  updateStepAwarePitchSmoother,
   updateHpfState,
 } from '../utils/dspUtils.js'
 
-const SMOOTH_WINDOW_SIZE = 5
 const DEBUG_FRAME_SIZE = 256
 
 function downsampleFrame(frame, targetLength = DEBUG_FRAME_SIZE) {
@@ -39,7 +38,7 @@ class PitchFrameProcessor extends AudioWorkletProcessor {
     this._hpfState = createHpfState(this._hpfCutoffHz, sampleRate)
     this._buffer = new Float32Array(this._windowSize * 4)
     this._bufferLength = 0
-    this._algoId = DEFAULT_CONFIG.pitchAlgoId || 'pitchy'
+    this._algoId = DEFAULT_CONFIG.pitchAlgoId || 'aubio'
     this._detectors = new Map([
       ['pitchy', new PitchyPlugin()],
       ['aubio', new AubioPlugin()],
@@ -49,6 +48,11 @@ class PitchFrameProcessor extends AudioWorkletProcessor {
     this._config = {
       rmsGate: DEFAULT_CONFIG.rmsGate,
       enableDoubleExponentialSmoothing: DEFAULT_CONFIG.enableDoubleExponentialSmoothing,
+      smoothAlpha: DEFAULT_CONFIG.smoothAlpha,
+      smoothBeta: DEFAULT_CONFIG.smoothBeta,
+      stepResetThresholdCents: DEFAULT_CONFIG.stepResetThresholdCents,
+      stepResetClusterCents: DEFAULT_CONFIG.stepResetClusterCents,
+      stepResetConfirmFrames: DEFAULT_CONFIG.stepResetConfirmFrames,
       aubioTolerance: DEFAULT_CONFIG.aubioTolerance,
       clarityGate: DEFAULT_CONFIG.clarityGate,
       yinConfidenceGate: DEFAULT_CONFIG.yinConfidenceGate,
@@ -68,7 +72,12 @@ class PitchFrameProcessor extends AudioWorkletProcessor {
       debugPipeline: Boolean(DEFAULT_CONFIG.debugPipeline),
       debugPipelineStride: Math.max(1, Number(DEFAULT_CONFIG.debugPipelineStride) || 4),
     }
-    this._smoothState = { value: null, window: [] }
+    this._pitchSmoothingState = {
+      smoothState: { value: null, level: null, trend: null },
+      pendingMidis: [],
+      pendingBaselineMidi: null,
+      resetCount: 0,
+    }
     this._stabilityState = {
       window: [],
       lastStableF0: null,
@@ -115,6 +124,15 @@ class PitchFrameProcessor extends AudioWorkletProcessor {
     // Double Exponential Smoothing parameters
     if (Number.isFinite(msg.smoothAlpha)) this._config.smoothAlpha = Number(msg.smoothAlpha)
     if (Number.isFinite(msg.smoothBeta)) this._config.smoothBeta = Number(msg.smoothBeta)
+    if (Number.isFinite(msg.stepResetThresholdCents)) {
+      this._config.stepResetThresholdCents = Number(msg.stepResetThresholdCents)
+    }
+    if (Number.isFinite(msg.stepResetClusterCents)) {
+      this._config.stepResetClusterCents = Number(msg.stepResetClusterCents)
+    }
+    if (Number.isFinite(msg.stepResetConfirmFrames)) {
+      this._config.stepResetConfirmFrames = Math.max(2, Math.round(Number(msg.stepResetConfirmFrames)))
+    }
 
     const clarityGate = Number(msg.clarityGate)
     if (Number.isFinite(clarityGate)) this._config.clarityGate = clarityGate
@@ -231,13 +249,21 @@ class PitchFrameProcessor extends AudioWorkletProcessor {
       this._bufferLength = Math.max(0, remaining)
 
       if (!gateOpen) {
+        this._pitchSmoothingState.pendingMidis = []
+        this._pitchSmoothingState.pendingBaselineMidi = null
         const result = {
           tAcSec: currentTime,
           f0Hz: null,
+          rawF0Hz: null,
           midi: null,
+          rawMidi: null,
           confidence: 0,
+          rawConfidence: 0,
           rms: frameRms,
           algoId: this._algoId,
+          smoothingReset: false,
+          smoothingResetCount: Number(this._pitchSmoothingState.resetCount) || 0,
+          smoothingResetCents: null,
         }
         this._postPitch(result)
         this._postDebug(debugStages, {
@@ -252,13 +278,21 @@ class PitchFrameProcessor extends AudioWorkletProcessor {
 
       const raw = this._runDetector(frame, frameRms)
       if (!raw) {
+        this._pitchSmoothingState.pendingMidis = []
+        this._pitchSmoothingState.pendingBaselineMidi = null
         const result = {
           tAcSec: currentTime,
           f0Hz: null,
+          rawF0Hz: null,
           midi: null,
+          rawMidi: null,
           confidence: 0,
+          rawConfidence: 0,
           rms: frameRms,
           algoId: this._algoId,
+          smoothingReset: false,
+          smoothingResetCount: Number(this._pitchSmoothingState.resetCount) || 0,
+          smoothingResetCents: null,
         }
         this._postPitch(result)
         this._postDebug(debugStages, {
@@ -286,7 +320,12 @@ class PitchFrameProcessor extends AudioWorkletProcessor {
   }
 
   _resetTracking() {
-    this._smoothState = { value: null, level: null, trend: null, window: [] }
+    this._pitchSmoothingState = {
+      smoothState: { value: null, level: null, trend: null },
+      pendingMidis: [],
+      pendingBaselineMidi: null,
+      resetCount: 0,
+    }
     this._stabilityState = { window: [], lastStableF0: null, lastStableMidi: null, holdLeft: 0 }
   }
 
@@ -364,6 +403,8 @@ class PitchFrameProcessor extends AudioWorkletProcessor {
         (!Number.isFinite(f0MaxHz) || f0Hz <= f0MaxHz)
       f0Hz = isValidRange ? f0Hz : null
     }
+    const validatedRawF0Hz = Number.isFinite(f0Hz) ? f0Hz : null
+    const rawMidi = Number.isFinite(validatedRawF0Hz) ? hzToMidi(validatedRawF0Hz) : null
 
     // 1. Median Smoothing (De-spiking) + Stability
     if (this._config.enableTemporalSmooth) {
@@ -426,17 +467,33 @@ class PitchFrameProcessor extends AudioWorkletProcessor {
       }
     }
 
-    // 2. Double Exponential Smoothing (Trend Smoothing)
-    // NOTE: We apply this INDEPENDENTLY of the legacy 'enableTemporalSmooth' flag.
-    // We also perform this in the MIDI (Log) domain for perceptual consistency.
+    let smoothingReset = false
+    let smoothingResetCents = null
+    // Apply Holt smoothing independently of the legacy median filter. Confirmed
+    // pitch steps reset its state after two coherent raw detector frames.
     if (this._config.enableDoubleExponentialSmoothing) {
-      // Use Double Exponential Smoothing (Holt's Linear Trend)
-      // Default params if not set: alpha=0.5, beta=0.1
       const alpha = Number.isFinite(this._config.smoothAlpha) ? this._config.smoothAlpha : 0.5
       const beta = Number.isFinite(this._config.smoothBeta) ? this._config.smoothBeta : 0.1
-
-      this._smoothState = smoothDoubleExponential(this._smoothState, f0Hz, alpha, beta)
-      f0Hz = this._smoothState.value
+      this._pitchSmoothingState = updateStepAwarePitchSmoother(
+        this._pitchSmoothingState,
+        f0Hz,
+        validatedRawF0Hz,
+        {
+          alpha,
+          beta,
+          thresholdCents: this._config.stepResetThresholdCents,
+          clusterCents: this._config.stepResetClusterCents,
+          confirmFrames: this._config.stepResetConfirmFrames,
+        },
+      )
+      f0Hz = this._pitchSmoothingState.value
+      smoothingReset = this._pitchSmoothingState.reset === true
+      smoothingResetCents = Number.isFinite(this._pitchSmoothingState.resetCents)
+        ? this._pitchSmoothingState.resetCents
+        : null
+    } else {
+      this._pitchSmoothingState.pendingMidis = []
+      this._pitchSmoothingState.pendingBaselineMidi = null
     }
 
     const midi = Number.isFinite(f0Hz) ? hzToMidi(f0Hz) : null
@@ -446,10 +503,14 @@ class PitchFrameProcessor extends AudioWorkletProcessor {
       f0Hz: f0Hz ?? null,
       rawF0Hz: Number.isFinite(rawF0Hz) ? rawF0Hz : null,
       midi: midi ?? null,
+      rawMidi: Number.isFinite(rawMidi) ? rawMidi : null,
       confidence: usedHold || !Number.isFinite(f0Hz) ? 0 : Number.isFinite(confidence) ? confidence : 0,
       rawConfidence: Number.isFinite(rawConfidence) ? rawConfidence : 0,
       rms: frameRms,
       algoId: this._algoId,
+      smoothingReset,
+      smoothingResetCount: Number(this._pitchSmoothingState.resetCount) || 0,
+      smoothingResetCents,
     }
   }
 }

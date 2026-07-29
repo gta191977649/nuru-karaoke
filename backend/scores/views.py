@@ -30,6 +30,7 @@ class ScoreSubmitAPIView(APIView):
             score=incoming['score'],
             accuracy=incoming.get('accuracy'),
             max_combo=incoming.get('max_combo'),
+            version=incoming.get('version', ''),
             f0_curve=serializer.validated_data.get('f0_curve'),
             technique_counts=serializer.validated_data.get('technique_counts'),
         )
@@ -41,11 +42,16 @@ class LeaderboardAPIView(APIView):
 
     def get(self, request):
         song_code = request.query_params.get('song')
+        version = request.query_params.get('version')
         if not song_code:
             return Response({'detail': 'song is required.'}, status=400)
 
+        filters = {'song__code': song_code}
+        if version is not None:
+            filters['version'] = version
+
         qs = (
-            Score.objects.filter(song__code=song_code)
+            Score.objects.filter(**filters)
             .select_related('user')
             .order_by('-score', '-accuracy', '-max_combo', '-created_at')
         )
@@ -63,6 +69,7 @@ class LeaderboardAPIView(APIView):
 
         return Response({
             'song': song_code,
+            'version': version,
             'limit': 100,
             'results': data,
         })

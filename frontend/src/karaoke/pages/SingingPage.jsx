@@ -1,5 +1,5 @@
 import '../Karaoke.css'
-import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { useKaraokeStore } from '../../state/karaokeStore.js'
 import { synthEngine } from '../../engine/SynthEngine.js'
 import { parseLyricSegments } from '../../engine/lrc.js'
@@ -157,8 +157,10 @@ function SingingPage({ onFinish }) {
     const lyricsMeasureRightRef = useRef(null)
     const overflowLayoutRef = useRef(false)
     const overflowLockIndexRef = useRef(-1)
+    const [scoreUpdateKey, setScoreUpdateKey] = useState(0)
     const micRmsGate = 0.01
     const liveScore = usePlayerScoreStore((store) => store.liveScore)
+    const liveScoreReady = usePlayerScoreStore((store) => store.liveScoreReady)
     const setLiveScore = usePlayerScoreStore((store) => store.setLiveScore)
     const setTechniqueCounts = usePlayerScoreStore((store) => store.setTechniqueCounts)
     const setResults = usePlayerScoreStore((store) => store.setResults)
@@ -172,6 +174,16 @@ function SingingPage({ onFinish }) {
         midiUrl: state.midiUrl,
         queueIndex: state.queueIndex,
     })
+    const handleLiveScoreChange = useCallback((score, meta) => {
+        setLiveScore(score, meta?.ready === true)
+        if (
+            meta?.ready === true &&
+            meta?.reset !== true &&
+            Number(meta?.finalizedNotes) > 0
+        ) {
+            setScoreUpdateKey((key) => key + 1)
+        }
+    }, [setLiveScore])
     const { showSongInfo, songInfo } = useKaraokeSongIntro({
         midiUrl: state.midiUrl,
         midiName: state.midiName,
@@ -210,7 +222,7 @@ function SingingPage({ onFinish }) {
     const { techniqueEventsRef, resetCounts } = useSingingTechnique(pitchEngine, currentTimeRef, micActive)
 
     // Scoring
-    const { getScore } = useKaraokeScoring({
+    const { finalizeScore, scoringVisualRef } = useKaraokeScoring({
         pitchEngine,
         reference,
         currentTimeRef,
@@ -218,8 +230,7 @@ function SingingPage({ onFinish }) {
         rmsGate: micRmsGate,
         debug: false,
         debugIntervalMs: 500,
-        onScoreChange: setLiveScore,
-        historyRef: pitchHistoryRef,
+        onScoreChange: handleLiveScoreChange,
         resetKey: `${state.midiName || ''}-${state.queueIndex ?? -1}`,
     })
 
@@ -335,8 +346,9 @@ function SingingPage({ onFinish }) {
 
     useEffect(() => {
         resetPlayerScore()
+        setLiveScore(0, true)
         resetCounts()
-    }, [resetPlayerScore, resetCounts, state.midiName, state.queueIndex])
+    }, [resetPlayerScore, resetCounts, setLiveScore, state.midiName, state.queueIndex])
 
     useEffect(() => {
         if (songInfo) setSongInfo(songInfo)
@@ -376,14 +388,12 @@ function SingingPage({ onFinish }) {
         if (!state.duration || state.duration < 10) return // Skip very short/invalid duration
         if (hasFinishedRef.current) return
 
-        // Finish slightly before actual end to capture state before reset? 
-        // Or just at end. duration is usually exact.
-        // If autoAdvance is disabled, it will just stop or pause at end.
-        // We check if currentTime is >= duration or near it.
-        if (state.currentTime >= state.duration - 0.2 || (state.status === 'Finished' /* hypothetical status */)) {
+        // Wait until playback has actually reached the end, then explicitly flush
+        // the final active note and delayed note evaluations before reading score.
+        if (state.currentTime >= state.duration - 0.03 || state.status === 'Finished') {
             hasFinishedRef.current = true
             if (onFinish) {
-                const finalScore = getScore()
+                const finalScore = finalizeScore(state.duration)
                 const finalTechniques = { ...techniqueCountsRef.current }
                 const history = Array.isArray(fullHistoryRef.current) ? fullHistoryRef.current : []
                 const f0Curve = buildF0CurveByBeat({
@@ -400,18 +410,25 @@ function SingingPage({ onFinish }) {
         state.currentTime,
         state.duration,
         onFinish,
-        getScore,
+        finalizeScore,
         songInfo,
         state.status,
         setResults,
         setF0Curve,
         reference,
+        fullHistoryRef,
         micRmsGate,
     ])
 
     return (
         <div className={`karaokePage${showSongInfo ? ' karaokePage--intro' : ''}`}>
-            <RealtimeScoreCounter score={liveScore} />
+            <RealtimeScoreCounter
+                key={`${state.midiName || ''}-${state.queueIndex ?? -1}`}
+                score={liveScore}
+                ready={liveScoreReady}
+                label="現在の得点"
+                updateKey={scoreUpdateKey}
+            />
             <KeyChangeAlert />
             <div className="karaokeSongIntro">
                 <div className="karaokeSongIntro__content">
@@ -440,6 +457,7 @@ function SingingPage({ onFinish }) {
                                 reference={reference}
                                 historyRef={pitchHistoryRef}
                                 pitchFrameHistoryRef={framePitchHistoryRef}
+                                scoringVisualRef={scoringVisualRef}
                                 lastPitchRef={lastPitchRef}
                                 currentTimeRef={currentTimeRef}
                                 transpositionRef={transpositionRef}

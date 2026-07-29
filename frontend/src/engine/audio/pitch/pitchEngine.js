@@ -14,7 +14,7 @@ class PitchEngine {
     this._detectors = registry.list().map((plugin) => ({ id: plugin.id, name: plugin.name }))
 
     this._config = { ...DEFAULT_CONFIG }
-    this._algoId = DEFAULT_CONFIG.pitchAlgoId || 'pitchy'
+    this._algoId = DEFAULT_CONFIG.pitchAlgoId || 'aubio'
 
     this._stream = null
     this._source = null
@@ -185,7 +185,6 @@ class PitchEngine {
 
       this.configureDetector(this._config)
       this.setDetector(this._algoId)
-      this.setDetector(this._algoId)
       if (this._debugWantsConnect) {
         console.log('[PitchEngine] startMic connecting debug chain')
         this._connectDebugChain()
@@ -240,6 +239,12 @@ class PitchEngine {
       algoId: this._algoId,
       windowSize: this._config.windowSize,
       hopSize: this._config.hopSize,
+      enableDoubleExponentialSmoothing: this._config.enableDoubleExponentialSmoothing,
+      smoothAlpha: this._config.smoothAlpha,
+      smoothBeta: this._config.smoothBeta,
+      stepResetThresholdCents: this._config.stepResetThresholdCents,
+      stepResetClusterCents: this._config.stepResetClusterCents,
+      stepResetConfirmFrames: this._config.stepResetConfirmFrames,
       hpfCutoffHz: this._config.hpfCutoffHz,
       rmsGate: this._config.rmsGate,
       smoothing: this._config.smoothing,
