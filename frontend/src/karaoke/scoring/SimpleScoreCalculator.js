@@ -116,6 +116,23 @@ export function getLiveHitDisplayMidi(userMidi, targetMidi, config = {}) {
   return target + displayOffset
 }
 
+export function getLiveF0DisplayMidi(userMidi, targetMidi) {
+  const normalized = normalizePitchClass(userMidi, targetMidi)
+  if (!Number.isFinite(targetMidi) || !Number.isFinite(normalized.normalizedMidi)) {
+    return null
+  }
+
+  const target = Number(targetMidi)
+  const relativeOffset =
+    (normalized.normalizedMidi - target) * LIVE_HIT_MARKER_DETUNE_SCALE
+  const displayOffset = clamp(
+    relativeOffset,
+    -LIVE_HIT_MARKER_MAX_OFFSET_SEMITONES,
+    LIVE_HIT_MARKER_MAX_OFFSET_SEMITONES,
+  )
+  return target + displayOffset
+}
+
 /**
  * Beat-weighted scoring compatible with the existing karaoke UI contract.
  * Internally it follows allkaraoke's rounded pitch-class matching and joins
