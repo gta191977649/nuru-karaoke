@@ -6,8 +6,8 @@ import useAlertStore from '../state/alertStore.js'
 import WiiDialog from '../components/WiiDialog.jsx'
 import { enqueueSongAndPlay } from '../engine/playerController.js'
 import ConnectionAlert from '../components/ConnectionAlert.jsx'
+import useFavoriteStore from '../state/favoriteStore.js'
 import useUserStore from '../state/userStore.js'
-import { addFavorite } from '../services/favorites.js'
 import NationalRanking from './NationalRanking.jsx'
 
 function InfoRow({ icon, label, value }) {
@@ -34,6 +34,8 @@ export default function ComfirmSong({ onBack, onConfirm }) {
   const showAlert = useAlertStore((state) => state.showAlert)
   const authStatus = useUserStore((state) => state.status)
   const accessToken = useUserStore((state) => state.accessToken)
+  const favoriteItems = useFavoriteStore((state) => state.items)
+  const addFavorite = useFavoriteStore((state) => state.add)
   const [previewText, setPreviewText] = useState('—')
   const [showLyrics, setShowLyrics] = useState(false)
   const [lyricsText, setLyricsText] = useState('')
@@ -41,6 +43,7 @@ export default function ComfirmSong({ onBack, onConfirm }) {
   const [connectionStatus, setConnectionStatus] = useState('loading')
   const [connectionMessage, setConnectionMessage] = useState('')
   const [view, setView] = useState('info') // 'info' or 'ranking'
+  const isFavorite = Boolean(song?.id) && favoriteItems.some((item) => item.song_code === song.id)
 
   const buildNetworkMessage = (error) => String(error?.message || 'Unknown error')
 
@@ -182,14 +185,15 @@ export default function ComfirmSong({ onBack, onConfirm }) {
           <Col xs={12} lg={3}>
             <Stack gap={2} className="h-100">
               <Button
-                variant="info"
+                variant={isFavorite ? 'secondary' : 'info'}
                 className="fw-semibold"
                 type="button"
-                disabled={authStatus !== 'authenticated'}
+                disabled={authStatus !== 'authenticated' || isFavorite}
                 onClick={async () => {
                   if (!song || authStatus !== 'authenticated') return
                   try {
-                    await addFavorite(song.id, accessToken)
+                    const wasAdded = await addFavorite(song, accessToken)
+                    if (!wasAdded) return
                     showAlert({
                       message: `${song.title} をマイうたに追加しました`,
                       variant: 'success',
@@ -204,9 +208,15 @@ export default function ComfirmSong({ onBack, onConfirm }) {
                   }
                 }}
               >
-                マイうたに
-                <br />
-                登録
+                {isFavorite ? (
+                  <>登録済み</>
+                ) : (
+                  <>
+                    マイうたに
+                    <br />
+                    登録
+                  </>
+                )}
               </Button>
               <Button
                 variant="info"

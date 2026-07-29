@@ -26,8 +26,8 @@
     height: 100%;
     position: relative;
     transform-style: preserve-3d;
-    /* animation: scoreCubeSpin 24s infinite cubic-bezier(0.65, 0, 0.35, 1); */
     transition: transform 1s cubic-bezier(0.65, 0, 0.35, 1);
+    will-change: transform;
 }
 
 .score-cube-face {
@@ -149,4 +149,16 @@
     text-align: center;
     margin-top: 5px;
     padding-top: 2px;
+}
+
+.score-cube-pending {
+    display: block;
+    font-size: 1.15rem;
+    letter-spacing: 0.08em;
+    white-space: nowrap;
+}
+
+.score-cube-calculating {
+    font-size: 1.5rem;
+    text-align: center;
 }

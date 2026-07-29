@@ -24,7 +24,7 @@ Admin: http://localhost:8000/admin
 - GET `/api/songs`
 - GET `/api/songs/:code`
 - POST `/api/scores` (auth required)
-- GET `/api/leaderboard?song=:code`
+- GET `/api/leaderboard?song=:code&version=pitch-v6` (omit `version` for the legacy mixed view)
 
 ## Notes
 - SQLite works for small traffic. For higher concurrency, switch to Postgres.

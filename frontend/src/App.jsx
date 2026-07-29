@@ -10,6 +10,7 @@ import WiiAlert from './components/WiiAlert.jsx'
 import KeyChangeAlert from './components/KeyChangeAlert.jsx'
 import useKeyChangeAlertStore from './state/keyChangeAlertStore.js'
 import useAlertStore from './state/alertStore.js'
+import useFavoriteStore from './state/favoriteStore.js'
 import useUserStore from './state/userStore.js'
 import { UI_CONFIG } from './config.js'
 import { getUiAudioEngine } from './engine/audioEngine.js'
@@ -46,8 +47,11 @@ function App({ onNavigate }) {
   const showAlert = useAlertStore((state) => state.showAlert)
   const refreshUser = useUserStore((state) => state.refresh)
   const authStatus = useUserStore((state) => state.status)
+  const accessToken = useUserStore((state) => state.accessToken)
   const isGuest = useUserStore((state) => state.isGuest)
   const user = useUserStore((state) => state.user)
+  const loadFavorites = useFavoriteStore((state) => state.load)
+  const resetFavorites = useFavoriteStore((state) => state.reset)
 
   const isKaraoke = useMemo(
     () => screen === SCREENS.karaoke && karaokeActive && !karaokeMini,
@@ -144,6 +148,14 @@ function App({ onNavigate }) {
     refreshUser()
   }, [refreshUser])
 
+  useEffect(() => {
+    if (authStatus === 'authenticated' && accessToken) {
+      loadFavorites(accessToken).catch(() => {})
+      return
+    }
+    resetFavorites()
+  }, [accessToken, authStatus, loadFavorites, resetFavorites])
+
   const runTransition = useCallback(async (action) => {
     if (transitionLockRef.current) return
     transitionLockRef.current = true
@@ -197,13 +209,13 @@ function App({ onNavigate }) {
                 if (key === SCREENS.home) setScreen(SCREENS.home)
                 if (key === SCREENS.moreModes) setScreen(SCREENS.moreModes)
                 if (key === SCREENS.ticket) setScreen(SCREENS.ticket)
-                if (key === SCREENS.singWithGamepad) setScreen(SCREENS.singWithGamepad)
+                if (key === SCREENS.mySongs) setScreen(SCREENS.mySongs)
               }}
               id="joy-top-tabs"
             >
               <Tab eventKey={SCREENS.home} title="曲を選ぶ" />
               <Tab eventKey={SCREENS.moreModes} title="採点" />
-              <Tab eventKey={SCREENS.singWithGamepad} title="マイうた" />
+              <Tab eventKey={SCREENS.mySongs} title="マイうた" />
               <Tab eventKey={SCREENS.ticket} title="メンテナンス" />
 
             </Tabs>

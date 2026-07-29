@@ -1,82 +1,124 @@
-import React, { useState, useEffect, useRef } from 'react'
+import React, { useCallback, useEffect, useRef, useState } from 'react'
 import './RealtimeScoreCounter.css'
 
-export default function RealtimeScoreCounter({ score = 0, label = '総合得点' }) {
-    // State for the visualized score (updates only when showing "Score" face)
-    const [displayScore, setDisplayScore] = useState(score)
-    // Target rotation angle (decrements by 90 deg)
-    const [rotation, setRotation] = useState(0)
+const CUBE_ROTATION_MS = 1000
+const CALCULATION_HOLD_MS = 2000
+const SCORE_DISPLAY_HOLD_MS = 3000
 
-    const scoreRef = useRef(score)
-    const stateRef = useRef({
-        phase: 'IDLE', // 'IDLE' (Score face) or 'CALCULATING' (Computing face)
-        lastSwitchTime: Date.now(),
-        displayScore: score
-    })
+export default function RealtimeScoreCounter({
+    score = 0,
+    ready = false,
+    label = '現在の得点',
+    updateKey = 0,
+}) {
+    const [displayScore, setDisplayScore] = useState(0)
+    const [rotationDeg, setRotationDeg] = useState(0)
+    const displayRef = useRef(0)
+    const rotationRef = useRef(0)
+    const pendingScoreRef = useRef(null)
+    const targetScoreRef = useRef(null)
+    const collectingRef = useRef(false)
+    const animatingRef = useRef(false)
+    const timersRef = useRef([])
+    const lastUpdateKeyRef = useRef(updateKey)
 
-    // Keep score ref updated
-    useEffect(() => {
-        scoreRef.current = score
-    }, [score])
-
-    useEffect(() => {
-        const interval = setInterval(() => {
-            const now = Date.now()
-            const { phase, lastSwitchTime, displayScore: currentDisplay } = stateRef.current
-            const latestScore = scoreRef.current
-            const timeInState = now - lastSwitchTime
-
-            // Tolerance for float comparison
-            const hasChange = Math.abs(latestScore - currentDisplay) > 0.1
-
-            if (phase === 'IDLE') {
-                // Showing Score Face (0, -180, -360...)
-                // Rule: Must stay at least 5 seconds.
-                if (timeInState >= 5000) {
-                    if (hasChange) {
-                        // Switch to Calculating
-                        stateRef.current.phase = 'CALCULATING'
-                        stateRef.current.lastSwitchTime = now
-                        setRotation(r => r - 90)
-                    }
-                }
-            } else if (phase === 'CALCULATING') {
-                // Showing Calculating Face (-90, -270...)
-                // Rule: Must stay 5 seconds, then return to Score.
-                if (timeInState >= 5000) {
-                    // Update display score to latest
-                    stateRef.current.displayScore = latestScore
-                    setDisplayScore(latestScore)
-
-                    // Switch back to Score
-                    stateRef.current.phase = 'IDLE'
-                    stateRef.current.lastSwitchTime = now
-                    setRotation(r => r - 90)
-                }
-            }
-        }, 200) // Check every 200ms
-
-        return () => clearInterval(interval)
+    const clearTimers = useCallback(() => {
+        timersRef.current.forEach((timer) => window.clearTimeout(timer))
+        timersRef.current = []
     }, [])
 
-    const formattedScore = Math.round(displayScore)
+    const runPendingUpdate = useCallback(function runPendingUpdate() {
+        if (animatingRef.current || pendingScoreRef.current == null) return
+
+        const nextScore = pendingScoreRef.current
+        pendingScoreRef.current = null
+        targetScoreRef.current = nextScore
+        animatingRef.current = true
+        collectingRef.current = true
+
+        // Show a calculation face first, retaining the old visible score.
+        rotationRef.current -= 90
+        setRotationDeg(rotationRef.current)
+
+        const revealTimer = window.setTimeout(() => {
+            // Keep collecting score events while the calculation face is
+            // visible, then reveal the newest accumulated result in one step.
+            const calculatedScore = Math.max(
+                targetScoreRef.current ?? 0,
+                Number.isFinite(pendingScoreRef.current) ? pendingScoreRef.current : 0,
+            )
+            pendingScoreRef.current = null
+            targetScoreRef.current = calculatedScore
+            collectingRef.current = false
+
+            // Both score faces are hidden at this point. Update the value, then
+            // rotate the freshly calculated result into view.
+            displayRef.current = calculatedScore
+            setDisplayScore(calculatedScore)
+            rotationRef.current -= 90
+            setRotationDeg(rotationRef.current)
+
+            const completeTimer = window.setTimeout(() => {
+                // Keep the calculated score readable for at least three
+                // seconds. Updates received during this window are coalesced
+                // in pendingScoreRef and shown in the next rotation.
+                const displayHoldTimer = window.setTimeout(() => {
+                    targetScoreRef.current = null
+                    animatingRef.current = false
+                    runPendingUpdate()
+                }, SCORE_DISPLAY_HOLD_MS)
+                timersRef.current.push(displayHoldTimer)
+            }, CUBE_ROTATION_MS)
+            timersRef.current.push(completeTimer)
+        }, CUBE_ROTATION_MS + CALCULATION_HOLD_MS)
+        timersRef.current.push(revealTimer)
+    }, [])
+
+    useEffect(() => {
+        if (!ready || updateKey === lastUpdateKeyRef.current) return
+        lastUpdateKeyRef.current = updateKey
+
+        const requestedScore = Math.max(0, Math.min(100, Number(score) || 0))
+        const scheduledScore = Number.isFinite(targetScoreRef.current)
+            ? targetScoreRef.current
+            : displayRef.current
+        const baselineScore = Math.max(displayRef.current, scheduledScore)
+        if (requestedScore <= baselineScore + 0.001) return
+
+        pendingScoreRef.current = Math.max(
+            Number.isFinite(pendingScoreRef.current) ? pendingScoreRef.current : baselineScore,
+            requestedScore,
+        )
+        // While collecting, the pending value is consumed by the current
+        // calculation window instead of scheduling an extra rotation.
+        if (collectingRef.current) return
+        runPendingUpdate()
+    }, [ready, runPendingUpdate, score, updateKey])
+
+    useEffect(() => {
+        return () => clearTimers()
+    }, [clearTimers])
+
+    const formattedScore = Math.round(ready ? displayScore : 0)
 
     return (
         <div className="score-cube-scene">
             <div
                 className="score-cube"
-                style={{ transform: `rotateY(${rotation}deg)` }}
+                style={{ transform: `rotateY(${rotationDeg}deg)` }}
             >
                 {/* Front (0 deg) - Score */}
                 <div className="score-cube-face front">
                     <div className="score-cube-label">{label}</div>
-                    <div className="score-cube-value">{formattedScore}</div>
+                    <div className="score-cube-value">
+                        {ready ? formattedScore : <span className="score-cube-pending">集計中</span>}
+                    </div>
                     <div className="score-cube-sub">100</div>
                 </div>
 
                 {/* Right (-90 deg) - Calculating */}
                 <div className="score-cube-face right">
-                    <div className="score-cube-value" style={{ fontSize: '1.5rem', textAlign: 'center' }}>集計中</div>
+                    <div className="score-cube-value score-cube-calculating">集計中</div>
                 </div>
 
                 {/* Back (-180 deg) - Score */}
@@ -88,10 +130,9 @@ export default function RealtimeScoreCounter({ score = 0, label = '総合得点'
 
                 {/* Left (-270 deg) - Calculating */}
                 <div className="score-cube-face left">
-                    <div className="score-cube-value" style={{ fontSize: '1.5rem', textAlign: 'center' }}>集計中</div>
+                    <div className="score-cube-value score-cube-calculating">集計中</div>
                 </div>
 
-                {/* Top/Bottom Caps */}
                 <div className="score-cube-face top"></div>
                 <div className="score-cube-face bottom"></div>
             </div>

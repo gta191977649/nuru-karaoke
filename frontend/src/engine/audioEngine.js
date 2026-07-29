@@ -1,22 +1,25 @@
 const DEFAULT_CONFIG = {
   sampleRate: 44100,
-  windowSize: 1024,
+  windowSize: 2048,
   hopSize: 256,
   rmsGate: 0.01,
   clarityGate: 0.8,
-  enableDoubleExponentialSmoothing: true, // Double Exponential Smoothing
+  enableDoubleExponentialSmoothing: false,
   smoothAlpha: 0.5, // Level smoothing factor
   smoothBeta: 0.1, // Trend smoothing factor
+  stepResetThresholdCents: 80,
+  stepResetClusterCents: 45,
+  stepResetConfirmFrames: 2,
   f0MinHz: 80, //  Detection Range for vocal low bound (Hz)
   f0MaxHz: 1000, // Detection Range for vocal high bound (Hz)
-  pitchToleranceSemis: 1.5, // Semitone tolerance for melody correctness
+  pitchToleranceSemis: 1.5, // Legacy setting; pitch-v6 visual/scoring paths use shared stable cents segments
   f0TimeToleranceSec: 0.12, // F0 time tolerance (seconds) for visual scoring smoothing
-  // allkaraoke-like stability knobs
-  breakToleranceMs: 160, // Short unvoiced gap tolerance (~100ms)
+  // Short gaps are bridged by the scorer, not by the detector.
+  breakToleranceMs: 0,
   medianWindowSize: 3, // 中值滤波窗口大小（抗尖刺）
   maxJumpSemitones: 6, // 半音跳变约束（MIDI domain） 人声物理约束。
-  holdFrames: 0, // Will be derived from breakToleranceMs unless overridden
-  enablePitchSnap: true, // Snap tiny jitter to last stable pitch
+  holdFrames: 0, // No detector-side pitch hold during gameplay
+  enablePitchSnap: false,
   snapToleranceSemis: 0.35, // Snap tolerance in semitones
   hpfCutoffHz: 80, //High-pass filter cutoff for mic conditioning
   enableDcRemoval: true,
@@ -31,7 +34,7 @@ const DEFAULT_CONFIG = {
   },
   debugPipeline: false,
   debugPipelineStride: 4,
-  pitchAlgoId: 'pitchy',
+  pitchAlgoId: 'aubio',
   aubioTolerance: 0.5,
   yinConfidenceGate: 0.2,
 }

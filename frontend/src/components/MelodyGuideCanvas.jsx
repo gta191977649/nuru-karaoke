@@ -7,6 +7,21 @@ import { DEFAULT_PARTICLE_CONFIG, createParticleSystem, createComboSystem } from
 import Spectrogram from './Spectrogram.jsx'
 import WaveformPixi from './WaveformPixi.jsx'
 import { getSharedDebugAnalyser } from '../engine/audio/pitch/sharedPitchEngine.js'
+import {
+  getConfirmedSegmentFillEnd,
+  getLivePitchTrailSegments,
+  getStableHitTargetMidi,
+  hasStableTechniqueLanding,
+  getTechniqueResolutionTime,
+  mergeConfirmedSpans,
+  smoothLiveMarkerPosition,
+  TECHNIQUE_LANDING_WINDOW_SEC,
+} from '../karaoke/scoring/scoringVisualUtils.js'
+import {
+  getLiveHitDisplayMidi,
+  getNoteFragmentJoinToleranceSec,
+  normalizePitchClass,
+} from '../karaoke/scoring/SimpleScoreCalculator.js'
 
 const TECHNIQUE_CONFIG = {
   glissup: {
@@ -65,10 +80,8 @@ const COLORS = {
   melodyOutFill: 0x4a4a4a,
   missFill: 0x0b0b0b,
   missStroke: 0xffffff,
-  userMiss: 0x83401e,
   userGlowFill: 0xffd14a,
   userGlowStroke: 0xfff2b8,
-  userMissStroke: 0xffffff,
   playhead: 0xffffff,
   technique: 0xffffff, // Default tint
 }
@@ -81,8 +94,6 @@ const ALPHAS = {
   melodyStroke: 1,
   missFill: 0.85,
   missStroke: 0.9,
-  userMiss: 0.5,
-  userMissStroke: 0.1,
   userGlowFill: 0.95,
   userGlowStroke: 1,
   playheadOuter: 0.15,
@@ -112,16 +123,12 @@ const USER_GLOW_FILL_SPEED = 1.5 // speed for correct note fill animation
 const JITTER_WINDOW_SEC = 0.3 // 200-500 ms suggested; default 300 ms
 const JITTER_PLOT_MAX_CENTS = 50
 const NOTE_MERGE_CONFIG = {
-  // Semitone tolerance for considering the user's pitch "in range" of the target.
-  pitchToleranceSemis: Number(DEFAULT_CONFIG.pitchToleranceSemis) || 1.5,
   // Minimum fraction of target note duration the user must cover to treat it as full-length.
   coverageRatio: 0.7,
   // Silence gap (seconds) to consider a note ended when RMS drops below the gate.
   gapThresholdSec: 0.1,
 }
 
-// Visual in-tune tolerance for trail + particles
-const VISUAL_TOLERANCE_SEMIS = 1.0
 // Beat stability threshold in semitones (std dev of userMidi samples within the beat).
 // Measured as standard deviation in MIDI semitones; lower = stricter, higher = looser.
 // Typical range: 0.2 (very strict) to 0.8 (very loose). Not normalized to 0–1.
@@ -183,13 +190,6 @@ function mod12(value) {
   return m < 0 ? m + 12 : m
 }
 
-function mod12Distance(a, b) {
-  const x = Number(a)
-  const y = Number(b)
-  if (!Number.isFinite(x) || !Number.isFinite(y)) return null
-  return ((x % 12) - (y % 12) + 18) % 12 - 6
-}
-
 function medianOf(values) {
   if (!values?.length) return null
   const sorted = values.slice().sort((a, b) => a - b)
@@ -235,20 +235,6 @@ function jitterCentsToWaveform(value, maxCents = JITTER_PLOT_MAX_CENTS) {
   return Math.max(-1, Math.min(1, (v / max) * 2 - 1))
 }
 
-function mapUserMidiToTargetOctave(userMidi, targetMidi) {
-  const u = Number(userMidi)
-  const t = Number(targetMidi)
-  if (!Number.isFinite(u) || !Number.isFinite(t)) return null
-  const userKey = Math.round(u)
-  const targetKey = Math.round(t)
-  const userPc = mod12(userKey)
-  const targetPc = mod12(targetKey)
-  if (userPc === targetPc) return t
-  const detune = u - userKey
-  const base = t - targetPc
-  return base + userPc + detune
-}
-
 function getTargetMidiAtTime(reference, t, opts = {}) {
   if (!reference) return null
   const ticksPerBeat = Number(reference?.timeDivision) || 480
@@ -269,8 +255,8 @@ function getTargetMidiAtTime(reference, t, opts = {}) {
   }
 
   if (opts.gateUserByTarget) {
-    const offset = Math.max(0, Number(opts.userOffsetSec) || 0)
-    return getTarget(t - offset) ?? getTarget(t + offset)
+    const offset = Number(opts.userOffsetSec) || 0
+    return getTarget(t - offset)
   }
   return getTarget(t)
 }
@@ -279,6 +265,7 @@ function MelodyGuideCanvas({
   reference,
   historyRef,
   pitchFrameHistoryRef = null,
+  scoringVisualRef = null,
   lastPitchRef,
   currentTimeRef,
   transpositionRef,
@@ -304,7 +291,7 @@ function MelodyGuideCanvas({
   style,
   onTechniqueCountsChange,
   showSolfeges = true,
-  debug = true,
+  debug = false,
   debugAnalyser = null,
   debugF0Hz = null,
   debugRawF0Hz = null,
@@ -359,11 +346,13 @@ function MelodyGuideCanvas({
     techniqueSprites: [], // For tracking active sprites
     techniqueTextureCache: new Map(),
     solfegeLabels: null,
-    solfegeLabelPool: []
+    solfegeLabelPool: [],
+    confirmedNoteIds: new Set(),
   })
   const stateRef = useRef({
     reference,
     historyRef,
+    scoringVisualRef,
     lastPitchRef,
     currentTimeRef,
     transpositionRef,
@@ -384,6 +373,10 @@ function MelodyGuideCanvas({
     debug
   })
 
+  useEffect(() => {
+    pixiRef.current.confirmedNoteIds = new Set()
+  }, [reference])
+
   const triggerComboHit = (ref, color) => {
     if (!ref.current) return
     ref.current.animate([
@@ -400,6 +393,7 @@ function MelodyGuideCanvas({
     stateRef.current = {
       reference,
       historyRef,
+      scoringVisualRef,
       lastPitchRef,
       currentTimeRef,
       transpositionRef,
@@ -423,6 +417,7 @@ function MelodyGuideCanvas({
   }, [
     reference,
     historyRef,
+    scoringVisualRef,
     lastPitchRef,
     currentTimeRef,
     transpositionRef,
@@ -497,9 +492,8 @@ function MelodyGuideCanvas({
       const targetMidi = Number.isFinite(targetNote?.midi)
         ? Number(targetNote.midi) + transposition
         : null
-      const distance = (Number.isFinite(userMidi) && Number.isFinite(targetMidi))
-        ? mod12Distance(Math.round(userMidi), Math.round(targetMidi))
-        : null
+      const distance = normalizePitchClass(userMidi, targetMidi).centsError
+      const distanceSemis = Number.isFinite(distance) ? distance / 100 : null
 
       const start = songTimeSec - windowSec
       const values = history
@@ -542,7 +536,7 @@ function MelodyGuideCanvas({
       setDebugPanel({
         userMidi,
         targetMidi,
-        distance,
+        distance: distanceSemis,
         rms,
         f0Hz,
         rawF0Hz,
@@ -565,6 +559,7 @@ function MelodyGuideCanvas({
     lastPitchRef,
     pitchFrameHistoryRef,
     historyRef,
+    scoringVisualRef,
   ])
 
   useEffect(() => {
@@ -647,6 +642,7 @@ function MelodyGuideCanvas({
         techniqueSpritePool,
         solfegeLabels,
         solfegeLabelPool: [],
+        confirmedNoteIds: new Set(),
         particleSystem,
         comboSystem,
         playhead,
@@ -687,88 +683,32 @@ function MelodyGuideCanvas({
           const events = state.techniqueEventsRef?.current || []
           const lastIndex = state.lastTechniqueEventIndex || 0
 
-          // Start Position: Playhead
-          const startX = activeApp.screen.width * 0.7
-          const startY = Number.isFinite(state.playheadDotY) ? state.playheadDotY : h / 2
-          const targetY = h - 30
-
           // Iterate through new events
           for (let i = lastIndex; i < events.length; i++) {
             const event = events[i]
-            // Validate pitch correctness at the time of the event
             const songTime = event.t
-            let isValid = false
-
-
             if (snap.reference) {
-              // Technique validation rule 1: Strict note duration (tick-aligned)
-              const ticksPerBeat = Number(snap.reference?.timeDivision) || 480
               const tick = snap.reference?.getTickAtTime ? snap.reference.getTickAtTime(songTime) : songTime
-              const bpsNow = snap.reference?.getBeatsPerSecond ? snap.reference.getBeatsPerSecond(songTime) : 2
-              const ticksPerSec = (Number.isFinite(bpsNow) ? bpsNow : 2) * ticksPerBeat
-              const edgeToleranceTick = 0
-              const maxGapTick = 0 * ticksPerSec
-              const targetNote = getTargetNoteAtTick(snap.reference, tick, { maxGapTick, edgeToleranceTick })
+              let targetNote = getTargetNoteAtTick(snap.reference, tick, { maxGapTick: 0, edgeToleranceTick: 0 })
+              if (!targetNote && (event.type === 'glissup' || event.type === 'glissdown')) {
+                targetNote = (snap.reference.notes || []).find((note) => (
+                  Number(note.t0Sec) >= songTime &&
+                  Number(note.t0Sec) <= songTime + TECHNIQUE_LANDING_WINDOW_SEC
+                )) || null
+              }
 
               if (targetNote) {
-                const targetMidi = targetNote.midi
-                // Technique validation rule 3: One technique per note
-                // We use t0 as a unique ID for the note instance
                 const noteId = targetNote.t0Sec
                 if (state.processedNotesRef && state.processedNotesRef.has(noteId)) {
-                  // Already have a technique for this note
                   continue
                 }
-
-                const transposition = snap.transpositionRef?.current ?? 0
-                const transposedTarget = targetMidi + transposition
-
-                // Find user pitch history near this time
-                const history = snap.historyRef?.current || []
-                let bestPoint = null
-                let minDiff = Infinity
-
-                for (let j = history.length - 1; j >= 0; j--) {
-                  const diff = Math.abs(history[j].t - songTime)
-                  if (diff < minDiff) {
-                    minDiff = diff
-                    bestPoint = history[j]
-                  }
-                  if (diff > 0.2) break
-                }
-
-                if (bestPoint && minDiff < 0.1) {
-                  const userMidi = Number(bestPoint.userMidi)
-                  if (Number.isFinite(userMidi)) {
-                    const mappedMidi = mapUserMidiToTargetOctave(userMidi, transposedTarget)
-                    if (Number.isFinite(mappedMidi)) {
-                      // Technique validation rule 2: Tune check (mod-12 distance)
-                      const distance = mod12Distance(Math.round(userMidi), Math.round(transposedTarget))
-                      if (Number.isFinite(distance) && Math.abs(distance) <= NOTE_MERGE_CONFIG.pitchToleranceSemis) {
-                        // VALID: Trigger immediately
-                        isValid = true
-
-                        // Mark this note as processed to avoid duplicates
-                        if (state.processedNotesRef) {
-                          state.processedNotesRef.add(noteId)
-                        }
-                      }
-                    }
-                  }
-                }
+                event.isValid = false
+                event.isPending = true
+                event._noteId = noteId
+                event._scoringNoteId = `${targetNote.t0Sec}:${targetNote.t1Sec}:${targetNote.midi}`
+                event._noteEndSec = Number(targetNote.t1Sec)
+                event._type = event.type
               }
-            }
-
-            if (isValid) {
-              const type = event.type
-              event.isValid = false
-              event.isPending = true
-              if (snap.reference?.getTickAtTime) {
-                const ticksPerBeat = Number(snap.reference?.timeDivision) || 480
-                const beatIdx = Math.floor(snap.reference.getTickAtTime(songTime) / ticksPerBeat)
-                event._beatIdx = beatIdx
-              }
-              event._type = type
             }
           }
           state.lastTechniqueEventIndex = events.length
@@ -943,15 +883,30 @@ function MelodyGuideCanvas({
         }
 
         const history = snap.historyRef?.current || []
-        const historyStep = history.length > 1
-          ? Math.max(
-            0.02,
-            Math.min(0.2, (history[history.length - 1].t - history[0].t) / (history.length - 1)),
-          )
-          : 0.08
-        const nextTime = (idx) =>
-          idx + 1 < history.length ? history[idx + 1].t : history[idx].t + historyStep
-
+        const scoringVisual = snap.scoringVisualRef?.current || {}
+        const completedResults = Array.isArray(scoringVisual.recentNotes)
+          ? scoringVisual.recentNotes
+          : []
+        const visualResults = scoringVisual.liveNote
+          ? [...completedResults.filter((result) => result.noteId !== scoringVisual.liveNote.noteId), scoringVisual.liveNote]
+          : completedResults
+        const stableHitSegments = Array.isArray(scoringVisual.confirmedSegments)
+          ? scoringVisual.confirmedSegments
+          : []
+        const confirmedNoteIds = state.confirmedNoteIds || new Set()
+        state.confirmedNoteIds = confirmedNoteIds
+        for (const result of completedResults) {
+          if (confirmedNoteIds.has(result.noteId)) continue
+          const resultSegments = stableHitSegments.filter((segment) => segment.noteId === result.noteId)
+          const firstSegment = resultSegments[0]
+          if (!firstSegment) continue
+          confirmedNoteIds.add(result.noteId)
+          if (firstSegment.t0Sec < visibleStart || firstSegment.t0Sec > visibleEnd) continue
+          const particleX = playheadX + (firstSegment.t0Sec - songTimeSec) * pixelsPerSec
+          const particleMidi = Number(result.note?.midi) + transposition
+          const { y: particleY } = midiToY(particleMidi)
+          state.particleSystem?.burst(particleX, particleY, 12)
+        }
         const scoringReference = snap.reference ? { ...snap.reference, notes: scoringNotes } : null
         const getTargetNoteAt = (t, opts = {}) => {
           if (!scoringReference) return null
@@ -974,8 +929,8 @@ function MelodyGuideCanvas({
         const getTargetMidiForUserTime = (t) => {
           if (!snap.reference) return null
           if (snap.gateUserByTarget) {
-            const offset = Math.max(0, Number(snap.userOffsetSec) || 0)
-            return getTargetMidiAt(t - offset) ?? getTargetMidiAt(t + offset)
+            const offset = Number(snap.userOffsetSec) || 0
+            return getTargetMidiAt(t - offset)
           }
           return getTargetMidiAt(t)
         }
@@ -1007,66 +962,14 @@ function MelodyGuideCanvas({
             if (!Number.isFinite(t0) || !Number.isFinite(t1)) continue
             if (t1 < visibleStart || t0 > visibleEnd) continue
             if (songTimeSec < t1) continue
-
-            const totalBeats = (t1Tick - t0Tick) / ticksPerBeat
-            let correctBeats = 0
-            let lastInTuneTime = null
-            const configTol = Number(DEFAULT_CONFIG.f0TimeToleranceSec)
-            const f0ToleranceSec = Number.isFinite(configTol)
-              ? Math.max(0, configTol)
-              : Math.min(0.08, Math.max(0.03, edgeToleranceSec))
-            const bridgeGapSec = breakToleranceSec
-
-            for (let i = 0; i < history.length; i += 1) {
-              const point = history[i]
-              if (point.t < t0 || point.t >= t1) continue
-              const next = nextTime(i)
-              const sliceStart = Math.max(point.t, t0)
-              const sliceEnd = Math.min(next, t1)
-              if (sliceEnd <= sliceStart) continue
-              const sliceStartTick = snap.reference.getTickAtTime(sliceStart - f0ToleranceSec)
-              const sliceEndTick = snap.reference.getTickAtTime(sliceEnd + f0ToleranceSec)
-              const dtBeat = Math.max(0, (sliceEndTick - sliceStartTick) / ticksPerBeat)
-              if (!Number.isFinite(dtBeat) || dtBeat <= 0) continue
-
-              const userMidi = Number.isFinite(point.userMidi) ? Number(point.userMidi) : null
-              if (!Number.isFinite(userMidi)) {
-                if (Number.isFinite(lastInTuneTime) && sliceStart - lastInTuneTime <= bridgeGapSec) {
-                  correctBeats += dtBeat
-                }
-                continue
-              }
-              const pointRms = Number.isFinite(point.rms) ? Number(point.rms) : null
-              if (Number.isFinite(pointRms) && pointRms < snap.rmsGate) {
-                if (Number.isFinite(lastInTuneTime) && sliceStart - lastInTuneTime <= bridgeGapSec) {
-                  correctBeats += dtBeat
-                }
-                continue
-              }
-
-              const midT = (sliceStart + sliceEnd) * 0.5
-              const rawTarget =
-                getTargetMidiAt(midT) ??
-                getTargetMidiAt(midT - f0ToleranceSec) ??
-                getTargetMidiAt(midT + f0ToleranceSec)
-              const targetMidiPoint = Number.isFinite(rawTarget) ? rawTarget + transposition : null
-              if (!Number.isFinite(targetMidiPoint)) {
-                lastInTuneTime = null
-                continue
-              }
-
-              const userQuant = Math.round(userMidi)
-              const targetQuant = Math.round(targetMidiPoint)
-              const distance = mod12Distance(userQuant, targetQuant)
-              if (Number.isFinite(distance) && Math.abs(distance) <= NOTE_MERGE_CONFIG.pitchToleranceSemis) {
-                correctBeats += dtBeat
-                lastInTuneTime = sliceEnd
-              } else {
-                lastInTuneTime = null
-              }
+            const totalSec = Math.max(0, t1 - t0)
+            let correctSec = 0
+            for (const segment of stableHitSegments) {
+              const overlapStart = Math.max(t0, segment.t0Sec)
+              const overlapEnd = Math.min(t1, segment.t1Sec)
+              if (overlapEnd > overlapStart) correctSec += overlapEnd - overlapStart
             }
-
-            const ratio = totalBeats > 0 ? correctBeats / totalBeats : 0
+            const ratio = totalSec > 0 ? Math.min(1, correctSec / totalSec) : 0
             beatStates.push({
               t0,
               t1,
@@ -1076,19 +979,37 @@ function MelodyGuideCanvas({
             })
           }
         }
-        // Resolve pending technique events after beat completes.
-        if (state.techniqueEventsRef?.current && beatStates.length) {
+        // A slide only becomes a technique after it lands stably on target.
+        if (state.techniqueEventsRef?.current) {
           const startX = activeApp.screen.width * 0.7
           const startY = Number.isFinite(state.playheadDotY) ? state.playheadDotY : h / 2
           const targetY = h - 30
           for (const evt of state.techniqueEventsRef.current) {
             if (!evt.isPending) continue
-            const beatIdx = Number.isFinite(evt._beatIdx) ? evt._beatIdx : null
-            if (beatIdx == null) continue
-            const beatState = beatStates.find((b) => b.beatIdx === beatIdx)
-            if (!beatState || songTimeSec < beatState.showAt) continue
-            if (beatState.correct) {
+            const eventTimeSec = Number(evt.t)
+            if (!Number.isFinite(eventTimeSec)) {
+              evt.isPending = false
+              continue
+            }
+            const eventSegments = evt._scoringNoteId
+              ? stableHitSegments.filter((segment) => segment.noteId === evt._scoringNoteId)
+              : []
+            const scoringNoteResult = evt._scoringNoteId
+              ? visualResults.find((result) => result.noteId === evt._scoringNoteId)
+              : null
+            if (scoringNoteResult?.pendingConfirmation) continue
+            const landed = hasStableTechniqueLanding(eventSegments, eventTimeSec)
+            const resolveAfter = getTechniqueResolutionTime(
+              eventTimeSec,
+              evt._noteEndSec,
+              scoringNoteResult?.visualDelaySec,
+            )
+            if (!landed && Number.isFinite(resolveAfter) && songTimeSec < resolveAfter) continue
+            if (landed) {
               evt.isValid = true
+              if (state.processedNotesRef && evt._noteId != null) {
+                state.processedNotesRef.add(evt._noteId)
+              }
               const type = evt._type || evt.type
               setValidCounts(prev => ({
                 ...prev,
@@ -1123,7 +1044,7 @@ function MelodyGuideCanvas({
         state.userGlow?.setFillStyle({ color: COLORS.userGlowFill, alpha: ALPHAS.userGlowFill })
         state.userGlow?.beginPath()
 
-        if (beatStates.length && notesData.length) {
+        if (notesData.length) {
           for (const note of notesData) {
             if (note.t1Sec < visibleStart || note.t0Sec > visibleEnd) continue
             const noteT0 = Math.max(note.t0Sec, visibleStart)
@@ -1132,17 +1053,19 @@ function MelodyGuideCanvas({
             const midi = note.midi + transposition
             const { y } = midiToY(midi)
             const noteBeats = []
-            for (const beatSeg of beatStates) {
-              if (beatSeg.t1 <= note.t0Sec) continue
-              if (beatSeg.t0 >= note.t1Sec) break
-              const segStart = Math.max(note.t0Sec, beatSeg.t0)
-              const segEnd = Math.min(note.t1Sec, beatSeg.t1)
+            for (const hitSegment of stableHitSegments) {
+              if (hitSegment.t1Sec <= note.t0Sec) continue
+              if (hitSegment.t0Sec >= note.t1Sec) break
+              const segStart = Math.max(note.t0Sec, hitSegment.t0Sec)
+              const segEnd = Math.min(note.t1Sec, hitSegment.t1Sec)
               if (segEnd <= segStart) continue
               noteBeats.push({
                 t0: segStart,
                 t1: segEnd,
-                correct: beatSeg.correct,
-                showAt: beatSeg.showAt,
+                correct: true,
+                showAt: Number.isFinite(Number(hitSegment.confirmedAtSec))
+                  ? Number(hitSegment.confirmedAtSec)
+                  : 0,
               })
             }
             if (!noteBeats.length || !state.userGlow) continue
@@ -1157,67 +1080,21 @@ function MelodyGuideCanvas({
 
             if (!spansToDraw.length) continue
 
-            // 1. Merge contiguous spans AND track the latest segment info for animation
-            spansToDraw.sort((a, b) => a.t0 - b.t0)
-            const merged = []
-            if (spansToDraw.length) {
-              // We track 'maxT1Seg' which is the segment that defines the right-most edge of the merged block.
-              // This segment's 'showAt' time dictates the animation start for the extension.
-              let curr = {
-                t0: spansToDraw[0].t0,
-                t1: spansToDraw[0].t1,
-                latestSeg: spansToDraw[0]
-              }
+            // Merge nearby correct fragments using the same note-relative tolerance
+            // as the scorer, then animate the merged block from its left edge.
+            const visualJoinToleranceSec = getNoteFragmentJoinToleranceSec(note)
+            const merged = mergeConfirmedSpans(spansToDraw, visualJoinToleranceSec)
 
-              for (let i = 1; i < spansToDraw.length; i++) {
-                const next = spansToDraw[i]
-                if (next.t0 <= curr.t1 + 0.001) {
-                  curr.t1 = Math.max(curr.t1, next.t1)
-                  // If this segment extends the block, it's the new "latest"
-                  if (next.t1 > curr.latestSeg.t1) {
-                    curr.latestSeg = next
-                  }
-                } else {
-                  merged.push(curr)
-                  // New block
-                  curr = {
-                    t0: next.t0,
-                    t1: next.t1,
-                    latestSeg: next
-                  }
-                }
-              }
-              merged.push(curr)
-            }
-
-            // 3. Draw merged spans with "Latest Beat Anchor" wipe
+            // Draw every merged span with one left-to-right wipe.
             merged.forEach(m => {
-              // Calculate wipe cursor based on the latest added segment in this block.
-              // Visual Idea: The block is solid up to 'latestSeg.t0' (roughly).
-              // We animate the fill from 'latestSeg.t0' to 'latestSeg.t1' starting at 'latestSeg.showAt'.
-              // OR more simply: The wipe cursor starts at 'latestSeg.t0' at time 'latestSeg.showAt'.
-              const anchorBeat = m.latestSeg
-
-              // When does the animation for this specific beat start?
-              // It starts exactly when the beat is revealed: anchorBeat.showAt (beatEnd + 0.2s)
-              // The wiper starts at the beginning of that beat: anchorBeat.t0
-              const timeSinceReveal = Math.max(0, songTimeSec - anchorBeat.showAt)
+              const timeSinceReveal = Math.max(0, songTimeSec - m.showAt)
               const wipeDist = timeSinceReveal * USER_GLOW_FILL_SPEED // Speed > 1.0 means it catches up
 
-              // The cursor position in absolute song time
-              let wipeCursor = anchorBeat.t0 + wipeDist
-
-              // IMPORTANT: If this merged block consists of many beats traverse,
-              // we technically want the *previous* parts to be fully solid.
-              // Since 'anchorBeat.t0' is the start of the *latest* addition,
-              // ensuring the wiper starts there guarantees the previous parts ( < t0 ) are considered "passed".
-              const finalWipeCursor = Math.max(wipeCursor, anchorBeat.t0)
-
-              // The segment is valid to draw up to m.t1.
               const drawT0 = m.t0
-              if (finalWipeCursor <= drawT0) return
+              const wipeCursor = drawT0 + wipeDist
+              if (wipeCursor <= drawT0) return
 
-              const drawT1 = Math.min(m.t1, finalWipeCursor)
+              const drawT1 = Math.min(m.t1, wipeCursor)
 
               if (drawT1 > drawT0) {
                 const d0 = Math.max(drawT0, visibleStart)
@@ -1236,64 +1113,35 @@ function MelodyGuideCanvas({
         }
         state.userGlow?.fill()
 
-        // F0 Trail
-        if (state.trail) state.trail.clear()
-        state.trail.setStrokeStyle({
-          width: 3,
-          color: COLORS.userGlowStroke,
-          alpha: 1,
-          cap: 'round',
-          join: 'round',
-        })
-        state.trail.beginPath()
-        let penDown = false
-        const trailHistory = history
-        for (let i = 0; i < trailHistory.length; i++) {
-          const pt = trailHistory[i]
-          if (pt.t < visibleStart || pt.t > visibleEnd) {
-            penDown = false
-            continue
-          }
-          const rms = Number.isFinite(pt.rms) ? Number(pt.rms) : 0
-          if (rms < snap.rmsGate) {
-            penDown = false
-            continue
-          }
-          const midi = Number(pt.userMidi)
-          if (!Number.isFinite(midi)) {
-            penDown = false
-            continue
-          }
-          // Visual tolerance check?
-          const targetMidi = getTargetMidiForUserTime(pt.t)
-          const isTargetDefined = Number.isFinite(targetMidi)
-          let inTune = false
-          if (isTargetDefined) {
-            const mapped = mapUserMidiToTargetOctave(midi, targetMidi + transposition)
-            const diff = Math.abs(mapped - (targetMidi + transposition))
-            if (diff <= VISUAL_TOLERANCE_SEMIS) {
-              inTune = true
-            }
-          }
-          // Only draw if "in tune" enough for glow effect
-          if (!inTune) {
-            penDown = false
-            continue
-          }
+        // Live F0 feedback is independent from delayed note confirmation.
+        // Draw each detector slice separately so the tail can fade with age.
+        if (state.trail) {
+          state.trail.clear()
+          const liveTrailSegments = getLivePitchTrailSegments(history, songTimeSec, {
+            durationSec: 2,
+            rmsGate: snap.rmsGate,
+            maxGapSec: 0.15,
+          })
+          for (const segment of liveTrailSegments) {
+            const startPoint = midiToY(segment.midi0)
+            const endPoint = midiToY(segment.midi1)
+            if (!startPoint.inRange || !endPoint.inRange) continue
 
-          const { y } = midiToY(mapUserMidiToTargetOctave(midi, targetMidi + transposition))
-          const x = playheadX + (pt.t - songTimeSec) * pixelsPerSec
-          if (!penDown) {
-            state.trail.moveTo(x, y)
-            penDown = true
-          } else {
-            state.trail.lineTo(x, y)
+            const x1 = playheadX + (segment.t0Sec - songTimeSec) * pixelsPerSec
+            const x2 = playheadX + (segment.t1Sec - songTimeSec) * pixelsPerSec
+            state.trail.setStrokeStyle({
+              width: 3,
+              color: COLORS.userGlowFill,
+              alpha: segment.alpha,
+              cap: 'round',
+              join: 'round',
+            })
+            state.trail.beginPath()
+            state.trail.moveTo(x1, startPoint.y)
+            state.trail.lineTo(x2, endPoint.y)
+            state.trail.stroke()
           }
         }
-        state.trail.stroke()
-
-        // user miss trail intentionally disabled
-        // state.userGlow?.fill() // Moved up
 
         // --- DEBUG PITCH TRACE ---
         if (state.debugTrace) {
@@ -1381,8 +1229,7 @@ function MelodyGuideCanvas({
           }
         }
 
-        let playheadDotY = null
-        let emitParticles = false
+        let desiredPlayheadDotY = null
         const lastPitch = snap.lastPitchRef?.current
         let userMidi = Number.isFinite(lastPitch?.midi) ? Number(lastPitch.midi) : null
         let userRms = Number.isFinite(lastPitch?.rms) ? Number(lastPitch.rms) : null
@@ -1404,87 +1251,57 @@ function MelodyGuideCanvas({
           }
           const allowNoTarget = snap.forceUserOnScoring === true
           if (!(snap.gateUserByTarget && snap.reference && targetMidi == null && !allowNoTarget)) {
-            const transposedTarget = targetMidi != null ? targetMidi + transposition : null
-            const mappedMidi = Number.isFinite(transposedTarget)
-              ? mapUserMidiToTargetOctave(userMidi, transposedTarget)
-              : userMidi
-            const { y, inRange } = midiToY(mappedMidi)
-            playheadDotY = y
-            // Expose y for combo system
-            state.playheadDotY = y
-
-            const distance = Number.isFinite(transposedTarget)
-              ? mod12Distance(Math.round(userMidi), Math.round(transposedTarget))
+            const transposedTargetMidi = Number.isFinite(targetMidi)
+              ? Number(targetMidi) + transposition
               : null
-            const inTune =
-              Number.isFinite(distance) &&
-              Math.abs(distance) <= VISUAL_TOLERANCE_SEMIS
-            emitParticles = inTune && inRange
+            const hitDisplayMidi = getLiveHitDisplayMidi(userMidi, transposedTargetMidi)
+            if (Number.isFinite(hitDisplayMidi)) {
+              const { y, inRange } = midiToY(hitDisplayMidi)
+              if (inRange) {
+                desiredPlayheadDotY = y
+              }
+            }
           }
         }
+        const playheadDotY = smoothLiveMarkerPosition(
+          state.playheadDotY,
+          desiredPlayheadDotY,
+          deltaSec,
+        )
+        state.playheadDotY = playheadDotY
 
-        // F0 Trail Rendering
-        state.trail.clear()
-        const trailDuration = 2.0
-        const trailPoints = history.filter(h => h.t > songTimeSec - trailDuration && h.t <= songTimeSec)
+        // Delayed confirmed-note feedback still controls its fill particles,
+        // but no longer controls the live F0 trail.
+        let fillParticleX = null
+        let fillParticleY = null
+        let emitFillParticles = false
+        let latestFillConfirmationSec = -Infinity
+        for (const segment of stableHitSegments) {
+          const segmentStart = Number(segment?.t0Sec)
+          const segmentEnd = Number(segment?.t1Sec)
+          if (!Number.isFinite(segmentStart) || !Number.isFinite(segmentEnd)) continue
+          const animatedEndSec = getConfirmedSegmentFillEnd(
+            segment,
+            songTimeSec,
+            USER_GLOW_FILL_SPEED,
+          )
+          if (!Number.isFinite(animatedEndSec)) continue
 
-        if (trailPoints.length > 1) {
-          for (let i = 0; i < trailPoints.length - 1; i++) {
-            const p1 = trailPoints[i]
-            const p2 = trailPoints[i + 1]
+          const targetMidi = getStableHitTargetMidi(segment, visualResults, transposition)
+          if (!Number.isFinite(targetMidi)) continue
+          const targetPoint = midiToY(targetMidi)
+          if (!targetPoint.inRange) continue
 
-            // Check if this segment is "correct". 
-            // We verify if the time t covers any correct segment.
-            // Since correctSegments are time-ranges, we check overlap.
-            const userMidi = Number(p1.userMidi)
-            const rms = Number.isFinite(p1.rms) ? Number(p1.rms) : 0
-            if (rms < (Number(snap.rmsGate) || 0)) continue
-            const targetMidi = getTargetMidiForUserTime(p1.t)
-            if (!Number.isFinite(userMidi) || !Number.isFinite(targetMidi)) continue
-            const transposedTarget = targetMidi + transposition
-            const mappedMidi = mapUserMidiToTargetOctave(userMidi, transposedTarget)
-            if (!Number.isFinite(mappedMidi)) continue
-            const distance = mod12Distance(Math.round(userMidi), Math.round(transposedTarget))
-            const inTune = Number.isFinite(distance) && Math.abs(distance) <= VISUAL_TOLERANCE_SEMIS
-            if (!inTune) continue
-
-            // We also need screen coordinates
-            // p1.y might not be computed yet if we didn't map it.
-            // We need to re-map or store mapped values.
-            // Let's re-map quickly.
-            const getPointY = (p) => {
-              const tm = getTargetMidiForUserTime(p.t)
-              if (tm == null) return null // No target, can't map correct
-              const userMidi = Number(p.userMidi)
-              if (!Number.isFinite(userMidi)) return null
-              const mapped = mapUserMidiToTargetOctave(userMidi, tm + transposition)
-              const { y } = midiToY(mapped) // uses closure variables !
-              return y
-            }
-
-            const y1 = getPointY(p1)
-            const y2 = getPointY(p2)
-
-            if (y1 === null || y2 === null) continue
-
-            const x1 = playheadX + (p1.t - songTimeSec) * pixelsPerSec
-            const x2 = playheadX + (p2.t - songTimeSec) * pixelsPerSec
-
-            // Alpha fade
-            const age = songTimeSec - p1.t
-            const alpha = Math.max(0, 1 - age / trailDuration)
-
-            state.trail.setStrokeStyle({
-              width: 3,
-              color: COLORS.userGlowFill,
-              alpha: alpha,
-              cap: 'round',
-              join: 'round'
-            })
-
-            state.trail.moveTo(x1, y1)
-            state.trail.lineTo(x2, y2)
-            state.trail.stroke()
+          const confirmedAtSec = Number(segment.confirmedAtSec)
+          if (
+            Number.isFinite(confirmedAtSec) &&
+            confirmedAtSec >= latestFillConfirmationSec &&
+            animatedEndSec < segmentEnd - 1e-7
+          ) {
+            latestFillConfirmationSec = confirmedAtSec
+            fillParticleX = playheadX + (animatedEndSec - songTimeSec) * pixelsPerSec
+            fillParticleY = targetPoint.y
+            emitFillParticles = true
           }
         }
 
@@ -1595,15 +1412,32 @@ function MelodyGuideCanvas({
         state.playhead.lineTo(alignedPlayheadX, h)
         state.playhead.stroke()
         if (Number.isFinite(playheadDotY)) {
-          state.playhead.setFillStyle({ color: COLORS.playhead, alpha: ALPHAS.playheadInner })
+          state.playhead.setFillStyle({ color: COLORS.playhead, alpha: 1 })
           state.playhead.beginPath()
-          state.playhead.circle(alignedPlayheadX, playheadDotY, PLAYHEAD_DOT_RADIUS)
+          state.playhead.moveTo(
+            alignedPlayheadX + PLAYHEAD_DOT_RADIUS,
+            playheadDotY,
+          )
+          state.playhead.lineTo(
+            alignedPlayheadX - PLAYHEAD_DOT_RADIUS,
+            playheadDotY - PLAYHEAD_DOT_RADIUS,
+          )
+          state.playhead.lineTo(
+            alignedPlayheadX - PLAYHEAD_DOT_RADIUS,
+            playheadDotY + PLAYHEAD_DOT_RADIUS,
+          )
+          state.playhead.closePath()
           state.playhead.fill()
         }
 
         if (state.particleSystem) {
           state.particleSystem.setConfig(snap.particleConfig)
-          state.particleSystem.update(deltaSec, emitParticles, alignedPlayheadX, playheadDotY)
+          state.particleSystem.update(
+            deltaSec,
+            emitFillParticles,
+            fillParticleX,
+            fillParticleY,
+          )
         }
       })
     }

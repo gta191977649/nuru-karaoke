@@ -4,13 +4,15 @@ import { fetchSongs, fetchTags } from '../services/songLibrary.js'
 import ConnectionAlert from '../components/ConnectionAlert.jsx'
 import { enqueueSongAndPlay } from '../engine/playerController.js'
 import useAlertStore from '../state/alertStore.js'
+import useFavoriteStore from '../state/favoriteStore.js'
 import useUserStore from '../state/userStore.js'
-import { addFavorite } from '../services/favorites.js'
 
 function FindSongKeywords({ onBack, onSelectSong, onConfirm }) {
     const showAlert = useAlertStore((state) => state.showAlert)
     const authStatus = useUserStore((state) => state.status)
     const accessToken = useUserStore((state) => state.accessToken)
+    const favoriteItems = useFavoriteStore((state) => state.items)
+    const addFavorite = useFavoriteStore((state) => state.add)
     const [term, setTerm] = useState('')
     const [results, setResults] = useState([])
     const [totalCount, setTotalCount] = useState(0)
@@ -59,7 +61,8 @@ function FindSongKeywords({ onBack, onSelectSong, onConfirm }) {
         e.stopPropagation()
         if (!song || authStatus !== 'authenticated') return
         try {
-            await addFavorite(song.id, accessToken)
+            const wasAdded = await addFavorite(song, accessToken)
+            if (!wasAdded) return
             showAlert({
                 message: `${song.title} をマイうたに追加しました`,
                 variant: 'success',
@@ -99,8 +102,6 @@ function FindSongKeywords({ onBack, onSelectSong, onConfirm }) {
         const controller = new AbortController()
         let didCancel = false
 
-        setIsLoading(true)
-        setLoadError('')
         fetchSongs({
             q: term,
             tag: activeTag || undefined,
@@ -128,11 +129,11 @@ function FindSongKeywords({ onBack, onSelectSong, onConfirm }) {
         }
     }, [activeTag, page, term])
 
-    useEffect(() => {
-        setPage(1)
-    }, [activeTag, term])
-
     const totalPages = useMemo(() => Math.max(1, Math.ceil(totalCount / 10)), [totalCount])
+    const favoriteSongCodes = useMemo(
+        () => new Set(favoriteItems.map((item) => item.song_code)),
+        [favoriteItems],
+    )
 
     return (
         <div className="wiiFind h-100 d-flex flex-column">
@@ -149,7 +150,9 @@ function FindSongKeywords({ onBack, onSelectSong, onConfirm }) {
                         value={term}
                         onChange={(e) => {
                             setTerm(e.target.value)
+                            setPage(1)
                             setIsLoading(true)
+                            setLoadError('')
                         }}
                     />
                     <span className="wiiFind__suffix">で 始まる曲</span>
@@ -162,7 +165,12 @@ function FindSongKeywords({ onBack, onSelectSong, onConfirm }) {
             <div className="wiiFind__tabs">
                 <Button
                     className={`wiiFind__tabBtn ${activeTag === '' ? 'wiiFind__tabBtn--active' : ''}`}
-                    onClick={() => setActiveTag('')}
+                    onClick={() => {
+                        setActiveTag('')
+                        setPage(1)
+                        setIsLoading(true)
+                        setLoadError('')
+                    }}
                 >
                     すべて
                 </Button>
@@ -170,7 +178,12 @@ function FindSongKeywords({ onBack, onSelectSong, onConfirm }) {
                     <Button
                         key={tag}
                         className={`wiiFind__tabBtn ${activeTag === tag ? 'wiiFind__tabBtn--active' : ''}`}
-                        onClick={() => setActiveTag(tag)}
+                        onClick={() => {
+                            setActiveTag(tag)
+                            setPage(1)
+                            setIsLoading(true)
+                            setLoadError('')
+                        }}
                     >
                         {tag}
                     </Button>
@@ -211,11 +224,16 @@ function FindSongKeywords({ onBack, onSelectSong, onConfirm }) {
 
                                     <div className="d-flex gap-2 ms-auto">
                                         <Button
-                                            className="wiiList__actionBtn"
-                                            disabled={authStatus !== 'authenticated'}
+                                            className={`wiiList__actionBtn ${favoriteSongCodes.has(song.id) ? 'wiiList__actionBtn--registered' : ''}`}
+                                            disabled={authStatus !== 'authenticated' || favoriteSongCodes.has(song.id)}
                                             onClick={(e) => handleFavorite(song, e)}
                                         >
-                                            <span className="me-1 text-warning" style={{ textShadow: '0 1px 0 rgba(0,0,0,0.2)' }}>★</span>
+                                            <span
+                                                className={`me-1 ${favoriteSongCodes.has(song.id) ? 'text-secondary' : 'text-warning'}`}
+                                                style={{ textShadow: '0 1px 0 rgba(0,0,0,0.2)' }}
+                                            >
+                                                ★
+                                            </span>
                                             マイうた
                                         </Button>
                                         <Button
@@ -242,7 +260,11 @@ function FindSongKeywords({ onBack, onSelectSong, onConfirm }) {
                         <Button
                             className="wiiFind__navBtn"
                             disabled={page <= 1 || isLoading}
-                            onClick={() => setPage((p) => Math.max(1, p - 1))}
+                            onClick={() => {
+                                setPage((currentPage) => Math.max(1, currentPage - 1))
+                                setIsLoading(true)
+                                setLoadError('')
+                            }}
                         >
                             <div style={{ fontSize: '1.5rem' }}>▲</div>
                             前
@@ -253,7 +275,11 @@ function FindSongKeywords({ onBack, onSelectSong, onConfirm }) {
                         <Button
                             className="wiiFind__navBtn"
                             disabled={page >= totalPages || isLoading}
-                            onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
+                            onClick={() => {
+                                setPage((currentPage) => Math.min(totalPages, currentPage + 1))
+                                setIsLoading(true)
+                                setLoadError('')
+                            }}
                         >
                             次
                             <div style={{ fontSize: '1.5rem' }}>▼</div>

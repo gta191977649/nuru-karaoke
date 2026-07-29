@@ -28,4 +28,4 @@ class ScoreSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = Score
-        fields = ('username', 'score', 'accuracy', 'max_combo', 'updated_at')
+        fields = ('username', 'score', 'accuracy', 'max_combo', 'version', 'updated_at')

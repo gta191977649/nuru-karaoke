@@ -170,6 +170,15 @@ const createParticleSystem = (initialConfig) => {
     config = resolveParticleConfig(nextConfig)
   }
 
+  const burst = (x, y, count = 12) => {
+    if (!Number.isFinite(x) || !Number.isFinite(y)) return
+    const requested = Math.max(0, Math.round(Number(count) || 0))
+    const capacity = Math.max(0, config.maxParticles - activeParticles.length)
+    for (let index = 0; index < Math.min(requested, capacity); index += 1) {
+      spawnParticle(x, y)
+    }
+  }
+
   const setBounds = (bounds) => {
     particleContainer.boundsArea = bounds
   }
@@ -186,6 +195,7 @@ const createParticleSystem = (initialConfig) => {
     setConfig,
     setBounds,
     update,
+    burst,
     destroy,
   }
 }

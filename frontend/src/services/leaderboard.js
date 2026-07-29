@@ -1,10 +1,14 @@
 import { buildUrl } from './api.js'
+import { SCORING_ALGORITHM_VERSION } from '../karaoke/scoring/SimpleScoreCalculator.js'
 
 async function fetchLeaderboard(songCode, options = {}) {
   if (!songCode) {
     return { song: null, limit: 0, results: [] }
   }
-  const response = await fetch(buildUrl(`/api/leaderboard?song=${encodeURIComponent(songCode)}`), {
+  const params = new URLSearchParams({ song: songCode })
+  const version = options.version === undefined ? SCORING_ALGORITHM_VERSION : options.version
+  if (version !== null) params.set('version', String(version))
+  const response = await fetch(buildUrl(`/api/leaderboard?${params.toString()}`), {
     method: 'GET',
     signal: options.signal,
   })

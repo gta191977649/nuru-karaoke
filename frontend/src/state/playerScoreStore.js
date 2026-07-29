@@ -9,6 +9,7 @@ const initialTechniqueCounts = {
 
 const initialScoreState = {
   liveScore: 0,
+  liveScoreReady: false,
   finalScore: 0,
   techniqueCounts: { ...initialTechniqueCounts },
   scoreMeta: {
@@ -28,7 +29,10 @@ const usePlayerScoreStore = create((set) => ({
       ...initialScoreState,
       techniqueCounts: { ...initialTechniqueCounts },
     }),
-  setLiveScore: (score) => set({ liveScore: Number.isFinite(score) ? score : 0 }),
+  setLiveScore: (score, ready = true) => set({
+    liveScore: Number.isFinite(score) ? score : 0,
+    liveScoreReady: ready === true,
+  }),
   setFinalScore: (score) =>
     set({
       finalScore: Number.isFinite(score) ? score : 0,

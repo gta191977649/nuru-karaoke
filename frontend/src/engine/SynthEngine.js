@@ -1,7 +1,7 @@
 import { Sequencer, WorkletSynthesizer } from 'spessasynth_lib'
 import processorUrl from 'spessasynth_lib/dist/spessasynth_processor.min.js?url'
 //import defaultSoundFontUrl from '../soundfont/gmex.sf2'
-import defaultSoundFontUrl from '../soundfont/gm.sf2'
+import defaultSoundFontUrl from '../soundfont/gm2.sf2'
 import { createMidiMapper } from './MidiMapper.js'
 import { findActiveLyricIndex, parseLrc } from './lrc.js'
 import { getKaraokeAudioEngine } from './audioEngine.js'

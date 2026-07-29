@@ -32,6 +32,7 @@ class ScoreHistory(models.Model):
     score = models.PositiveIntegerField(null=True, blank=True)
     accuracy = models.DecimalField(max_digits=5, decimal_places=2, null=True, blank=True)
     max_combo = models.PositiveIntegerField(null=True, blank=True)
+    version = models.CharField(max_length=32, blank=True)
     f0_curve = models.JSONField(null=True, blank=True)
     technique_counts = models.JSONField(null=True, blank=True)
     created_at = models.DateTimeField(auto_now_add=True)

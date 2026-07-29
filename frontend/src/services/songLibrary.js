@@ -32,6 +32,22 @@ async function fetchSongs(options = {}) {
   return { items: [], count: 0, next: null, previous: null }
 }
 
+async function fetchSongByCode(songCode, options = {}) {
+  if (!songCode) throw new Error('Song code required')
+  const response = await fetch(buildUrl(`/api/songs/${encodeURIComponent(songCode)}/`), {
+    method: 'GET',
+    signal: options.signal,
+  })
+  if (!response.ok) {
+    throw new Error(`Failed to load song (${response.status})`)
+  }
+  const contentType = response.headers.get('content-type') || ''
+  if (!contentType.includes('application/json')) {
+    throw new Error('Unexpected response for song API')
+  }
+  return response.json()
+}
+
 async function fetchTags(options = {}) {
   const response = await fetch(buildUrl('/api/tags'), {
     method: 'GET',
@@ -51,4 +67,4 @@ async function fetchTags(options = {}) {
   return []
 }
 
-export { fetchSongs, fetchTags }
+export { fetchSongByCode, fetchSongs, fetchTags }
