@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest'
 import {
   getConfirmedSegmentFillEnd,
   getLivePitchTrailSegments,
+  getNearestNoteMidiAtTime,
   getStableHitTargetMidi,
   getStableLandingDuration,
   getTechniqueResolutionTime,
@@ -9,6 +10,24 @@ import {
   mergeConfirmedSpans,
   smoothLiveMarkerPosition,
 } from './scoringVisualUtils.js'
+
+describe('nearest note visual anchor', () => {
+  const notes = [
+    { t0Sec: 1, t1Sec: 2, midi: 60 },
+    { t0Sec: 2.3, t1Sec: 3, midi: 64 },
+  ]
+
+  it('uses the active note and remains anchored inside a between-note scoring gap', () => {
+    expect(getNearestNoteMidiAtTime(notes, 1.5)).toBe(60)
+    expect(getNearestNoteMidiAtTime(notes, 2.1)).toBe(60)
+    expect(getNearestNoteMidiAtTime(notes, 2.2)).toBe(64)
+  })
+
+  it('returns null without a usable time or note', () => {
+    expect(getNearestNoteMidiAtTime([], 2)).toBeNull()
+    expect(getNearestNoteMidiAtTime(notes, null)).toBeNull()
+  })
+})
 
 describe('live F0 trail', () => {
   it('draws voiced history immediately and fades older segments', () => {

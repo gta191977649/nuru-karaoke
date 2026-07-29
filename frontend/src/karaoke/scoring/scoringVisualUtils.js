@@ -76,6 +76,35 @@ export function getLivePitchTrailSegments(
   return segments
 }
 
+export function getNearestNoteMidiAtTime(notes, timeSec) {
+  if (!Number.isFinite(timeSec) || !Array.isArray(notes)) return null
+  const time = Number(timeSec)
+
+  let nearestMidi = null
+  let nearestDistance = Infinity
+  for (const note of notes) {
+    const startSec = Number(note?.t0Sec)
+    const endSec = Number(note?.t1Sec)
+    const midi = Number.isFinite(note?.midi) ? Number(note.midi) : null
+    if (
+      !Number.isFinite(startSec) ||
+      !Number.isFinite(endSec) ||
+      !Number.isFinite(midi)
+    ) {
+      continue
+    }
+
+    const distance = time < startSec
+      ? startSec - time
+      : (time > endSec ? time - endSec : 0)
+    if (distance < nearestDistance) {
+      nearestDistance = distance
+      nearestMidi = midi
+    }
+  }
+  return nearestMidi
+}
+
 export function mergeConfirmedSpans(spans = [], toleranceSec = 0) {
   const tolerance = Math.max(0, Number(toleranceSec) || 0)
   const sorted = (spans || [])
