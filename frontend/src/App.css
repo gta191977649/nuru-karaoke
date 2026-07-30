@@ -617,6 +617,11 @@
   pointer-events: none;
 }
 
+.karaokeDock--parked {
+  visibility: hidden;
+  pointer-events: none;
+}
+
 .karaokeDock__move,
 .karaokeDock__scale {
   width: 100%;

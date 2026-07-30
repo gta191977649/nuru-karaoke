@@ -58,7 +58,12 @@ function App({ onNavigate }) {
     [screen, karaokeActive, karaokeMini],
   )
   const chromeVisible = !(screen === SCREENS.karaoke && karaokeActive && !karaokeMini)
-  const showKaraokeDock = screen === SCREENS.karaoke || (screen === SCREENS.home && karaokeActive)
+  const showKaraokeDock = screen === SCREENS.karaoke || karaokeActive
+  const karaokeDockMode = screen === SCREENS.karaoke && !karaokeMini
+    ? 'full'
+    : screen === SCREENS.home && karaokeActive
+      ? 'mini'
+      : 'parked'
 
   const go = useCallback(
     (to) => {
@@ -254,7 +259,7 @@ function App({ onNavigate }) {
 
         {showKaraokeDock ? (
           <div
-            className={`karaokeDock ${screen === SCREENS.karaoke && !karaokeMini ? 'karaokeDock--full' : 'karaokeDock--mini'}`}
+            className={`karaokeDock karaokeDock--${karaokeDockMode}`}
             style={{
               top: `${karaokeBase.top}px`,
               left: `${karaokeBase.left}px`,
@@ -270,8 +275,9 @@ function App({ onNavigate }) {
               openKaraoke()
             }}
             role="button"
-            tabIndex={0}
+            tabIndex={karaokeDockMode === 'parked' ? -1 : 0}
             aria-label="Karaoke view"
+            aria-hidden={karaokeDockMode === 'parked'}
           >
             <div className="karaokeDock__move">
               <div

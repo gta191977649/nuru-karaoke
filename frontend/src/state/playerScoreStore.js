@@ -8,6 +8,7 @@ const initialTechniqueCounts = {
 }
 
 const initialScoreState = {
+  scoreSessionId: null,
   liveScore: 0,
   liveScoreReady: false,
   finalScore: 0,
@@ -24,6 +25,20 @@ const initialScoreState = {
 
 const usePlayerScoreStore = create((set) => ({
   ...initialScoreState,
+  beginPlayerScoreSession: (sessionId) => {
+    if (sessionId == null) return false
+    let didReset = false
+    set((state) => {
+      if (state.scoreSessionId === sessionId) return state
+      didReset = true
+      return {
+        ...initialScoreState,
+        scoreSessionId: sessionId,
+        techniqueCounts: { ...initialTechniqueCounts },
+      }
+    })
+    return didReset
+  },
   resetPlayerScore: () =>
     set({
       ...initialScoreState,

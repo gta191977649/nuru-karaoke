@@ -10,6 +10,7 @@ function Karaoke({ onStop, resetKey, transitionPhase = 'idle' }) {
   const midiName = useKaraokeStore((state) => state.midiName)
   const queueIndex = useKaraokeStore((state) => state.queueIndex)
   const queueLength = useKaraokeStore((state) => state.queue.length)
+  const playbackSessionId = useKaraokeStore((state) => state.playbackSessionId)
 
   const handleFinish = useCallback(() => {
     setView('results')
@@ -45,7 +46,7 @@ function Karaoke({ onStop, resetKey, transitionPhase = 'idle' }) {
         <MessagePage />
       ) : (
         <SingingPage
-          key={`${midiName}-${queueIndex}-${resetKey}`}
+          key={`${playbackSessionId}-${resetKey}`}
           onFinish={handleFinish}
         />
       )}
