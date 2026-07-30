@@ -427,6 +427,69 @@
   position: relative;
 }
 
+.lyrics-lines {
+  opacity: 0;
+  transition: opacity 300ms ease;
+}
+
+.lyrics-lines--visible {
+  opacity: 1;
+}
+
+.interlude-prompt {
+  position: absolute;
+  inset: 0;
+  z-index: 2;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #ffffff;
+  font-size: 3.5rem;
+  line-height: 1.2;
+  white-space: nowrap;
+  -webkit-text-stroke: 6px #000000;
+  paint-order: stroke fill;
+  opacity: 0;
+  visibility: hidden;
+  pointer-events: none;
+  transition:
+    opacity 300ms ease,
+    visibility 0s linear 300ms;
+}
+
+.interlude-prompt--visible {
+  opacity: 1;
+  visibility: visible;
+  transition:
+    opacity 300ms ease,
+    visibility 0s linear 0s;
+}
+
+.interlude-prompt__dot {
+  opacity: 0.2;
+  animation: interludeDotPulse 1.2s steps(1, end) infinite;
+}
+
+.interlude-prompt__dot:nth-child(3) {
+  animation-delay: 0.4s;
+}
+
+.interlude-prompt__dot:nth-child(4) {
+  animation-delay: 0.8s;
+}
+
+@keyframes interludeDotPulse {
+  0%,
+  32% {
+    opacity: 1;
+  }
+
+  33%,
+  100% {
+    opacity: 0.2;
+  }
+}
+
 .lyrics-measure {
   position: absolute;
   inset: 0;
@@ -572,6 +635,10 @@
     font-size: 3rem;
   }
 
+  .interlude-prompt {
+    font-size: 3rem;
+  }
+
   .lyrics-measure .text {
     font-size: 3rem;
   }
@@ -603,9 +670,20 @@
     white-space: normal;
   }
 
+  .interlude-prompt {
+    font-size: 2.4rem;
+  }
+
   .lyrics-measure .text {
     font-size: 2.4rem;
     white-space: nowrap;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .interlude-prompt__dot {
+    opacity: 1;
+    animation: none;
   }
 }
 

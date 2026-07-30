@@ -62,7 +62,7 @@ function makeCalculator(notes, options = {}) {
 
 describe('allkaraoke pitch-class matching', () => {
   it('publishes the new competitive algorithm version', () => {
-    expect(SCORING_ALGORITHM_VERSION).toBe('pitch-v9-allkaraoke-dynamic-join')
+    expect(SCORING_ALGORITHM_VERSION).toBe('pitch-v10-allkaraoke-edge-fill')
   })
 
   it('uses rounded MIDI notes and a hard ±2-semitone hit window', () => {
@@ -110,7 +110,7 @@ describe('allkaraoke pitch-class matching', () => {
   })
 })
 
-describe('SimpleScoreCalculator pitch-v9-allkaraoke-dynamic-join', () => {
+describe('SimpleScoreCalculator pitch-v10-allkaraoke-edge-fill', () => {
   it.each([-36, -24, -12, 0, 12, 24, 36])(
     'accepts the same pitch class at a %s-semitone octave shift',
     (shift) => {
@@ -174,8 +174,8 @@ describe('SimpleScoreCalculator pitch-v9-allkaraoke-dynamic-join', () => {
     expect(calculator.getMaxGapSec(makeNote(0, 0.5))).toBeCloseTo(0.1, 6)
     expect(calculator.getMaxGapSec(makeNote(0, 2))).toBeCloseTo(0.4, 6)
     expect(getNoteFragmentJoinToleranceSec(makeNote(0, 1))).toBeCloseTo(0.2, 6)
-    expect(calculator.getEdgeToleranceSec(makeNote(0, 0.5))).toBeCloseTo(0.05, 6)
-    expect(calculator.getEdgeToleranceSec(makeNote(0, 2))).toBeCloseTo(0.2, 6)
+    expect(calculator.getEdgeToleranceSec(makeNote(0, 0.5))).toBeCloseTo(0.075, 6)
+    expect(calculator.getEdgeToleranceSec(makeNote(0, 2))).toBeCloseTo(0.3, 6)
   })
 
   it('bridges an unvoiced gap within 20% of the note duration', () => {
@@ -226,11 +226,11 @@ describe('SimpleScoreCalculator pitch-v9-allkaraoke-dynamic-join', () => {
     expect(calculator.getDebugInfo().recentNotes[0].stableSegments).toHaveLength(2)
   })
 
-  it('rounds hits near both edges using the note-duration ratio', () => {
+  it('fills the whole note when both edge misses stay within the note-duration tolerance', () => {
     const note = makeNote(0, 1)
     const calculator = makeCalculator([note])
     runSamples(calculator, 0, 1, (timeSec) => (
-      timeSec >= 0.08 && timeSec <= 0.92 ? 60 : null
+      timeSec >= 0.14 && timeSec <= 0.86 ? 60 : null
     ))
 
     expect(calculator.finalize(1)).toBeCloseTo(100, 6)
@@ -243,10 +243,10 @@ describe('SimpleScoreCalculator pitch-v9-allkaraoke-dynamic-join', () => {
   it('does not round a late onset beyond the note-duration ratio', () => {
     const note = makeNote(0, 1)
     const calculator = makeCalculator([note])
-    runSamples(calculator, 0, 1, (timeSec) => timeSec >= 0.12 ? 60 : null)
+    runSamples(calculator, 0, 1, (timeSec) => timeSec >= 0.17 ? 60 : null)
 
-    expect(calculator.finalize(1)).toBeGreaterThan(86)
-    expect(calculator.getScore()).toBeLessThan(89)
+    expect(calculator.finalize(1)).toBeGreaterThan(81)
+    expect(calculator.getScore()).toBeLessThan(85)
   })
 
   it('closes adjacent reference notes independently', () => {

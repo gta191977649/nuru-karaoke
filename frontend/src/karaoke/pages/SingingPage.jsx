@@ -4,7 +4,11 @@ import { useKaraokeStore } from '../../state/karaokeStore.js'
 import { synthEngine } from '../../engine/SynthEngine.js'
 import { parseLyricSegments } from '../../engine/lrc.js'
 import { sharedPitchEngine, startSharedMic, stopSharedMic } from '../../engine/audio/pitch/sharedPitchEngine.js'
-import { groupNotesToSegments } from '../../engine/audio/midi/noteUtils.js'
+import {
+    findInterludeRanges,
+    getInterludeDisplayState,
+    groupNotesToSegments,
+} from '../../engine/audio/midi/noteUtils.js'
 import MelodyGuideCanvas from '../../components/MelodyGuideCanvas.jsx'
 import KeyChangeAlert from '../../components/KeyChangeAlert.jsx'
 import useKeyChangeAlertStore from '../../state/keyChangeAlertStore.js'
@@ -208,6 +212,15 @@ function SingingPage({ onFinish }) {
         if (!seg) return false
         return seg.t0Sec <= t
     }, [scoringSegments, state.currentTime])
+
+    const interludeRanges = useMemo(
+        () => findInterludeRanges(reference?.notes),
+        [reference?.notes],
+    )
+    const interludeDisplay = useMemo(
+        () => getInterludeDisplayState(interludeRanges, state.currentTime),
+        [interludeRanges, state.currentTime],
+    )
 
     const { pitchHistoryRef, fullHistoryRef, lastPitchRef, framePitchHistoryRef } = useKaraokePitchHistory({
         pitchEngine,
@@ -490,7 +503,9 @@ function SingingPage({ onFinish }) {
                                     </span>
                                 </span>
                             </span>
-                            <div className="lyrics-lines lyrics-lines--two">
+                            <div
+                                className={`lyrics-lines lyrics-lines--two${interludeDisplay.lyricsVisible ? ' lyrics-lines--visible' : ''}`}
+                            >
                                 {lineRowsTwo.map((row, idx) => (
                                     <div className={`lyric-row ${row.align}`} key={`two-${row.align}-${idx}`}>
                                         <span className="text">
@@ -509,7 +524,9 @@ function SingingPage({ onFinish }) {
                                     </div>
                                 ))}
                             </div>
-                            <div className="lyrics-lines lyrics-lines--three">
+                            <div
+                                className={`lyrics-lines lyrics-lines--three${interludeDisplay.lyricsVisible ? ' lyrics-lines--visible' : ''}`}
+                            >
                                 {lineRowsThree.map((row, idx) => (
                                     <div className={`lyric-row ${row.align}`} key={`three-${row.align}-${idx}`}>
                                         <span className="text">
@@ -527,6 +544,17 @@ function SingingPage({ onFinish }) {
                                         </span>
                                     </div>
                                 ))}
+                            </div>
+                            <div
+                                className={`interlude-prompt${interludeDisplay.promptVisible ? ' interlude-prompt--visible' : ''}`}
+                                aria-label="間奏"
+                                aria-hidden={!interludeDisplay.promptVisible}
+                            >
+                                <span aria-hidden="true">間奏(</span>
+                                <span className="interlude-prompt__dot" aria-hidden="true">・</span>
+                                <span className="interlude-prompt__dot" aria-hidden="true">・</span>
+                                <span className="interlude-prompt__dot" aria-hidden="true">・</span>
+                                <span aria-hidden="true">)</span>
                             </div>
                         </div>
                     </div>
