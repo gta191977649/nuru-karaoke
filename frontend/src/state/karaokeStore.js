@@ -15,6 +15,7 @@ const initialEngineState = {
   transposition: 0,
   queue: [],
   queueIndex: -1,
+  playbackSessionId: 0,
   history: [],
   enabledChannels: Array.from({ length: 16 }, () => true),
   channelInstrumentNames: Array.from({ length: 16 }, (_, i) => (i === 9 ? 'Drums' : '—')),

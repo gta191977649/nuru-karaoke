@@ -169,7 +169,8 @@ function SingingPage({ onFinish }) {
     const setTechniqueCounts = usePlayerScoreStore((store) => store.setTechniqueCounts)
     const setResults = usePlayerScoreStore((store) => store.setResults)
     const setF0Curve = usePlayerScoreStore((store) => store.setF0Curve)
-    const resetPlayerScore = usePlayerScoreStore((store) => store.resetPlayerScore)
+    const scoreSessionId = usePlayerScoreStore((store) => store.scoreSessionId)
+    const beginPlayerScoreSession = usePlayerScoreStore((store) => store.beginPlayerScoreSession)
     const setSongInfo = usePlayerScoreStore((store) => store.setSongInfo)
     const showKeyChangeAlert = useKeyChangeAlertStore((store) => store.showKeyChangeAlert)
     const reference = useKaraokeReference({
@@ -177,8 +178,15 @@ function SingingPage({ onFinish }) {
         midiName: state.midiName,
         midiUrl: state.midiUrl,
         queueIndex: state.queueIndex,
+        playbackSessionId: state.playbackSessionId,
     })
     const handleLiveScoreChange = useCallback((score, meta) => {
+        if (
+            meta?.initialization === true &&
+            scoreSessionId === state.playbackSessionId
+        ) {
+            return
+        }
         setLiveScore(score, meta?.ready === true)
         if (
             meta?.ready === true &&
@@ -187,12 +195,13 @@ function SingingPage({ onFinish }) {
         ) {
             setScoreUpdateKey((key) => key + 1)
         }
-    }, [setLiveScore])
+    }, [scoreSessionId, setLiveScore, state.playbackSessionId])
     const { showSongInfo, songInfo } = useKaraokeSongIntro({
         midiUrl: state.midiUrl,
         midiName: state.midiName,
         queue: state.queue,
         queueIndex: state.queueIndex,
+        playbackSessionId: state.playbackSessionId,
         transposition: state.transposition,
         showKeyChangeAlert,
         reference,
@@ -228,7 +237,7 @@ function SingingPage({ onFinish }) {
         currentTimeRef,
         transpositionRef,
         rmsGate: micRmsGate,
-        resetKey: `${state.midiName || ''}-${state.queueIndex ?? -1}`,
+        resetKey: state.playbackSessionId,
     })
 
     // Technique Detection
@@ -244,7 +253,7 @@ function SingingPage({ onFinish }) {
         debug: false,
         debugIntervalMs: 500,
         onScoreChange: handleLiveScoreChange,
-        resetKey: `${state.midiName || ''}-${state.queueIndex ?? -1}`,
+        resetKey: state.playbackSessionId,
     })
 
     // Technique Counts (Validated)
@@ -358,18 +367,15 @@ function SingingPage({ onFinish }) {
     }, [state.transposition])
 
     useEffect(() => {
-        resetPlayerScore()
-        setLiveScore(0, true)
+        const startedNewSession = beginPlayerScoreSession(state.playbackSessionId)
+        if (!startedNewSession) return
         resetCounts()
-    }, [resetPlayerScore, resetCounts, setLiveScore, state.midiName, state.queueIndex])
+        setF0Curve(null)
+    }, [beginPlayerScoreSession, resetCounts, setF0Curve, state.playbackSessionId])
 
     useEffect(() => {
         if (songInfo) setSongInfo(songInfo)
     }, [setSongInfo, songInfo])
-
-    useEffect(() => {
-        setF0Curve(null)
-    }, [setF0Curve, state.midiName, state.queueIndex])
 
     useEffect(() => {
         let cancelled = false
@@ -395,7 +401,7 @@ function SingingPage({ onFinish }) {
     // Reset finished flag on new song
     useEffect(() => {
         hasFinishedRef.current = false
-    }, [state.midiName, state.queueIndex])
+    }, [state.playbackSessionId])
 
     useEffect(() => {
         if (!state.duration || state.duration < 10) return // Skip very short/invalid duration
@@ -436,7 +442,7 @@ function SingingPage({ onFinish }) {
     return (
         <div className={`karaokePage${showSongInfo ? ' karaokePage--intro' : ''}`}>
             <RealtimeScoreCounter
-                key={`${state.midiName || ''}-${state.queueIndex ?? -1}`}
+                key={state.playbackSessionId}
                 score={liveScore}
                 ready={liveScoreReady}
                 label="現在の得点"

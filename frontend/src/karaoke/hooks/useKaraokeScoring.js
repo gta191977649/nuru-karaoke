@@ -67,6 +67,7 @@ export function useKaraokeScoring({
                 ready: true,
                 finalizedNotes: 0,
                 cumulative: true,
+                initialization: true,
             })
         }
     }, [resetKey, reference, rmsGate, onScoreChange])

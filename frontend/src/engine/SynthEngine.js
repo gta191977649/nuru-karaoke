@@ -986,7 +986,8 @@ class SynthEngine {
       lyricOffsetMs: 0,
       activeLyricIndex: -1,
     })
-    this._setState({ queueIndex: i })
+    const playbackSessionId = (Number(getKaraokeStoreState().playbackSessionId) || 0) + 1
+    this._setState({ queueIndex: i, playbackSessionId })
     await this.loadMidiFromUrl(song.url, { autoPlay: false })
 
     if (song.lrc) {

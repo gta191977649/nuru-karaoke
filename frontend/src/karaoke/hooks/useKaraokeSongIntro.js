@@ -6,6 +6,7 @@ function useKaraokeSongIntro({
   midiName,
   queue,
   queueIndex,
+  playbackSessionId,
   transposition,
   showKeyChangeAlert,
   reference,
@@ -44,7 +45,7 @@ function useKaraokeSongIntro({
     }
 
     // Only trigger the intro animation if it's a new song load
-    const introKey = midiUrl || `${queueIndex ?? -1}:${midiName || ''}`
+    const introKey = `${playbackSessionId ?? 0}:${midiUrl || `${queueIndex ?? -1}:${midiName || ''}`}`
     if (introKey === lastIntroMidiUrl) return
     if (!title) return
 
@@ -59,6 +60,7 @@ function useKaraokeSongIntro({
     midiName,
     queue,
     queueIndex,
+    playbackSessionId,
     transposition,
     showKeyChangeAlert,
     lastIntroMidiUrl,
