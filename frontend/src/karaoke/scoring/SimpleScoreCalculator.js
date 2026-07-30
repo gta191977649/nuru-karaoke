@@ -1,11 +1,11 @@
-export const SCORING_ALGORITHM_VERSION = 'pitch-v9-allkaraoke-dynamic-join'
+export const SCORING_ALGORITHM_VERSION = 'pitch-v10-allkaraoke-edge-fill'
 export const LIVE_HIT_MARKER_DETUNE_SCALE = 0.5
 export const LIVE_HIT_MARKER_MAX_OFFSET_SEMITONES = 0.75
 
 export const DEFAULT_SCORING_CONFIG = Object.freeze({
   pitchToleranceSemitones: 2,
-  fragmentJoinNoteRatio: 0.2,
-  edgeSnapNoteRatio: 0.1,
+  fragmentJoinNoteRatio: 0.3,
+  edgeSnapNoteRatio: 0.2,
   sampleGridSec: 0.02,
   sampleLookupToleranceSec: 0.03,
   shortNoteMaxSec: 0.22,
