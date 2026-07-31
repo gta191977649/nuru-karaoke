@@ -121,7 +121,7 @@ class PitchEngine {
     return () => this._debugListeners.delete(cb)
   }
 
-  async startMic() {
+  async startMic(options = {}) {
     if (this._stream) return
     if (this._starting) {
       this._stopRequested = false
@@ -141,13 +141,17 @@ class PitchEngine {
       const noiseSuppression = micConstraints.noiseSuppression === true
       const autoGainControl = micConstraints.autoGainControl === true
 
-      const stream = await navigator.mediaDevices.getUserMedia({
-        audio: {
-          echoCancellation,
-          noiseSuppression,
-          autoGainControl,
-        },
-      })
+      const microphoneDeviceId = String(options.deviceId || '').trim()
+      const audioConstraints = {
+        echoCancellation,
+        noiseSuppression,
+        autoGainControl,
+      }
+      if (microphoneDeviceId) {
+        audioConstraints.deviceId = { exact: microphoneDeviceId }
+      }
+
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: audioConstraints })
 
       const source = audioContext.createMediaStreamSource(stream)
       const workletNode = new AudioWorkletNode(audioContext, 'pitch-frame-processor', {

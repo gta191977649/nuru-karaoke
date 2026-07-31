@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react'
 import { synthEngine } from '../../engine/SynthEngine.js'
 import { extractReferenceMelodyFromMidiData } from '../../engine/audio/midi/referenceMelody.js'
 
-function useKaraokeReference({ ready, midiName, midiUrl, queueIndex, playbackSessionId }) {
+function useKaraokeReference({ ready, midiName, midiUrl, queueIndex }) {
   const [reference, setReference] = useState(null)
 
   useEffect(() => {
@@ -25,7 +25,7 @@ function useKaraokeReference({ ready, midiName, midiUrl, queueIndex, playbackSes
     return () => {
       active = false
     }
-  }, [ready, midiName, midiUrl, queueIndex, playbackSessionId])
+  }, [ready, midiName, midiUrl, queueIndex])
 
   return reference
 }

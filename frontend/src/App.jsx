@@ -1,6 +1,7 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { Button, Col, Container, Row, Tab, Tabs } from 'react-bootstrap'
-import WiiHomeMain, { SCREENS } from './home/WiiHomeMain.jsx'
+import WiiHomeMain from './home/WiiHomeMain.jsx'
+import { SCREENS } from './home/screens.js'
 import Karaoke from './karaoke/Karaoke.jsx'
 import { synthEngine } from './engine/SynthEngine.js'
 import { getKaraokeStoreState, useKaraokeStore } from './state/karaokeStore.js'
@@ -17,6 +18,7 @@ import { getUiAudioEngine } from './engine/audioEngine.js'
 import './App.css'
 
 const TRANSITION_MS = UI_CONFIG.karaokeTransitionMs
+const MINI_TRANSITION_MS = 720
 
 const wait = (ms) => new Promise((resolve) => setTimeout(resolve, ms))
 
@@ -42,6 +44,8 @@ function App({ onNavigate }) {
   const resetPlayerScore = usePlayerScoreStore((state) => state.resetPlayerScore)
   const [transitionPhase, setTransitionPhase] = useState('idle')
   const transitionLockRef = useRef(false)
+  const dockTransitionTimerRef = useRef(null)
+  const [animateKaraokeDock, setAnimateKaraokeDock] = useState(false)
   const [karaokeResetKey, setKaraokeResetKey] = useState(0)
   const showKeyChangeAlert = useKeyChangeAlertStore((state) => state.showKeyChangeAlert)
   const showAlert = useAlertStore((state) => state.showAlert)
@@ -73,27 +77,61 @@ function App({ onNavigate }) {
     [onNavigate],
   )
 
+  const cancelKaraokeDockAnimation = useCallback(() => {
+    if (dockTransitionTimerRef.current) {
+      clearTimeout(dockTransitionTimerRef.current)
+      dockTransitionTimerRef.current = null
+    }
+    setAnimateKaraokeDock(false)
+  }, [])
+
+  const startKaraokeDockAnimation = useCallback(() => {
+    if (dockTransitionTimerRef.current) {
+      clearTimeout(dockTransitionTimerRef.current)
+    }
+    setAnimateKaraokeDock(true)
+    dockTransitionTimerRef.current = setTimeout(() => {
+      dockTransitionTimerRef.current = null
+      setAnimateKaraokeDock(false)
+    }, MINI_TRANSITION_MS)
+  }, [])
+
   const navigateScreen = useCallback(
     (next) => {
+      cancelKaraokeDockAnimation()
       if (next !== SCREENS.karaoke && karaokeActive) {
         setKaraokeMini(true)
       }
       setScreen(next)
     },
-    [karaokeActive, setKaraokeMini, setScreen],
+    [cancelKaraokeDockAnimation, karaokeActive, setKaraokeMini, setScreen],
   )
 
   useEffect(() => {
     if (!karaokeActive || karaokeMini || screen !== SCREENS.karaoke) return
     const handleMove = () => {
+      startKaraokeDockAnimation()
       setKaraokeMini(true)
       setScreen(SCREENS.home)
     }
     window.addEventListener('mousemove', handleMove, { once: true })
     return () => window.removeEventListener('mousemove', handleMove)
-  }, [karaokeActive, karaokeMini, screen, setKaraokeMini, setScreen])
+  }, [
+    karaokeActive,
+    karaokeMini,
+    screen,
+    setKaraokeMini,
+    setScreen,
+    startKaraokeDockAnimation,
+  ])
 
-  useEffect(() => {
+  useEffect(() => () => {
+    if (dockTransitionTimerRef.current) {
+      clearTimeout(dockTransitionTimerRef.current)
+    }
+  }, [])
+
+  useLayoutEffect(() => {
     if (!karaokeActive) return
     const updateTransform = () => {
       if (!frameRef.current || !mainRef.current) return
@@ -211,17 +249,17 @@ function App({ onNavigate }) {
               activeKey={screen}
               onSelect={(key) => {
                 if (!key) return
-                if (key === SCREENS.home) setScreen(SCREENS.home)
-                if (key === SCREENS.moreModes) setScreen(SCREENS.moreModes)
-                if (key === SCREENS.ticket) setScreen(SCREENS.ticket)
-                if (key === SCREENS.mySongs) setScreen(SCREENS.mySongs)
+                if (key === SCREENS.home) navigateScreen(SCREENS.home)
+                if (key === SCREENS.moreModes) navigateScreen(SCREENS.moreModes)
+                if (key === SCREENS.settings) navigateScreen(SCREENS.settings)
+                if (key === SCREENS.mySongs) navigateScreen(SCREENS.mySongs)
               }}
               id="joy-top-tabs"
             >
               <Tab eventKey={SCREENS.home} title="曲を選ぶ" />
               <Tab eventKey={SCREENS.moreModes} title="採点" />
               <Tab eventKey={SCREENS.mySongs} title="マイうた" />
-              <Tab eventKey={SCREENS.ticket} title="メンテナンス" />
+              <Tab eventKey={SCREENS.settings} title="設定" />
 
             </Tabs>
 
@@ -259,7 +297,11 @@ function App({ onNavigate }) {
 
         {showKaraokeDock ? (
           <div
-            className={`karaokeDock karaokeDock--${karaokeDockMode}`}
+            className={[
+              'karaokeDock',
+              `karaokeDock--${karaokeDockMode}`,
+              animateKaraokeDock ? 'karaokeDock--animate-resize' : '',
+            ].join(' ')}
             style={{
               top: `${karaokeBase.top}px`,
               left: `${karaokeBase.left}px`,
@@ -269,9 +311,11 @@ function App({ onNavigate }) {
               '--karaoke-mini-y': `${karaokeTransform.y}px`,
               '--karaoke-mini-sx': karaokeTransform.sx,
               '--karaoke-mini-sy': karaokeTransform.sy,
+              '--karaoke-mini-transition-ms': `${MINI_TRANSITION_MS}ms`,
             }}
             onClick={() => {
               if (screen !== SCREENS.home || !karaokeMini) return
+              startKaraokeDockAnimation()
               openKaraoke()
             }}
             role="button"
@@ -284,7 +328,12 @@ function App({ onNavigate }) {
                 className="karaokeDock__scale"
                 style={{ '--karaoke-transition-ms': `${TRANSITION_MS}ms` }}
               >
-                <Karaoke onStop={handleStop} resetKey={karaokeResetKey} transitionPhase={transitionPhase} />
+                <Karaoke
+                  onStop={handleStop}
+                  resetKey={karaokeResetKey}
+                  transitionPhase={transitionPhase}
+                  displayMode={karaokeDockMode}
+                />
               </div>
             </div>
           </div>

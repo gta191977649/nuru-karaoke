@@ -7,24 +7,12 @@ import FindSongKeywords from './FindSongKeywords.jsx'
 import Leaderboard from './Leaderboard.jsx'
 import ScoringPage from './ScoringPage.jsx'
 import AuthScreen from './AuthScreen.jsx'
-import Maintenance from './メンテナンス.jsx'
+import SettingsPage from './SettingsPage.jsx'
 import MySong from './MySong.jsx'
+import ArtistPage from './ArtistPage.jsx'
+import useUiStore from '../state/uiStore.js'
+import { SCREENS } from './screens.js'
 import logo from '../assets/logo.png'
-
-const SCREENS = {
-  home: 'home',
-  findSongs: 'findSongs',
-  myRoom: 'myRoom',
-  moreModes: 'moreModes',
-  mySongs: 'mySongs',
-  ticket: 'ticket',
-  comfirmSongs: 'confirmSongs',
-  karaoke: 'karaoke',
-  queue: 'queue',
-  findSongKeywords: 'findSongKeywords',
-  leaderboard: 'leaderboard',
-  auth: 'auth',
-}
 
 function WiiScreen({ title, subtitle, onBack }) {
   return (
@@ -43,14 +31,23 @@ function WiiScreen({ title, subtitle, onBack }) {
 }
 
 function WiiHomeMain({ screen, onNavigate, onOpenKaraoke, karaokeTargetRef, mainRef }) {
+  const selectedArtist = useUiStore((state) => state.selectedArtist)
+  const songSearchMode = useUiStore((state) => state.songSearchMode)
+  const openSongSearch = useUiStore((state) => state.openSongSearch)
+  const closeArtist = useUiStore((state) => state.closeArtist)
+  const songDetailReturnScreen = useUiStore((state) => state.songDetailReturnScreen)
+  const setSongDetailReturnScreen = useUiStore((state) => state.setSongDetailReturnScreen)
+
   if (screen !== SCREENS.home) {
     switch (screen) {
       case SCREENS.findSongs:
         return (
           <main className="wiiHome__main" ref={mainRef}>
             <FindSongs
+              initialMode={songSearchMode}
               onBack={() => onNavigate(SCREENS.home)}
               onSelectSong={(song) => {
+                setSongDetailReturnScreen(SCREENS.findSongs)
                 onNavigate(SCREENS.comfirmSongs)
                 setPendingSong(song)
               }}
@@ -79,17 +76,17 @@ function WiiHomeMain({ screen, onNavigate, onOpenKaraoke, karaokeTargetRef, main
             />
           </main>
         )
-      case SCREENS.ticket:
+      case SCREENS.settings:
         return (
           <main className="wiiHome__main" ref={mainRef}>
-            <Maintenance onBack={() => onNavigate(SCREENS.home)} />
+            <SettingsPage onBack={() => onNavigate(SCREENS.home)} />
           </main>
         )
       case SCREENS.comfirmSongs:
         return (
           <main className="wiiHome__main" ref={mainRef}>
             <ComfirnSong
-              onBack={() => onNavigate(SCREENS.findSongs)}
+              onBack={() => onNavigate(songDetailReturnScreen || SCREENS.findSongs)}
               onConfirm={() => {
                 if (onOpenKaraoke) onOpenKaraoke()
               }}
@@ -115,12 +112,28 @@ function WiiHomeMain({ screen, onNavigate, onOpenKaraoke, karaokeTargetRef, main
             <FindSongKeywords
               onBack={() => onNavigate(SCREENS.home)}
               onSelectSong={(song) => {
+                setSongDetailReturnScreen(SCREENS.findSongKeywords)
                 onNavigate(SCREENS.comfirmSongs)
                 setPendingSong(song)
               }}
               onConfirm={() => {
                 if (onOpenKaraoke) onOpenKaraoke()
               }}
+            />
+          </main>
+        )
+      case SCREENS.artist:
+        return (
+          <main className="wiiHome__main" ref={mainRef}>
+            <ArtistPage
+              artist={selectedArtist}
+              onBack={closeArtist}
+              onSelectSong={(song) => {
+                setSongDetailReturnScreen(SCREENS.artist)
+                onNavigate(SCREENS.comfirmSongs)
+                setPendingSong(song)
+              }}
+              onConfirm={() => onOpenKaraoke?.()}
             />
           </main>
         )
@@ -163,14 +176,14 @@ function WiiHomeMain({ screen, onNavigate, onOpenKaraoke, karaokeTargetRef, main
         <Col xs={12} lg={8}>
           <Row className="g-3">
             <Col xs={12} md={6}>
-              <Button className="joyCard joyCard--artist w-100" type="button" onClick={() => onNavigate(SCREENS.findSongs)}>
+              <Button className="joyCard joyCard--artist w-100" type="button" onClick={() => openSongSearch('artist')}>
                 <div className="joyCard__icon">🎤</div>
                 <div className="joyCard__title">歌手名</div>
                 <div className="joyCard__sub">ARTIST</div>
               </Button>
             </Col>
             <Col xs={12} md={6}>
-              <Button className="joyCard joyCard--song w-100" type="button" onClick={() => onNavigate(SCREENS.findSongs)}>
+              <Button className="joyCard joyCard--song w-100" type="button" onClick={() => openSongSearch('title')}>
                 <div className="joyCard__icon">🎵</div>
                 <div className="joyCard__title">曲 名</div>
                 <div className="joyCard__sub">SONG</div>
@@ -239,5 +252,4 @@ function WiiHomeMain({ screen, onNavigate, onOpenKaraoke, karaokeTargetRef, main
   )
 }
 
-export { SCREENS }
 export default WiiHomeMain

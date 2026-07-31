@@ -1,9 +1,16 @@
 import { synthEngine } from './SynthEngine.js'
+import { getSettingsStoreState } from '../state/settingsStore.js'
 
 async function enqueueSongAndPlay(song) {
   if (!song) return
+  const queuedSong = song.guideMelodyEnabled == null
+    ? {
+      ...song,
+      guideMelodyEnabled: getSettingsStoreState().guideMelodyEnabled,
+    }
+    : song
   await synthEngine.resumeAudio()
-  synthEngine.enqueueSong(song)
+  synthEngine.enqueueSong(queuedSong)
   synthEngine.clearPendingSong()
   await synthEngine.playQueueIfIdle()
 }

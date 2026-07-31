@@ -7,6 +7,7 @@ import { fetchSongByCode } from '../services/songLibrary.js'
 import useAlertStore from '../state/alertStore.js'
 import useFavoriteStore from '../state/favoriteStore.js'
 import useUserStore from '../state/userStore.js'
+import ArtistLink from '../components/ArtistLink.jsx'
 
 function MySong({ onBack, onLogin, onOpenKaraoke }) {
   const authStatus = useUserStore((state) => state.status)
@@ -142,7 +143,7 @@ function MySong({ onBack, onLogin, onOpenKaraoke }) {
                     {favorite.song_code}
                   </div>
                   <div className="wiiList__title">{favorite.title}</div>
-                  <div className="wiiList__artist">{favorite.artist}</div>
+                  <ArtistLink artist={favorite.artist} className="wiiList__artist" />
                   <div className="d-flex gap-2 ms-auto">
                     <Button
                       className="wiiList__actionBtn wiiList__actionBtn--remove"

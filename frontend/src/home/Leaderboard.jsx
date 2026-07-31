@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from 'react'
 import { Button, Col, Form, ListGroup, Row, Spinner } from 'react-bootstrap'
 import { fetchSongs } from '../services/songLibrary.js'
 import { fetchLeaderboard } from '../services/leaderboard.js'
+import ArtistLink from '../components/ArtistLink.jsx'
 
 function Leaderboard({ onBack }) {
   const [songs, setSongs] = useState([])
@@ -105,7 +106,7 @@ function Leaderboard({ onBack }) {
 
           {selectedSong ? (
             <div className="text-muted small mt-2">
-              {selectedSong.title} / {selectedSong.artist}
+              {selectedSong.title} / <ArtistLink artist={selectedSong.artist} />
             </div>
           ) : null}
 

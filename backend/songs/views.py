@@ -22,10 +22,19 @@ class SongViewSet(ReadOnlyModelViewSet):
     def get_queryset(self):
         qs = Song.objects.filter(is_published=True).prefetch_related('tags')
         q = self.request.query_params.get('q')
+        artist = self.request.query_params.get('artist')
+        artist_q = self.request.query_params.get('artist_q')
+        title_q = self.request.query_params.get('title_q')
         tag = self.request.query_params.get('tag')
         language = self.request.query_params.get('language')
         if q:
             qs = qs.filter(Q(title__icontains=q) | Q(artist__icontains=q))
+        if artist:
+            qs = qs.filter(artist__iexact=artist.strip())
+        if artist_q:
+            qs = qs.filter(artist__icontains=artist_q.strip())
+        if title_q:
+            qs = qs.filter(title__icontains=title_q.strip())
         if tag:
             qs = qs.filter(tags__name__iexact=tag)
         if language:

@@ -1,4 +1,5 @@
 import React from 'react';
+import ArtistLink from '../../../components/ArtistLink.jsx';
 // import { Flame } from 'lucide-react'; // Removing lucide-react as it might not be in main project, using emoji or SVG
 
 const FlameIcon = () => (
@@ -27,7 +28,11 @@ export const SongInfo = ({ data }) => {
             <InfoRow label="曲名" value={data.title} type="cyan" />
 
             {/* Artist - Cyan */}
-            <InfoRow label="歌手名" value={`♪ ${data.artist}`} type="cyan" />
+            <InfoRow
+                label="歌手名"
+                value={<ArtistLink artist={data.artist}>♪ {data.artist}</ArtistLink>}
+                type="cyan"
+            />
 
             {/* National Average - Magenta */}
             <InfoRow label="全国平均" value={`${(data.avgScore || 0).toFixed(3)} 点`} type="magenta" />

@@ -6,6 +6,7 @@ import { enqueueSongAndPlay } from '../engine/playerController.js'
 import useAlertStore from '../state/alertStore.js'
 import useFavoriteStore from '../state/favoriteStore.js'
 import useUserStore from '../state/userStore.js'
+import ArtistLink from '../components/ArtistLink.jsx'
 
 function FindSongKeywords({ onBack, onSelectSong, onConfirm }) {
     const showAlert = useAlertStore((state) => state.showAlert)
@@ -220,7 +221,7 @@ function FindSongKeywords({ onBack, onSelectSong, onConfirm }) {
                                     </div>
 
                                     <div className="wiiList__title">{song.title}</div>
-                                    <div className="wiiList__artist">{song.artist}</div>
+                                    <ArtistLink artist={song.artist} className="wiiList__artist" />
 
                                     <div className="d-flex gap-2 ms-auto">
                                         <Button

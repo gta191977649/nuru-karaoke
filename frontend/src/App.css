@@ -307,6 +307,7 @@
 .karaokeDock {
   position: absolute;
   z-index: 10;
+  overflow: hidden;
 }
 
 .joyHome {
@@ -626,9 +627,14 @@
 .karaokeDock__scale {
   width: 100%;
   height: 100%;
+  overflow: hidden;
   transform-origin: top left;
-  transition: transform 720ms linear;
   will-change: transform;
+}
+
+.karaokeDock--animate-resize .karaokeDock__move,
+.karaokeDock--animate-resize .karaokeDock__scale {
+  transition: transform var(--karaoke-mini-transition-ms, 720ms) linear;
 }
 
 .karaokeDock--full .karaokeDock__move {
@@ -1771,6 +1777,599 @@
   white-space: nowrap;
   font-weight: 700;
   letter-spacing: -0.02em;
+}
+
+.artistLink {
+  appearance: none;
+  border: 0;
+  background: transparent;
+  color: #0d4ca4;
+  cursor: pointer;
+  display: inline;
+  font: inherit;
+  font-weight: inherit;
+  line-height: inherit;
+  margin: 0;
+  padding: 0;
+  text-align: inherit;
+  text-decoration: underline;
+  text-decoration-color: rgba(13, 76, 164, 0.35);
+  text-decoration-thickness: 1px;
+  text-underline-offset: 0.18em;
+}
+
+.artistLink:hover,
+.artistLink:focus-visible {
+  color: #d21818;
+  text-decoration-color: currentColor;
+}
+
+.artistLink:focus-visible {
+  border-radius: 3px;
+  outline: 3px solid rgba(210, 24, 24, 0.24);
+  outline-offset: 2px;
+}
+
+.artistPage__header {
+  align-items: center;
+  background:
+    linear-gradient(135deg, rgba(255, 255, 255, 0.96), rgba(250, 235, 238, 0.96)),
+    repeating-linear-gradient(90deg, transparent 0 18px, rgba(210, 24, 24, 0.05) 18px 19px);
+  border-bottom: 2px solid rgba(210, 24, 24, 0.2);
+  display: grid;
+  grid-template-columns: minmax(100px, auto) 1fr minmax(70px, auto);
+  gap: 1rem;
+  min-height: 86px;
+  padding: 0.75rem 1rem;
+}
+
+.artistPage__identity {
+  min-width: 0;
+  text-align: center;
+}
+
+.artistPage__eyebrow {
+  color: #a50f1c;
+  display: block;
+  font-size: 0.72rem;
+  font-weight: 900;
+  letter-spacing: 0.22em;
+  margin-bottom: 0.1rem;
+}
+
+.artistPage__title {
+  color: #242424;
+  font-size: clamp(1.45rem, 3vw, 2.25rem);
+  font-weight: 900;
+  line-height: 1.1;
+  margin: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.artistPage__body {
+  display: flex;
+  flex: 1 1 0;
+  flex-direction: column;
+  min-height: 0;
+  overflow: hidden;
+  padding: 0.75rem;
+}
+
+.artistPage__status {
+  align-items: center;
+  display: flex;
+  gap: 0.5rem;
+  justify-content: center;
+  padding: 2rem;
+}
+
+.artistPage__song {
+  grid-template-columns: auto minmax(0, 1fr) auto;
+}
+
+.artistPage__song:focus-visible {
+  outline: 3px solid rgba(210, 24, 24, 0.35);
+  outline-offset: -2px;
+}
+
+.artistPage__songMeta {
+  min-width: 0;
+}
+
+.artistPage__songMeta .wiiList__artist {
+  margin-top: 0.15rem;
+  text-align: left;
+}
+
+.settingsPage {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  min-height: 430px;
+  overflow: hidden;
+}
+
+.settingsPage__header {
+  align-items: center;
+  background:
+    linear-gradient(135deg, rgba(255, 255, 255, 0.98), rgba(249, 235, 238, 0.98)),
+    repeating-linear-gradient(90deg, transparent 0 18px, rgba(210, 24, 24, 0.05) 18px 19px);
+  border: 1px solid rgba(170, 25, 35, 0.18);
+  border-radius: 12px 12px 0 0;
+  display: grid;
+  grid-template-columns: minmax(100px, 1fr) auto minmax(100px, 1fr);
+  min-height: 78px;
+  padding: 0.7rem 1rem;
+}
+
+.settingsPage__heading {
+  text-align: center;
+}
+
+.settingsPage__back,
+.settingsPage__back:hover,
+.settingsPage__back:focus,
+.settingsPage__back:active {
+  appearance: none !important;
+  background: transparent !important;
+  border: 0 !important;
+  border-radius: 0 !important;
+  box-shadow: none !important;
+  color: #e60012 !important;
+  outline-offset: 4px;
+  padding: 0 !important;
+}
+
+.settingsPage__heading h1 {
+  color: #252525;
+  font-size: clamp(1.65rem, 3vw, 2.2rem);
+  font-weight: 900;
+  letter-spacing: 0.08em;
+  line-height: 1;
+  margin: 0;
+}
+
+.settingsPage__eyebrow {
+  color: #a50f1c;
+  display: block;
+  font-size: 0.65rem;
+  font-weight: 900;
+  letter-spacing: 0.22em;
+  margin-bottom: 0.25rem;
+}
+
+.settingsPage__tabs {
+  background: linear-gradient(#4a4a4a, #303030);
+  display: grid;
+  gap: 2px;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  padding: 5px;
+}
+
+.settingsPage__tab {
+  align-items: center;
+  background: linear-gradient(#fbfbfb, #d8d8d8);
+  border: 1px solid rgba(0, 0, 0, 0.28);
+  border-radius: 5px;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.9);
+  color: #444;
+  display: flex;
+  font-size: 1.05rem;
+  font-weight: 900;
+  gap: 0.55rem;
+  justify-content: center;
+  min-height: 48px;
+  padding: 0.45rem 1rem;
+}
+
+.settingsPage__tab--active {
+  background: linear-gradient(#e62d36, #ad0d18);
+  border-color: #8a0710;
+  color: #fff;
+  text-shadow: 0 1px 1px rgba(0, 0, 0, 0.25);
+}
+
+.settingsPage__tabIcon {
+  align-items: center;
+  background: rgba(255, 255, 255, 0.82);
+  border-radius: 50%;
+  color: #b0101a;
+  display: inline-flex;
+  font-size: 0.95rem;
+  height: 25px;
+  justify-content: center;
+  width: 25px;
+}
+
+.settingsPage__content {
+  background: linear-gradient(#eceeef, #dfe2e4);
+  border: 1px solid rgba(0, 0, 0, 0.14);
+  border-radius: 0 0 12px 12px;
+  flex: 1 1 0;
+  min-height: 0;
+  overflow: auto;
+  padding: clamp(0.8rem, 2vw, 1.4rem);
+}
+
+.settingsList {
+  display: flex;
+  flex-direction: column;
+  gap: 0.55rem;
+  margin: 0 auto;
+  max-width: 920px;
+}
+
+.settingsList__item {
+  align-items: center;
+  background: linear-gradient(#ffffff, #eceeef);
+  border: 1px solid rgba(0, 0, 0, 0.2);
+  border-left: 5px solid #c31420;
+  border-radius: 8px;
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.95),
+    0 2px 0 rgba(0, 0, 0, 0.08);
+  display: grid;
+  gap: 0.9rem;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  min-height: 86px;
+  padding: 0.75rem 1rem;
+}
+
+.settingsList__item--disabled {
+  border-left-color: #999;
+  color: #777;
+  opacity: 0.68;
+}
+
+.settingsList__icon {
+  align-items: center;
+  background: linear-gradient(#555, #292929);
+  border: 1px solid rgba(0, 0, 0, 0.35);
+  border-radius: 7px;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.22);
+  color: #fff;
+  display: flex;
+  flex: 0 0 auto;
+  font-size: 1.35rem;
+  font-weight: 900;
+  height: 48px;
+  justify-content: center;
+  width: 48px;
+}
+
+.settingsList__icon--playback {
+  background: linear-gradient(#eb3340, #a90813);
+}
+
+.settingsList__icon--microphone span {
+  border: 2px solid #fff;
+  border-radius: 999px;
+  height: 24px;
+  position: relative;
+  width: 12px;
+}
+
+.settingsList__icon--microphone span::before {
+  border: solid #fff;
+  border-radius: 0 0 9px 9px;
+  border-width: 0 2px 2px;
+  bottom: -6px;
+  content: '';
+  height: 9px;
+  left: -5px;
+  position: absolute;
+  width: 18px;
+}
+
+.settingsList__icon--microphone span::after {
+  background: #fff;
+  bottom: -11px;
+  content: '';
+  height: 5px;
+  left: 3px;
+  position: absolute;
+  width: 2px;
+}
+
+.settingsList__body {
+  min-width: 0;
+}
+
+.settingsList__label {
+  color: #252525;
+  font-size: 1.08rem;
+  font-weight: 900;
+}
+
+.settingsList__description {
+  color: #646464;
+  font-size: 0.84rem;
+  font-weight: 700;
+  margin-top: 0.16rem;
+}
+
+.settingsList__help {
+  color: #8a5a12;
+  font-size: 0.76rem;
+  font-weight: 700;
+  margin-top: 0.45rem;
+}
+
+.settingsList__control {
+  align-items: center;
+  display: flex;
+  gap: 0.55rem;
+  justify-content: flex-end;
+}
+
+.settingsList__control .form-check {
+  margin: 0;
+  min-height: 0;
+}
+
+.settingsList__control .form-check-input {
+  cursor: pointer;
+  height: 1.55rem;
+  margin: 0;
+  width: 3rem;
+}
+
+.settingsList__control .form-check-input:checked {
+  background-color: #c31420;
+  border-color: #970b14;
+}
+
+.settingsList__state {
+  color: #777;
+  font-size: 0.8rem;
+  font-weight: 900;
+  min-width: 28px;
+}
+
+.settingsList__state.is-on {
+  color: #b00f1a;
+}
+
+.settingsList__message {
+  color: #4d6475;
+  font-size: 0.76rem;
+  font-weight: 700;
+  margin-top: 0.35rem;
+}
+
+.settingsPanel {
+  background: linear-gradient(#ffffff, #f1f3f4);
+  border: 1px solid rgba(0, 0, 0, 0.16);
+  border-radius: 14px;
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.95),
+    0 4px 10px rgba(0, 0, 0, 0.1);
+  margin: 0 auto;
+  max-width: 880px;
+  overflow: hidden;
+}
+
+.settingsPanel__title {
+  align-items: center;
+  background: linear-gradient(#4b4b4b, #292929);
+  border-bottom: 3px solid #c31420;
+  color: #fff;
+  display: flex;
+  font-size: 1.1rem;
+  font-weight: 900;
+  gap: 0.55rem;
+  letter-spacing: 0.04em;
+  padding: 0.65rem 1rem;
+}
+
+.settingsPanel__micIcon {
+  border: 2px solid #fff;
+  border-radius: 999px;
+  display: inline-block;
+  height: 20px;
+  position: relative;
+  width: 10px;
+}
+
+.settingsPanel__micIcon::after {
+  background: #fff;
+  bottom: -6px;
+  content: '';
+  height: 6px;
+  left: 3px;
+  position: absolute;
+  width: 2px;
+}
+
+.settingsRow {
+  align-items: center;
+  background: #fff;
+  display: flex;
+  gap: 1rem;
+  justify-content: space-between;
+  min-height: 100px;
+  padding: 1rem 1.2rem;
+}
+
+.settingsRow--stacked {
+  align-items: stretch;
+  flex-direction: column;
+  justify-content: flex-start;
+}
+
+.settingsRow__copy {
+  min-width: 0;
+}
+
+.settingsRow__label {
+  color: #252525;
+  font-size: 1.15rem;
+  font-weight: 900;
+}
+
+.settingsRow__description {
+  color: #6c6c6c;
+  font-size: 0.86rem;
+  font-weight: 700;
+  margin-top: 0.25rem;
+}
+
+.settingsRow__control {
+  align-items: center;
+  background: linear-gradient(#ededed, #d1d1d1);
+  border: 1px solid rgba(0, 0, 0, 0.2);
+  border-radius: 999px;
+  display: flex;
+  flex: 0 0 auto;
+  gap: 0.65rem;
+  min-width: 130px;
+  padding: 0.45rem 0.7rem;
+}
+
+.settingsRow__control .form-check {
+  margin: 0;
+  min-height: 0;
+}
+
+.settingsRow__control .form-check-input {
+  cursor: pointer;
+  height: 1.45rem;
+  margin: 0;
+  width: 2.8rem;
+}
+
+.settingsRow__control .form-check-input:checked {
+  background-color: #c31420;
+  border-color: #970b14;
+}
+
+.settingsRow__state {
+  color: #777;
+  font-size: 0.8rem;
+  font-weight: 900;
+  min-width: 28px;
+}
+
+.settingsRow__state.is-on {
+  color: #b00f1a;
+}
+
+.settingsPanel__note,
+.settingsPanel__placeholder {
+  border-top: 1px solid rgba(0, 0, 0, 0.11);
+  color: #666;
+  font-size: 0.82rem;
+  font-weight: 700;
+  padding: 0.75rem 1.2rem;
+}
+
+.settingsPanel__note {
+  background: #fff8e1;
+}
+
+.settingsPanel__placeholder {
+  background: repeating-linear-gradient(
+    -45deg,
+    #f3f3f3 0 8px,
+    #ececec 8px 16px
+  );
+  color: #888;
+  min-height: 76px;
+}
+
+.settingsSelectWrap {
+  max-width: 390px;
+  min-width: min(390px, 38vw);
+  position: relative;
+}
+
+.settingsSelect {
+  background-color: #fff !important;
+  border: 2px solid rgba(0, 0, 0, 0.3) !important;
+  border-radius: 7px !important;
+  color: #252525 !important;
+  font-size: 1rem !important;
+  font-weight: 800 !important;
+  min-height: 48px;
+  padding-right: 3rem !important;
+}
+
+.settingsSelect:focus {
+  border-color: #c31420 !important;
+  box-shadow: 0 0 0 0.2rem rgba(195, 20, 32, 0.18) !important;
+}
+
+.settingsSelectWrap__spinner {
+  color: #c31420;
+  pointer-events: none;
+  position: absolute;
+  right: 2.2rem;
+  top: calc(50% - 0.5rem);
+}
+
+.settingsRow__message {
+  color: #4d6475;
+  font-size: 0.82rem;
+  font-weight: 700;
+}
+
+@media (max-width: 767.98px) {
+  .artistPage__header {
+    grid-template-columns: auto minmax(0, 1fr) auto;
+    gap: 0.5rem;
+    padding-inline: 0.5rem;
+  }
+
+  .artistPage__song {
+    grid-template-columns: auto minmax(0, 1fr);
+  }
+
+  .artistPage__song > .d-flex {
+    grid-column: 1 / -1;
+    justify-content: flex-end;
+    margin-left: 0 !important;
+  }
+
+  .settingsPage__header {
+    grid-template-columns: auto minmax(0, 1fr) auto;
+    padding-inline: 0.55rem;
+  }
+
+  .settingsPage__headerSpacer {
+    width: 54px;
+  }
+
+  .settingsPage__tab {
+    font-size: 0.9rem;
+    padding-inline: 0.4rem;
+  }
+
+  .settingsList__item {
+    align-items: start;
+    gap: 0.65rem;
+    grid-template-columns: auto minmax(0, 1fr);
+  }
+
+  .settingsList__control,
+  .settingsSelectWrap {
+    grid-column: 1 / -1;
+    justify-self: stretch;
+    margin-left: calc(48px + 0.65rem);
+    max-width: none;
+    min-width: 0;
+    width: calc(100% - 48px - 0.65rem);
+  }
+
+  .settingsRow {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .settingsRow__control {
+    align-self: flex-end;
+  }
 }
 
 .wiiList__actions {

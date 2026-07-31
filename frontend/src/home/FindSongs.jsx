@@ -1,8 +1,8 @@
 import { useEffect, useMemo, useState } from 'react'
 import { Button, Col, Form, Row, Stack } from 'react-bootstrap'
 
-import { SONG_LIBRARY } from '../library/songs.js'
 import { fetchSongs } from '../services/songLibrary.js'
+import useUiStore from '../state/uiStore.js'
 
 
 const KEYBOARD_ROWS = [
@@ -16,39 +16,57 @@ function normalize(text) {
   return String(text ?? '').trim().toLowerCase()
 }
 
-function FindSongs({ onBack, onSelectSong }) {
-  const [term, setTerm] = useState('Pretender')
+function FindSongs({ initialMode = 'title', onBack, onSelectSong }) {
+  const openArtist = useUiStore((state) => state.openArtist)
+  const [term, setTerm] = useState(initialMode === 'artist' ? '' : 'Pretender')
   const [isComposing, setIsComposing] = useState(false)
-  const [mode, setMode] = useState('title') // 'title' | 'artist'
-  const [songs, setSongs] = useState(SONG_LIBRARY)
+  const [mode, setMode] = useState(initialMode) // 'title' | 'artist'
+  const [songs, setSongs] = useState([])
   const [isLoading, setIsLoading] = useState(false)
   const [loadError, setLoadError] = useState('')
 
   useEffect(() => {
+    const q = term.trim()
+    if (!q) {
+      const emptyTimer = window.setTimeout(() => {
+        setSongs([])
+        setIsLoading(false)
+        setLoadError('')
+      }, 0)
+      return () => window.clearTimeout(emptyTimer)
+    }
+
     const controller = new AbortController()
     let didCancel = false
-
-    setIsLoading(true)
-    setLoadError('')
-    fetchSongs({ signal: controller.signal, pageSize: 200 })
-      .then((data) => {
-        if (didCancel) return
-        setSongs(Array.isArray(data?.items) ? data.items : [])
+    const timer = window.setTimeout(() => {
+      setIsLoading(true)
+      setLoadError('')
+      fetchSongs({
+        signal: controller.signal,
+        pageSize: 50,
+        artistQ: mode === 'artist' ? q : undefined,
+        titleQ: mode === 'title' ? q : undefined,
       })
-      .catch((err) => {
-        if (didCancel) return
-        setLoadError(err?.message || 'Failed to load songs.')
-      })
-      .finally(() => {
-        if (didCancel) return
-        setIsLoading(false)
-      })
+        .then((data) => {
+          if (didCancel) return
+          setSongs(Array.isArray(data?.items) ? data.items : [])
+        })
+        .catch((err) => {
+          if (didCancel) return
+          setLoadError(err?.message || 'Failed to load songs.')
+        })
+        .finally(() => {
+          if (didCancel) return
+          setIsLoading(false)
+        })
+    }, 180)
 
     return () => {
       didCancel = true
+      window.clearTimeout(timer)
       controller.abort()
     }
-  }, [])
+  }, [mode, term])
 
   const suggestions = useMemo(() => {
     const q = normalize(term)
@@ -57,6 +75,9 @@ function FindSongs({ onBack, onSelectSong }) {
       const haystack = mode === 'artist' ? song.artist : song.title
       return normalize(haystack).includes(q)
     })
+    if (mode === 'artist') {
+      return [...new Map(matches.map((song) => [normalize(song.artist), song])).values()].slice(0, 3)
+    }
     return matches.slice(0, 3)
   }, [mode, songs, term])
 
@@ -151,6 +172,10 @@ function FindSongs({ onBack, onSelectSong }) {
                     className="wiiSuggest__item"
                     type="button"
                     onClick={() => {
+                      if (mode === 'artist') {
+                        openArtist(song.artist)
+                        return
+                      }
                       if (onSelectSong) onSelectSong(song)
                       else setTerm((mode === 'artist' ? song.artist : song.title).toUpperCase())
                     }}

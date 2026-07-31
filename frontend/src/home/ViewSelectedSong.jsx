@@ -3,6 +3,7 @@ import { useKaraokeStore } from '../state/karaokeStore.js'
 import useAlertStore from '../state/alertStore.js'
 import { bumpQueueNext, clearQueue, removeFromQueue } from '../engine/playerController.js'
 import { selectHistory, selectReservedQueue } from '../engine/playerSelectors.js'
+import ArtistLink from '../components/ArtistLink.jsx'
 
 function ViewSelectedSong({ onBack }) {
   const state = useKaraokeStore()
@@ -46,7 +47,7 @@ function ViewSelectedSong({ onBack }) {
                       <div className="fw-semibold">
                         {listIndex + 1}. {song.title}
                       </div>
-                      <div className="text-muted small">{song.artist}</div>
+                      <ArtistLink artist={song.artist} className="text-muted small" />
                     </div>
                     {isCurrent ? (
                       <span className="badge text-bg-primary">Now Playing</span>
@@ -96,7 +97,7 @@ function ViewSelectedSong({ onBack }) {
                     <div className="fw-semibold">
                       {idx + 1}. {song.title}
                     </div>
-                    <div className="text-muted small">{song.artist}</div>
+                    <ArtistLink artist={song.artist} className="text-muted small" />
                   </div>
                   <span className="badge text-bg-secondary">Played</span>
                 </ListGroup.Item>
