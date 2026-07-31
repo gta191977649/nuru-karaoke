@@ -54,7 +54,7 @@ const initialUiState = {
   activeLyricIndex: -1,
   karaokeProgress: 0,
   lastIntroMidiUrl: '',
-  karaokeView: 'singing',
+  karaokeView: 'message',
 }
 
 const useKaraokeStore = create((set) => ({

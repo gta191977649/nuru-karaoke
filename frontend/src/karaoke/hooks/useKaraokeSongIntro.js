@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { useKaraokeStore } from '../../state/karaokeStore.js'
 
 function useKaraokeSongIntro({
@@ -16,6 +16,15 @@ function useKaraokeSongIntro({
   const [songInfo, setSongInfo] = useState({ title: '', artist: '', code: '' })
   const lastIntroMidiUrl = useKaraokeStore((state) => state.lastIntroMidiUrl)
   const setLastIntroMidiUrl = useKaraokeStore((state) => state.setLastIntroMidiUrl)
+  const introTimerRef = useRef(null)
+
+  const currentSong = queueIndex >= 0 ? queue?.[queueIndex] : null
+  const title = currentSong?.title || midiName || ''
+  const artist = currentSong?.artist || ''
+  const code = currentSong?.id || currentSong?.code || ''
+  const introKey = midiUrl || midiName
+    ? `${playbackSessionId ?? 0}:${midiUrl || `${queueIndex ?? -1}:${midiName || ''}`}`
+    : ''
 
   // Force hide if melody is visible (approaching within 3 seconds)
   useEffect(() => {
@@ -28,47 +37,44 @@ function useKaraokeSongIntro({
     }
   }, [showSongInfo, reference, currentTime])
 
+  // Keep the result-page metadata in sync independently from the intro timer.
   useEffect(() => {
-    if (!midiUrl && !midiName) return
-
-    const currentSong = queueIndex >= 0 ? queue?.[queueIndex] : null
-    const title = currentSong?.title || midiName || ''
-
-    // Always update song info so it's available for ResultsPage
-    const nextCode = currentSong?.id || currentSong?.code || ''
     if (
       title &&
-      (songInfo.title !== title || songInfo.artist !== (currentSong?.artist || '') || songInfo.code !== nextCode)
+      (songInfo.title !== title || songInfo.artist !== artist || songInfo.code !== code)
     ) {
       // eslint-disable-next-line react-hooks/set-state-in-effect
-      setSongInfo({ title, artist: currentSong?.artist || '', code: nextCode })
+      setSongInfo({ title, artist, code })
     }
+  }, [artist, code, songInfo.artist, songInfo.code, songInfo.title, title])
 
-    // Only trigger the intro animation if it's a new song load
-    const introKey = `${playbackSessionId ?? 0}:${midiUrl || `${queueIndex ?? -1}:${midiName || ''}`}`
-    if (introKey === lastIntroMidiUrl) return
-    if (!title) return
+  // Start the intro once per playback session. The timer is deliberately kept
+  // outside this effect's cleanup so the store update below cannot cancel it.
+  useEffect(() => {
+    if (!introKey || !title || introKey === lastIntroMidiUrl) return
 
     setLastIntroMidiUrl(introKey)
     if (showKeyChangeAlert) showKeyChangeAlert(transposition ?? 0, 5000)
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     setShowSongInfo(true)
 
-    const timer = setTimeout(() => setShowSongInfo(false), 5000)
-    return () => clearTimeout(timer)
+    if (introTimerRef.current) clearTimeout(introTimerRef.current)
+    introTimerRef.current = setTimeout(() => {
+      introTimerRef.current = null
+      setShowSongInfo(false)
+    }, 5000)
   }, [
-    midiUrl,
-    midiName,
-    queue,
-    queueIndex,
-    playbackSessionId,
+    introKey,
+    title,
     transposition,
     showKeyChangeAlert,
     lastIntroMidiUrl,
     setLastIntroMidiUrl,
-    songInfo.artist,
-    songInfo.title,
-    songInfo.code
   ])
+
+  useEffect(() => () => {
+    if (introTimerRef.current) clearTimeout(introTimerRef.current)
+  }, [])
 
   return { showSongInfo, songInfo }
 }

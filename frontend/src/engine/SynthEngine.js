@@ -989,6 +989,11 @@ class SynthEngine {
     const playbackSessionId = (Number(getKaraokeStoreState().playbackSessionId) || 0) + 1
     this._setState({ queueIndex: i, playbackSessionId })
     await this.loadMidiFromUrl(song.url, { autoPlay: false })
+    if (typeof this._synth?.muteChannel === 'function') {
+      const channelZeroEnabled = getKaraokeStoreState().enabledChannels?.[0] !== false
+      const guideMelodyEnabled = song.guideMelodyEnabled !== false
+      this._synth.muteChannel(0, !(channelZeroEnabled && guideMelodyEnabled))
+    }
 
     if (song.lrc) {
       try {

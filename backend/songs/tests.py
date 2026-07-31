@@ -10,6 +10,40 @@ from .forms import SongForm
 from .models import Song
 
 
+class SongApiFilterTests(TestCase):
+    def test_artist_filter_returns_only_exact_published_artist_matches(self):
+        Song.objects.create(title='First', artist='Example Singer', is_published=True)
+        Song.objects.create(title='Second', artist='example singer', is_published=True)
+        Song.objects.create(title='Similar', artist='Example Singer Band', is_published=True)
+        Song.objects.create(title='Draft', artist='Example Singer', is_published=False)
+
+        response = self.client.get('/api/songs/', {'artist': '  EXAMPLE SINGER  ', 'page_size': 200})
+
+        self.assertEqual(response.status_code, 200)
+        payload = response.json()
+        self.assertEqual(payload['count'], 2)
+        self.assertEqual(
+            {item['title'] for item in payload['results']},
+            {'First', 'Second'},
+        )
+
+    def test_field_search_does_not_cross_match_artist_and_title(self):
+        Song.objects.create(title='Blue Sky', artist='Red Moon', is_published=True)
+        Song.objects.create(title='Red Moon', artist='Blue Sky', is_published=True)
+
+        artist_response = self.client.get('/api/songs/', {'artist_q': 'Blue'})
+        title_response = self.client.get('/api/songs/', {'title_q': 'Blue'})
+
+        self.assertEqual(
+            [item['title'] for item in artist_response.json()['results']],
+            ['Red Moon'],
+        )
+        self.assertEqual(
+            [item['title'] for item in title_response.json()['results']],
+            ['Blue Sky'],
+        )
+
+
 class SongLyricsEditorTests(TestCase):
     def setUp(self):
         super().setUp()

@@ -150,7 +150,7 @@ const buildF0CurveByBeat = ({ history, reference, rmsGate }) => {
     return curve
 }
 
-function SingingPage({ onFinish }) {
+function SingingPage({ onFinish, showInterludePrompt = true }) {
     const state = useKaraokeStore()
     const pitchEngine = sharedPitchEngine
     const [micActive, setMicActive] = useState(false)
@@ -178,7 +178,6 @@ function SingingPage({ onFinish }) {
         midiName: state.midiName,
         midiUrl: state.midiUrl,
         queueIndex: state.queueIndex,
-        playbackSessionId: state.playbackSessionId,
     })
     const handleLiveScoreChange = useCallback((score, meta) => {
         if (
@@ -552,9 +551,9 @@ function SingingPage({ onFinish }) {
                                 ))}
                             </div>
                             <div
-                                className={`interlude-prompt${interludeDisplay.promptVisible ? ' interlude-prompt--visible' : ''}`}
+                                className={`interlude-prompt${showInterludePrompt && interludeDisplay.promptVisible ? ' interlude-prompt--visible' : ''}`}
                                 aria-label="間奏"
-                                aria-hidden={!interludeDisplay.promptVisible}
+                                aria-hidden={!showInterludePrompt || !interludeDisplay.promptVisible}
                             >
                                 <span aria-hidden="true">間奏(</span>
                                 <span className="interlude-prompt__dot" aria-hidden="true">・</span>

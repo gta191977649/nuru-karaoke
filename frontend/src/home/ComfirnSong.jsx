@@ -1,4 +1,4 @@
-import { Button, Card, Col, Container, Row, Stack } from 'react-bootstrap'
+import { Button, Card, Col, Container, Form, Row, Stack } from 'react-bootstrap'
 import { useEffect, useState } from 'react'
 import { useKaraokeStore } from '../state/karaokeStore.js'
 import { parseLrc } from '../engine/lrc.js'
@@ -9,6 +9,8 @@ import ConnectionAlert from '../components/ConnectionAlert.jsx'
 import useFavoriteStore from '../state/favoriteStore.js'
 import useUserStore from '../state/userStore.js'
 import NationalRanking from './NationalRanking.jsx'
+import ArtistLink from '../components/ArtistLink.jsx'
+import { useSettingsStore } from '../state/settingsStore.js'
 
 function InfoRow({ icon, label, value }) {
   return (
@@ -36,6 +38,7 @@ export default function ComfirmSong({ onBack, onConfirm }) {
   const accessToken = useUserStore((state) => state.accessToken)
   const favoriteItems = useFavoriteStore((state) => state.items)
   const addFavorite = useFavoriteStore((state) => state.add)
+  const defaultGuideMelodyEnabled = useSettingsStore((state) => state.guideMelodyEnabled)
   const [previewText, setPreviewText] = useState('—')
   const [showLyrics, setShowLyrics] = useState(false)
   const [lyricsText, setLyricsText] = useState('')
@@ -43,6 +46,7 @@ export default function ComfirmSong({ onBack, onConfirm }) {
   const [connectionStatus, setConnectionStatus] = useState('loading')
   const [connectionMessage, setConnectionMessage] = useState('')
   const [view, setView] = useState('info') // 'info' or 'ranking'
+  const [guideMelodyEnabled, setGuideMelodyEnabled] = useState(defaultGuideMelodyEnabled)
   const isFavorite = Boolean(song?.id) && favoriteItems.some((item) => item.song_code === song.id)
 
   const buildNetworkMessage = (error) => String(error?.message || 'Unknown error')
@@ -118,7 +122,11 @@ export default function ComfirmSong({ onBack, onConfirm }) {
           <Col xs={12} lg={9}>
             <div className="bg-white border rounded-3 p-3">
               <InfoRow icon="🆔" label="曲番号" value={song?.id || '—'} />
-              <InfoRow icon="👤" label="歌手名" value={song?.artist || '—'} />
+              <InfoRow
+                icon="👤"
+                label="歌手名"
+                value={song?.artist ? <ArtistLink artist={song.artist} /> : '—'}
+              />
               <InfoRow icon="🎵" label="曲名" value={song?.title || '—'} />
               <div className="d-flex align-items-center gap-3 py-2">
                 <div
@@ -148,8 +156,18 @@ export default function ComfirmSong({ onBack, onConfirm }) {
                 <Col xs={12} md={4}>
                   <Card className="h-100">
                     <Card.Header className="py-2 fw-semibold">ガイドメロディ</Card.Header>
-                    <Card.Body className="py-2">
-                      <div className="text-muted small">あり</div>
+                    <Card.Body className="py-2 d-flex align-items-center justify-content-between gap-3">
+                      <div className="text-muted small">
+                        {guideMelodyEnabled ? 'あり' : 'なし'}
+                      </div>
+                      <Form.Check
+                        type="switch"
+                        id={`guide-melody-${song?.id || 'song'}`}
+                        checked={guideMelodyEnabled}
+                        onChange={(event) => setGuideMelodyEnabled(event.currentTarget.checked)}
+                        label={guideMelodyEnabled ? 'ON' : 'OFF'}
+                        aria-label="ガイドメロディを切り替える"
+                      />
                     </Card.Body>
                   </Card>
                 </Col>
@@ -240,7 +258,10 @@ export default function ComfirmSong({ onBack, onConfirm }) {
                     setConnectionStatus('loading')
                     setConnectionMessage('通信中です…')
                     try {
-                      await enqueueSongAndPlay(song)
+                      await enqueueSongAndPlay({
+                        ...song,
+                        guideMelodyEnabled,
+                      })
                       setConnectionStatus('success')
                       setConnectionMessage('読み込み完了しました。')
                       showAlert({

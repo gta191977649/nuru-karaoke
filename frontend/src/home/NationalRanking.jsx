@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import { Container, Row, Col, Card, Badge, Stack, Button, Spinner, Alert } from 'react-bootstrap'
 import { Crown, User, MapPin, Trophy } from 'lucide-react';
 import { fetchLeaderboard } from '../services/leaderboard.js'
+import ArtistLink from '../components/ArtistLink.jsx'
 
 export default function NationalRanking({ song, onBack }) {
     const [ranking, setRanking] = useState([])
@@ -96,7 +97,9 @@ export default function NationalRanking({ song, onBack }) {
                                 color: 'transparent',
                                 WebkitTextStroke: '1px white',
                                 filter: 'drop-shadow(0px 2px 0px rgba(0,0,0,0.2))'
-                            }}>{song?.artist || 'Official髭男dism'}</div>
+                            }}>
+                                <ArtistLink artist={song?.artist || 'Official髭男dism'} />
+                            </div>
                         </Col>
                         <Col xs="auto" className="text-end">
                             <div className="mb-3">

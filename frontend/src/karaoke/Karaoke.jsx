@@ -4,7 +4,7 @@ import ResultsPage from './pages/ResultsPage.jsx'
 import MessagePage from './pages/MessagePage.jsx'
 import { useKaraokeStore } from '../state/karaokeStore.js'
 
-function Karaoke({ onStop, resetKey, transitionPhase = 'idle' }) {
+function Karaoke({ onStop, resetKey, transitionPhase = 'idle', displayMode = 'full' }) {
   const view = useKaraokeStore((state) => state.karaokeView)
   const setView = useKaraokeStore((state) => state.setKaraokeView)
   const midiName = useKaraokeStore((state) => state.midiName)
@@ -32,7 +32,7 @@ function Karaoke({ onStop, resetKey, transitionPhase = 'idle' }) {
   }, [midiName, queueIndex, queueLength, setView])
 
   return (
-    <div className="karaokeTransitionRoot">
+    <div className={`karaokeTransitionRoot karaokeTransitionRoot--${displayMode}`}>
       <div
         className={[
           'karaokeTransition',
@@ -48,6 +48,7 @@ function Karaoke({ onStop, resetKey, transitionPhase = 'idle' }) {
         <SingingPage
           key={`${playbackSessionId}-${resetKey}`}
           onFinish={handleFinish}
+          showInterludePrompt={displayMode !== 'parked'}
         />
       )}
     </div>

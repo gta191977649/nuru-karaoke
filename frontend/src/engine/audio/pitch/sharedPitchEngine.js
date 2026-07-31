@@ -1,5 +1,6 @@
 import { getKaraokeAudioEngine, DEFAULT_CONFIG } from '../../audioEngine.js'
 import { PitchEngine } from './pitchEngine.js'
+import { getSettingsStoreState } from '../../../state/settingsStore.js'
 
 const sharedPitchEngine = new PitchEngine({ getAudioContext: () => getKaraokeAudioEngine().getAudioContext() })
 let activeUsers = 0
@@ -23,10 +24,38 @@ const startSharedMic = async () => {
   activeUsers += 1
   console.log('[mic] start request', { activeUsers })
   if (activeUsers === 1) {
-    console.log('[mic] starting stream')
-    await sharedPitchEngine.startMic()
+    try {
+      console.log('[mic] starting stream')
+      await sharedPitchEngine.startMic({
+        deviceId: getSettingsStoreState().microphoneDeviceId,
+      })
+      ensureSharedDebugAnalyser()
+      console.log('[mic] stream active')
+    } catch (error) {
+      activeUsers = Math.max(0, activeUsers - 1)
+      throw error
+    }
+  }
+}
+
+const switchSharedMicDevice = async (deviceId) => {
+  if (activeUsers <= 0) return false
+  sharedPitchEngine.stopMic()
+  sharedDebugAnalyser = null
+  try {
+    await sharedPitchEngine.startMic({ deviceId })
     ensureSharedDebugAnalyser()
-    console.log('[mic] stream active')
+    return true
+  } catch (error) {
+    if (deviceId) {
+      try {
+        await sharedPitchEngine.startMic()
+        ensureSharedDebugAnalyser()
+      } catch {
+        // Preserve the original device-selection error.
+      }
+    }
+    throw error
   }
 }
 
@@ -48,4 +77,5 @@ export {
   stopSharedMic,
   ensureSharedDebugAnalyser,
   getSharedDebugAnalyser,
+  switchSharedMicDevice,
 }

@@ -3,12 +3,15 @@ import { buildUrl } from './api.js'
 async function fetchSongs(options = {}) {
   const params = new URLSearchParams()
   if (options.q) params.set('q', options.q)
+  if (options.artist) params.set('artist', options.artist)
+  if (options.artistQ) params.set('artist_q', options.artistQ)
+  if (options.titleQ) params.set('title_q', options.titleQ)
   if (options.tag) params.set('tag', options.tag)
   if (options.language) params.set('language', options.language)
   if (options.page) params.set('page', String(options.page))
   if (options.pageSize) params.set('page_size', String(options.pageSize))
   const query = params.toString()
-  const path = query ? `/api/songs?${query}` : '/api/songs'
+  const path = query ? `/api/songs/?${query}` : '/api/songs/'
 
   const response = await fetch(buildUrl(path), {
     method: 'GET',
