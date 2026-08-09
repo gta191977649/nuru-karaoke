@@ -1,11 +1,24 @@
-export const SCORING_ALGORITHM_VERSION = 'pitch-v10-allkaraoke-edge-fill'
+export const SCORING_ALGORITHM_VERSION = 'pitch-v11-log-duration-tolerance'
 export const LIVE_HIT_MARKER_DETUNE_SCALE = 0.5
 export const LIVE_HIT_MARKER_MAX_OFFSET_SEMITONES = 0.75
 
 export const DEFAULT_SCORING_CONFIG = Object.freeze({
   pitchToleranceSemitones: 2,
-  fragmentJoinNoteRatio: 0.3,
-  edgeSnapNoteRatio: 0.2,
+  durationToleranceMinLog: Math.log(1.15),
+  durationToleranceMaxLog: Math.log(1.5),
+  durationTolerancePivotSec: 0.5,
+  durationTolerancePower: 1.5,
+  centerToleranceMinRatio: 0.08,
+  centerToleranceMaxRatio: 0.28,
+  centerTolerancePivotSec: 0.5,
+  centerTolerancePower: 1,
+  centerToleranceMinSec: 0.04,
+  centerToleranceMaxSec: 0.18,
+  fragmentJoinMinSec: 0.05,
+  fragmentJoinMaxSec: 0.14,
+  fragmentJoinPivotSec: 0.5,
+  fragmentJoinPower: 1,
+  fragmentJoinMaxNoteRatio: 0.4,
   sampleGridSec: 0.02,
   sampleLookupToleranceSec: 0.03,
   shortNoteMaxSec: 0.22,
@@ -32,11 +45,61 @@ function mod12(value) {
 
 export function getNoteFragmentJoinToleranceSec(
   note,
-  ratio = DEFAULT_SCORING_CONFIG.fragmentJoinNoteRatio,
+  config = DEFAULT_SCORING_CONFIG,
 ) {
   const duration = Math.max(0, Number(note?.t1Sec) - Number(note?.t0Sec))
-  const resolvedRatio = Number.isFinite(Number(ratio)) ? Math.max(0, Number(ratio)) : 0
-  return duration * resolvedRatio
+  const minSec = Number.isFinite(config?.fragmentJoinMinSec)
+    ? Math.max(0, Number(config.fragmentJoinMinSec))
+    : DEFAULT_SCORING_CONFIG.fragmentJoinMinSec
+  const maxSec = Number.isFinite(config?.fragmentJoinMaxSec)
+    ? Math.max(minSec, Number(config.fragmentJoinMaxSec))
+    : DEFAULT_SCORING_CONFIG.fragmentJoinMaxSec
+  const pivotSec = Number.isFinite(config?.fragmentJoinPivotSec)
+    ? Math.max(1e-4, Number(config.fragmentJoinPivotSec))
+    : DEFAULT_SCORING_CONFIG.fragmentJoinPivotSec
+  const power = Number.isFinite(config?.fragmentJoinPower)
+    ? Math.max(0.1, Number(config.fragmentJoinPower))
+    : DEFAULT_SCORING_CONFIG.fragmentJoinPower
+  const maxNoteRatio = Number.isFinite(config?.fragmentJoinMaxNoteRatio)
+    ? Math.max(0, Number(config.fragmentJoinMaxNoteRatio))
+    : DEFAULT_SCORING_CONFIG.fragmentJoinMaxNoteRatio
+  const dynamicSec =
+    minSec + (maxSec - minSec) / (1 + (duration / pivotSec) ** power)
+  return Math.min(dynamicSec, duration * maxNoteRatio)
+}
+
+export function getDurationLogError(referenceDurationSec, sungDurationSec) {
+  const reference = Number(referenceDurationSec)
+  const sung = Number(sungDurationSec)
+  if (
+    !Number.isFinite(reference) ||
+    !Number.isFinite(sung) ||
+    reference <= 0 ||
+    sung <= 0
+  ) {
+    return Infinity
+  }
+  return Math.abs(Math.log(sung / reference))
+}
+
+export function getDurationToleranceLog(
+  referenceDurationSec,
+  config = DEFAULT_SCORING_CONFIG,
+) {
+  const duration = Math.max(0, Number(referenceDurationSec) || 0)
+  const minLog = Number.isFinite(config?.durationToleranceMinLog)
+    ? Math.max(0, Number(config.durationToleranceMinLog))
+    : DEFAULT_SCORING_CONFIG.durationToleranceMinLog
+  const maxLog = Number.isFinite(config?.durationToleranceMaxLog)
+    ? Math.max(minLog, Number(config.durationToleranceMaxLog))
+    : DEFAULT_SCORING_CONFIG.durationToleranceMaxLog
+  const pivotSec = Number.isFinite(config?.durationTolerancePivotSec)
+    ? Math.max(1e-4, Number(config.durationTolerancePivotSec))
+    : DEFAULT_SCORING_CONFIG.durationTolerancePivotSec
+  const power = Number.isFinite(config?.durationTolerancePower)
+    ? Math.max(0.1, Number(config.durationTolerancePower))
+    : DEFAULT_SCORING_CONFIG.durationTolerancePower
+  return minLog + (maxLog - minLog) / (1 + (duration / pivotSec) ** power)
 }
 
 /** Map a continuous detected pitch to the closest octave-equivalent of the target. */
@@ -188,16 +251,32 @@ export class SimpleScoreCalculator {
   }
 
   getMaxGapSec(note) {
-    return getNoteFragmentJoinToleranceSec(note, this.config.fragmentJoinNoteRatio)
+    return getNoteFragmentJoinToleranceSec(note, this.config)
   }
 
   getEdgeToleranceSec(note) {
     const duration = Math.max(0, Number(note?.t1Sec) - Number(note?.t0Sec))
-    const ratio = Number(this.config.edgeSnapNoteRatio)
-    const resolvedRatio = Number.isFinite(ratio)
-      ? Math.max(0, ratio)
-      : DEFAULT_SCORING_CONFIG.edgeSnapNoteRatio
-    return duration * resolvedRatio
+    const minRatio = Number.isFinite(this.config.centerToleranceMinRatio)
+      ? Math.max(0, Number(this.config.centerToleranceMinRatio))
+      : DEFAULT_SCORING_CONFIG.centerToleranceMinRatio
+    const maxRatio = Number.isFinite(this.config.centerToleranceMaxRatio)
+      ? Math.max(minRatio, Number(this.config.centerToleranceMaxRatio))
+      : DEFAULT_SCORING_CONFIG.centerToleranceMaxRatio
+    const pivotSec = Number.isFinite(this.config.centerTolerancePivotSec)
+      ? Math.max(1e-4, Number(this.config.centerTolerancePivotSec))
+      : DEFAULT_SCORING_CONFIG.centerTolerancePivotSec
+    const power = Number.isFinite(this.config.centerTolerancePower)
+      ? Math.max(0.1, Number(this.config.centerTolerancePower))
+      : DEFAULT_SCORING_CONFIG.centerTolerancePower
+    const minSec = Number.isFinite(this.config.centerToleranceMinSec)
+      ? Math.max(0, Number(this.config.centerToleranceMinSec))
+      : DEFAULT_SCORING_CONFIG.centerToleranceMinSec
+    const maxSec = Number.isFinite(this.config.centerToleranceMaxSec)
+      ? Math.max(minSec, Number(this.config.centerToleranceMaxSec))
+      : DEFAULT_SCORING_CONFIG.centerToleranceMaxSec
+    const ratio =
+      minRatio + (maxRatio - minRatio) / (1 + (duration / pivotSec) ** power)
+    return clamp(duration * ratio, minSec, maxSec)
   }
 
   _getNoteWeight(note) {
@@ -311,6 +390,11 @@ export class SimpleScoreCalculator {
       rawFrameCoverage: 0,
       validRawFrames: 0,
       stableIslandSec: 0,
+      filledWholeNote: false,
+      durationLogError: null,
+      durationToleranceLog: getDurationToleranceLog(duration, this.config),
+      centerErrorSec: null,
+      centerToleranceSec: this.getEdgeToleranceSec(note),
       rejectionReason: 'unvoiced',
       smoothingResetCount: 0,
       smoothingResetMaxCents: 0,
@@ -345,13 +429,13 @@ export class SimpleScoreCalculator {
     let absCentsSum = 0
     let validRawFrames = 0
 
-    const closeActiveSegment = (roundToEnd = false) => {
+    const closeActiveSegment = () => {
       if (!activeSegment || !Number.isFinite(lastHitTime)) {
         activeSegment = null
         lastHitTime = null
         return
       }
-      activeSegment.t1Sec = roundToEnd ? noteEnd : lastHitTime
+      activeSegment.t1Sec = lastHitTime
       if (activeSegment.t1Sec > activeSegment.t0Sec + 1e-9) {
         hitSegments.push(activeSegment)
       }
@@ -374,11 +458,8 @@ export class SimpleScoreCalculator {
         const gapSec = Number.isFinite(lastHitTime) ? sample.timeSec - lastHitTime : Infinity
         if (!activeSegment || gapSec > fragmentJoinToleranceSec + 1e-9) {
           closeActiveSegment()
-          const roundedStart = sample.timeSec - noteStart <= edgeToleranceSec + 1e-9
-            ? noteStart
-            : sample.timeSec
           activeSegment = {
-            t0Sec: roundedStart,
+            t0Sec: sample.timeSec,
             t1Sec: sample.timeSec,
             midi: Number(note.midi),
           }
@@ -413,11 +494,28 @@ export class SimpleScoreCalculator {
       })
     }
 
-    const shouldRoundEnd =
-      isComplete &&
-      Number.isFinite(lastHitTime) &&
-      noteEnd - lastHitTime <= edgeToleranceSec + 1e-9
-    closeActiveSegment(shouldRoundEnd)
+    closeActiveSegment()
+
+    let filledWholeNote = false
+    let durationLogError = Infinity
+    const durationToleranceLog = getDurationToleranceLog(duration, this.config)
+    let centerErrorSec = Infinity
+    if (isComplete && hitSegments.length === 1) {
+      const segment = hitSegments[0]
+      const sungDurationSec = Math.max(0, segment.t1Sec - segment.t0Sec)
+      durationLogError = getDurationLogError(duration, sungDurationSec)
+      const referenceCenterSec = (noteStart + noteEnd) * 0.5
+      const sungCenterSec = (segment.t0Sec + segment.t1Sec) * 0.5
+      centerErrorSec = Math.abs(sungCenterSec - referenceCenterSec)
+      if (
+        durationLogError <= durationToleranceLog + 1e-9 &&
+        centerErrorSec <= edgeToleranceSec + 1e-9
+      ) {
+        segment.t0Sec = noteStart
+        segment.t1Sec = noteEnd
+        filledWholeNote = true
+      }
+    }
 
     const scoringSegments = hitSegments
     const stableSegments = pendingConfirmation ? [] : hitSegments
@@ -465,6 +563,11 @@ export class SimpleScoreCalculator {
       rawFrameCoverage: voicedCoverage,
       validRawFrames,
       stableIslandSec,
+      filledWholeNote,
+      durationLogError: Number.isFinite(durationLogError) ? durationLogError : null,
+      durationToleranceLog,
+      centerErrorSec: Number.isFinite(centerErrorSec) ? centerErrorSec : null,
+      centerToleranceSec: edgeToleranceSec,
       rejectionReason,
       smoothingResetCount: samples.filter((sample) => sample.smoothingReset).length,
       smoothingResetMaxCents: samples.length

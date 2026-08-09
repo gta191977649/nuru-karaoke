@@ -1,12 +1,14 @@
 import { Sequencer, WorkletSynthesizer } from 'spessasynth_lib'
+import { BasicMIDI } from 'spessasynth_core'
 import processorUrl from 'spessasynth_lib/dist/spessasynth_processor.min.js?url'
-//import defaultSoundFontUrl from '../soundfont/gmex.sf2'
-import defaultSoundFontUrl from '../soundfont/gm2.sf2'
+import defaultSoundFontUrl from '../soundfont/sc55.sf2'
 import { createMidiMapper } from './MidiMapper.js'
 import { findActiveLyricIndex, parseLrc } from './lrc.js'
 import { getKaraokeAudioEngine } from './audioEngine.js'
 import { PLAYER_CONFIG } from '../config.js'
 import { getKaraokeStoreState, setKaraokeStoreState } from '../state/karaokeStore.js'
+import { AutoGainController } from './autoGainController.js'
+import { estimateMidiInitialGainDb } from './midiGainEstimator.js'
 
 const DEFAULT_CONFIG = {
   enableMIDIStandardMapping: true,
@@ -280,11 +282,14 @@ class SynthEngine {
     this._context = null
     this._synth = null
     this._seq = null
+    this._autoGainController = null
+    this._autoGainEnabled = true
 
     this._smfKnifeConfigText = ''
     this._smfKnifeConfigName = ''
     this._smfKnifeForce = false
     this._lastMidiBuffer = null
+    this._referenceMidiData = null
 
     this._midiMapper = createMidiMapper(null)
     this._midiEvent = createMidiEvent()
@@ -363,35 +368,83 @@ class SynthEngine {
     if (this._initializing) return this._initializing
 
     this._initializing = (async () => {
-      this._setState({ status: 'Loading SynthEngine…' })
-      const audioEngine = getKaraokeAudioEngine()
-      const context = audioEngine.ensureAudioContext()
-      await context.audioWorklet.addModule(processorUrl)
+      this._setState({
+        ready: false,
+        status: 'シンセエンジンを起動しています…',
+        engineLoadStage: 'audio',
+        engineLoadError: '',
+      })
 
-      const synth = new WorkletSynthesizer(context, { initializeChorusProcessor: true, initializeReverbProcessor: true })
-      synth.connect(context.destination)
+      try {
+        const audioEngine = getKaraokeAudioEngine()
+        const context = audioEngine.ensureAudioContext()
+        await context.audioWorklet.addModule(processorUrl)
 
-      const response = await fetch(defaultSoundFontUrl)
-      if (!response.ok) throw new Error(`SoundFont HTTP ${response.status}`)
-      const sfBuffer = await response.arrayBuffer()
-      await synth.soundBankManager.addSoundBank(sfBuffer, 'main')
+        const synth = new WorkletSynthesizer(context, { initializeChorusProcessor: true, initializeReverbProcessor: true })
+        const autoGainController = new AutoGainController(context, {
+          onMetrics: ({ enabled, gainDb, inputLevelDb, reductionDb }) => {
+            this._setState({
+              autoGainEnabled: enabled,
+              autoGainDb: gainDb,
+              autoGainInputDb: inputLevelDb,
+              autoGainReductionDb: reductionDb,
+            })
+          },
+        })
+        synth.connect(autoGainController.input)
+        autoGainController.connect(context.destination)
+        autoGainController.setEnabled(this._autoGainEnabled)
 
-      const seq = new Sequencer(synth)
-      seq.loopCount = -1
+        this._setState({
+          status: '音色ライブラリをダウンロードしています…',
+          engineLoadStage: 'soundfont-download',
+        })
+        const response = await fetch(defaultSoundFontUrl)
+        if (!response.ok) throw new Error(`SoundFont HTTP ${response.status}`)
+        const sfBuffer = await response.arrayBuffer()
 
-      this._context = context
-      this._synth = synth
-      this._seq = seq
-      this._bindSequencerEvents()
-      this._setupMidiMapper()
+        this._setState({
+          status: '音色ライブラリを読み込んでいます…',
+          engineLoadStage: 'soundfont-load',
+        })
+        await synth.soundBankManager.addSoundBank(sfBuffer, 'main')
 
-      this._applyDefaultEffects()
+        this._setState({
+          status: 'プレーヤーを準備しています…',
+          engineLoadStage: 'player',
+        })
+        const seq = new Sequencer(synth)
+        seq.loopCount = -1
 
-      const { enabledChannels } = getKaraokeStoreState()
-      enabledChannels.forEach((enabled, i) => synth.muteChannel(i, !enabled))
+        this._context = context
+        this._synth = synth
+        this._seq = seq
+        this._autoGainController = autoGainController
+        this._bindSequencerEvents()
+        this._setupMidiMapper()
 
-      this._initialized = true
-      this._setState({ ready: true, status: 'Ready' })
+        this._applyDefaultEffects()
+
+        const { enabledChannels } = getKaraokeStoreState()
+        enabledChannels.forEach((enabled, i) => synth.muteChannel(i, !enabled))
+
+        this._initialized = true
+        this._setState({
+          ready: true,
+          status: '準備完了',
+          engineLoadStage: 'ready',
+          engineLoadError: '',
+        })
+      } catch (error) {
+        this._initialized = false
+        this._setState({
+          ready: false,
+          status: 'シンセエンジンの読み込みに失敗しました',
+          engineLoadStage: 'error',
+          engineLoadError: String(error?.message || error),
+        })
+        throw error
+      }
     })()
 
     try {
@@ -857,18 +910,31 @@ class SynthEngine {
   }
 
   async getMidiData() {
-    if (!this._seq) return null
-    try {
-      return await this._seq.getMIDI()
-    } catch {
-      return null
-    }
+    return this._referenceMidiData
   }
 
   async loadMIDI({ buffer, midiName, midiUrl = '' }) {
     await this.ensureInitialized()
     this.panic()
+    this._autoGainController?.setInitialGainDb(0)
     this._autoPlayOnNextSong = true
+    this._referenceMidiData = null
+    try {
+      const referenceBuffer =
+        buffer instanceof ArrayBuffer
+          ? buffer.slice(0)
+          : buffer?.buffer?.slice(
+              Number(buffer.byteOffset) || 0,
+              (Number(buffer.byteOffset) || 0) + Number(buffer.byteLength),
+            )
+      if (referenceBuffer instanceof ArrayBuffer) {
+        this._referenceMidiData = BasicMIDI.fromArrayBuffer(referenceBuffer, midiName)
+        const gainEstimate = estimateMidiInitialGainDb(this._referenceMidiData)
+        this._autoGainController?.setInitialGainDb(gainEstimate?.gainDb ?? 0)
+      }
+    } catch (error) {
+      console.warn('[SynthEngine] Failed to cache reference MIDI data', error)
+    }
 
     this._rebuildMidiMapper(buffer)
     this._setupMidiMapper()
@@ -900,7 +966,7 @@ class SynthEngine {
     return buffer
   }
 
-  async loadMidiFromUrl(url, options = {}) {
+  async loadMidiFromUrl(url) {
     this._setState({ status: `Loading MIDI: ${url}` })
     const response = await fetch(url)
     if (!response.ok) throw new Error(`MIDI HTTP ${response.status}`)
@@ -909,7 +975,7 @@ class SynthEngine {
     return this.loadMIDI({ buffer, midiName, midiUrl: url })
   }
 
-  async loadMidiFromFile(file, options = {}) {
+  async loadMidiFromFile(file) {
     const buffer = await file.arrayBuffer()
     const midiName = file.name
     return this.loadMIDI({ buffer, midiName, midiUrl: '' })
@@ -1048,6 +1114,7 @@ class SynthEngine {
     this._synth.stopAll(true)
     this._resetChannelActivity()
     this._resetPolyphony()
+    this._autoGainController?.reset()
     this._setState({ isPlaying: false, currentTime: 0 })
     this._stopClock()
   }
@@ -1132,6 +1199,17 @@ class SynthEngine {
     const v = Math.max(0, Number(value) || 0)
     this._synth.setMasterParameter('chorusGain', v)
     this._setState({ chorusGain: v })
+  }
+
+  setAutoGainEnabled(enabled) {
+    this._autoGainEnabled = Boolean(enabled)
+    this._autoGainController?.setEnabled(this._autoGainEnabled)
+    this._setState({
+      autoGainEnabled: this._autoGainEnabled,
+      ...(!this._autoGainEnabled
+        ? { autoGainDb: 0, autoGainInputDb: -100, autoGainReductionDb: 0 }
+        : {}),
+    })
   }
 
   setSmfKnifeMapping(text, name = '') {

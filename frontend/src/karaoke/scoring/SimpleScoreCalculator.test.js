@@ -2,6 +2,8 @@ import { describe, expect, it } from 'vitest'
 import {
   SCORING_ALGORITHM_VERSION,
   SimpleScoreCalculator,
+  getDurationLogError,
+  getDurationToleranceLog,
   getLiveF0DisplayMidi,
   getLiveHitDisplayMidi,
   getNoteFragmentJoinToleranceSec,
@@ -62,7 +64,7 @@ function makeCalculator(notes, options = {}) {
 
 describe('allkaraoke pitch-class matching', () => {
   it('publishes the new competitive algorithm version', () => {
-    expect(SCORING_ALGORITHM_VERSION).toBe('pitch-v10-allkaraoke-edge-fill')
+    expect(SCORING_ALGORITHM_VERSION).toBe('pitch-v11-log-duration-tolerance')
   })
 
   it('uses rounded MIDI notes and a hard ±2-semitone hit window', () => {
@@ -110,7 +112,7 @@ describe('allkaraoke pitch-class matching', () => {
   })
 })
 
-describe('SimpleScoreCalculator pitch-v10-allkaraoke-edge-fill', () => {
+describe('SimpleScoreCalculator pitch-v11-log-duration-tolerance', () => {
   it.each([-36, -24, -12, 0, 12, 24, 36])(
     'accepts the same pitch class at a %s-semitone octave shift',
     (shift) => {
@@ -168,69 +170,76 @@ describe('SimpleScoreCalculator pitch-v10-allkaraoke-edge-fill', () => {
     expect(calculator.getDebugInfo().recentNotes[0].rejectionReason).toBe('unvoiced')
   })
 
-  it('derives fragment-join and edge tolerances from each note duration', () => {
+  it('makes relative edge and absolute break tolerance stricter for long notes', () => {
     const calculator = makeCalculator([])
 
-    expect(calculator.getMaxGapSec(makeNote(0, 0.5))).toBeCloseTo(0.1, 6)
-    expect(calculator.getMaxGapSec(makeNote(0, 2))).toBeCloseTo(0.4, 6)
-    expect(getNoteFragmentJoinToleranceSec(makeNote(0, 1))).toBeCloseTo(0.2, 6)
-    expect(calculator.getEdgeToleranceSec(makeNote(0, 0.5))).toBeCloseTo(0.075, 6)
-    expect(calculator.getEdgeToleranceSec(makeNote(0, 2))).toBeCloseTo(0.3, 6)
+    expect(calculator.getMaxGapSec(makeNote(0, 0.5))).toBeCloseTo(0.095, 6)
+    expect(calculator.getMaxGapSec(makeNote(0, 2))).toBeCloseTo(0.068, 6)
+    expect(getNoteFragmentJoinToleranceSec(makeNote(0, 1))).toBeCloseTo(0.08, 6)
+    expect(calculator.getEdgeToleranceSec(makeNote(0, 0.5))).toBeCloseTo(0.09, 6)
+    expect(calculator.getEdgeToleranceSec(makeNote(0, 2))).toBeCloseTo(0.18, 6)
+    expect(calculator.getEdgeToleranceSec(makeNote(0, 0.5)) / 0.5)
+      .toBeGreaterThan(calculator.getEdgeToleranceSec(makeNote(0, 2)) / 2)
   })
 
-  it('bridges an unvoiced gap within 20% of the note duration', () => {
+  it('uses symmetric log-ratio errors and lowers duration tolerance for long notes', () => {
+    expect(getDurationLogError(1, 0.5)).toBeCloseTo(getDurationLogError(1, 2), 10)
+    expect(getDurationToleranceLog(0.2)).toBeGreaterThan(getDurationToleranceLog(2))
+  })
+
+  it('bridges an unvoiced gap inside the dynamic break tolerance', () => {
     const note = makeNote(0, 1)
     const calculator = makeCalculator([note])
     runSamples(calculator, 0, 1, (timeSec) => (
-      timeSec >= 0.4 && timeSec <= 0.56 ? null : 60
+      timeSec >= 0.4 && timeSec <= 0.45 ? null : 60
     ))
 
     expect(calculator.finalize(1)).toBeCloseTo(100, 6)
     expect(calculator.getDebugInfo().recentNotes[0].stableSegments).toHaveLength(1)
   })
 
-  it('splits an unvoiced gap longer than 20% of the note duration', () => {
+  it('splits an unvoiced gap longer than the dynamic break tolerance', () => {
     const note = makeNote(0, 1)
     const calculator = makeCalculator([note])
     runSamples(calculator, 0, 1, (timeSec) => (
-      timeSec >= 0.4 && timeSec <= 0.62 ? null : 60
+      timeSec >= 0.4 && timeSec <= 0.49 ? null : 60
     ))
 
     const score = calculator.finalize(1)
-    expect(score).toBeGreaterThan(70)
-    expect(score).toBeLessThan(82)
+    expect(score).toBeGreaterThan(85)
+    expect(score).toBeLessThan(92)
     expect(calculator.getDebugInfo().recentNotes[0].stableSegments).toHaveLength(2)
   })
 
-  it('bridges correct fragments across a wrong-pitch interval within the note ratio', () => {
+  it('bridges correct fragments across a wrong-pitch interval inside the dynamic tolerance', () => {
     const note = makeNote(0, 1)
     const calculator = makeCalculator([note])
     runSamples(calculator, 0, 1, (timeSec) => (
-      timeSec >= 0.4 && timeSec <= 0.56 ? 63 : 60
+      timeSec >= 0.4 && timeSec <= 0.45 ? 63 : 60
     ))
 
     expect(calculator.finalize(1)).toBeCloseTo(100, 6)
     expect(calculator.getDebugInfo().recentNotes[0].stableSegments).toHaveLength(1)
   })
 
-  it('splits correct fragments across a wrong-pitch interval beyond the note ratio', () => {
+  it('splits correct fragments across a wrong-pitch interval beyond the dynamic tolerance', () => {
     const note = makeNote(0, 1)
     const calculator = makeCalculator([note])
     runSamples(calculator, 0, 1, (timeSec) => (
-      timeSec >= 0.4 && timeSec <= 0.62 ? 63 : 60
+      timeSec >= 0.4 && timeSec <= 0.49 ? 63 : 60
     ))
 
     const score = calculator.finalize(1)
-    expect(score).toBeGreaterThan(70)
-    expect(score).toBeLessThan(82)
+    expect(score).toBeGreaterThan(85)
+    expect(score).toBeLessThan(92)
     expect(calculator.getDebugInfo().recentNotes[0].stableSegments).toHaveLength(2)
   })
 
-  it('fills the whole note when both edge misses stay within the note-duration tolerance', () => {
+  it('fills the whole note when log duration and center alignment both pass', () => {
     const note = makeNote(0, 1)
     const calculator = makeCalculator([note])
     runSamples(calculator, 0, 1, (timeSec) => (
-      timeSec >= 0.14 && timeSec <= 0.86 ? 60 : null
+      timeSec >= 0.08 && timeSec <= 0.92 ? 60 : null
     ))
 
     expect(calculator.finalize(1)).toBeCloseTo(100, 6)
@@ -238,15 +247,34 @@ describe('SimpleScoreCalculator pitch-v10-allkaraoke-edge-fill', () => {
       t0Sec: 0,
       t1Sec: 1,
     })
+    expect(calculator.getDebugInfo().recentNotes[0].filledWholeNote).toBe(true)
   })
 
-  it('does not round a late onset beyond the note-duration ratio', () => {
+  it('does not fill a late onset beyond the log-duration tolerance', () => {
     const note = makeNote(0, 1)
     const calculator = makeCalculator([note])
-    runSamples(calculator, 0, 1, (timeSec) => timeSec >= 0.17 ? 60 : null)
+    runSamples(calculator, 0, 1, (timeSec) => timeSec >= 0.22 ? 60 : null)
 
-    expect(calculator.finalize(1)).toBeGreaterThan(81)
-    expect(calculator.getScore()).toBeLessThan(85)
+    expect(calculator.finalize(1)).toBeGreaterThan(74)
+    expect(calculator.getScore()).toBeLessThan(80)
+    expect(calculator.getDebugInfo().recentNotes[0].filledWholeNote).toBe(false)
+  })
+
+  it('accepts the same relative shortening on a short note but rejects it on a long note', () => {
+    const shortNote = makeNote(0, 0.2)
+    const shortCalculator = makeCalculator([shortNote])
+    runSamples(shortCalculator, 0, 0.2, (timeSec) => (
+      timeSec >= 0.028 && timeSec <= 0.172 ? 60 : null
+    ), { step: 0.002 })
+
+    const longNote = makeNote(0, 2)
+    const longCalculator = makeCalculator([longNote])
+    runSamples(longCalculator, 0, 2, (timeSec) => (
+      timeSec >= 0.28 && timeSec <= 1.72 ? 60 : null
+    ), { step: 0.002 })
+
+    expect(shortCalculator.finalize(0.2)).toBeCloseTo(100, 6)
+    expect(longCalculator.finalize(2)).toBeLessThan(75)
   })
 
   it('closes adjacent reference notes independently', () => {

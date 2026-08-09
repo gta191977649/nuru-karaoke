@@ -2424,7 +2424,7 @@ spectrogram@^0.0.7:
   resolved "https://registry.yarnpkg.com/spectrogram/-/spectrogram-0.0.7.tgz#59bf2e4e747560ca03a5a484e9ffb917e153ba8d"
   integrity sha512-lBua7BXerhLev7x2FWEdVUDGtCkHLK2+Bf1/sX9EyH/qVOJyCkLe2cs9DTDiX29GzytFFumOebqNZ856A+M+Vg==
 
-spessasynth_core@latest:
+spessasynth_core@^4.0.24, spessasynth_core@latest:
   version "4.0.24"
   resolved "https://registry.yarnpkg.com/spessasynth_core/-/spessasynth_core-4.0.24.tgz#7a718be69d14628514177d8c17fea6e8988ca735"
   integrity sha512-uEu8DqSlgpqJAnpOnLvY5fd6RcVPQyTmoB7ygD0njXdGzSYI8xTPhH9bvefia8rS8lIUa2bI9zzn/YqVNaYVXw==

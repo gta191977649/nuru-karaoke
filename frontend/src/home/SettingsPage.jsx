@@ -6,8 +6,10 @@ import { useSettingsStore } from '../state/settingsStore.js'
 
 function SettingsPage({ onBack }) {
   const guideMelodyEnabled = useSettingsStore((state) => state.guideMelodyEnabled)
+  const autoGainEnabled = useSettingsStore((state) => state.autoGainEnabled)
   const microphoneDeviceId = useSettingsStore((state) => state.microphoneDeviceId)
   const setGuideMelodyEnabled = useSettingsStore((state) => state.setGuideMelodyEnabled)
+  const setAutoGainEnabled = useSettingsStore((state) => state.setAutoGainEnabled)
   const setMicrophoneDeviceId = useSettingsStore((state) => state.setMicrophoneDeviceId)
   const [activeTab, setActiveTab] = useState('playback')
   const [microphones, setMicrophones] = useState([])
@@ -132,6 +134,27 @@ function SettingsPage({ onBack }) {
                   checked={guideMelodyEnabled}
                   onChange={(event) => setGuideMelodyEnabled(event.currentTarget.checked)}
                   aria-label="予約曲のガイドメロディ初期値を切り替える"
+                />
+              </div>
+            </div>
+            <div className="settingsList__item">
+              <div className="settingsList__icon settingsList__icon--playback" aria-hidden="true">↕</div>
+              <div className="settingsList__body">
+                <div className="settingsList__label">自動音量調整</div>
+                <div className="settingsList__description">
+                  曲ごとの音量差を自動で補正し、大きすぎる音を抑えます。
+                </div>
+              </div>
+              <div className="settingsList__control">
+                <span className={`settingsList__state ${autoGainEnabled ? 'is-on' : 'is-off'}`}>
+                  {autoGainEnabled ? 'ON' : 'OFF'}
+                </span>
+                <Form.Check
+                  type="switch"
+                  id="settings-auto-gain"
+                  checked={autoGainEnabled}
+                  onChange={(event) => setAutoGainEnabled(event.currentTarget.checked)}
+                  aria-label="自動音量調整を切り替える"
                 />
               </div>
             </div>

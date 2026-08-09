@@ -54,8 +54,12 @@ function extractRawTickNotes(midi, channel, tempoMap) {
 
       const status = Number(event?.statusByte ?? event?.status)
       const data = event?.data || event?.bytes || event?.message || null
-      const data0 = Array.isArray(data) || data instanceof Uint8Array ? Number(data[0]) : NaN
-      const data1 = Array.isArray(data) || data instanceof Uint8Array ? Number(data[1]) : NaN
+      const hasArrayLikeData =
+        data != null &&
+        typeof data !== 'string' &&
+        Number.isFinite(Number(data.length))
+      const data0 = hasArrayLikeData ? Number(data[0]) : NaN
+      const data1 = hasArrayLikeData ? Number(data[1]) : NaN
 
       if (!type && Number.isFinite(status)) {
         const hi = status & 0xf0
@@ -315,6 +319,9 @@ export function extractReferenceMelodyFromMidiData(midi, opts = {}) {
   })
 
   const rawNotes = extractRawTickNotes(midi, channel, tempoMap)
+  if (!notes.length && rawNotes.length) {
+    notes.push(...rawNotes)
+  }
 
   const durationSec = normalizeNumber(midi.duration, 0)
   const fallbackDuration = notes.length ? Math.max(...notes.map((note) => note.t1Sec)) : durationSec
