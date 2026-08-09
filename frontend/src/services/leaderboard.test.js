@@ -16,7 +16,7 @@ describe('fetchLeaderboard', () => {
 
     const url = new URL(fetchMock.mock.calls[0][0])
     expect(url.searchParams.get('song')).toBe('song id')
-    expect(url.searchParams.get('version')).toBe('pitch-v10-allkaraoke-edge-fill')
+    expect(url.searchParams.get('version')).toBe('pitch-v11-log-duration-tolerance')
   })
 
   it('can explicitly request the compatible unversioned view', async () => {

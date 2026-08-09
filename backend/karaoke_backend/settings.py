@@ -96,6 +96,16 @@ _cors_origins = os.getenv(
 )
 CORS_ALLOWED_ORIGINS = [origin for origin in _cors_origins.split(',') if origin]
 
+_csrf_trusted_origins = os.getenv(
+    'CSRF_TRUSTED_ORIGINS',
+    'https://karaoke.okamei.net,https://raku-sound.okamei.net',
+)
+CSRF_TRUSTED_ORIGINS = [origin for origin in _csrf_trusted_origins.split(',') if origin]
+
+# The production app is served through Cloudflare and nginx. Trust the
+# forwarded protocol so Django validates HTTPS origins against HTTPS requests.
+SECURE_PROXY_SSL_HEADER = ('HTTP_X_FORWARDED_PROTO', 'https')
+
 REST_FRAMEWORK = {
     'DEFAULT_AUTHENTICATION_CLASSES': (
         'rest_framework_simplejwt.authentication.JWTAuthentication',

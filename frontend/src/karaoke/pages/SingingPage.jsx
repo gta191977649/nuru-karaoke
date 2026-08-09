@@ -444,7 +444,7 @@ function SingingPage({ onFinish, showInterludePrompt = true }) {
                 key={state.playbackSessionId}
                 score={liveScore}
                 ready={liveScoreReady}
-                label="現在の得点"
+                label="現在得点"
                 updateKey={scoreUpdateKey}
             />
             <KeyChangeAlert />

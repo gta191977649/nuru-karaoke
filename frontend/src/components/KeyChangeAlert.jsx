@@ -10,12 +10,16 @@ function clamp(value, min, max) {
 function KeyChangeAlert() {
   const visible = useKeyChangeAlertStore((state) => state.visible)
   const value = useKeyChangeAlertStore((state) => state.value)
+  const previousValue = useKeyChangeAlertStore((state) => state.previousValue)
+  const animationId = useKeyChangeAlertStore((state) => state.animationId)
   const timeoutMs = useKeyChangeAlertStore((state) => state.timeoutMs)
   const hide = useKeyChangeAlertStore((state) => state.hideKeyChangeAlert)
   const clear = useKeyChangeAlertStore((state) => state.clearKeyChangeAlert)
 
   const dots = useMemo(() => Array.from({ length: 13 }, (_, i) => i - 6), [])
   const selectedIndex = clamp(Math.round(value) + 6, 0, dots.length - 1)
+  const previousIndex = clamp(Math.round(previousValue) + 6, 0, dots.length - 1)
+  const indicatorTravelPx = (previousIndex - selectedIndex) * 20
 
   useEffect(() => {
     if (!visible || timeoutMs <= 0) return
@@ -34,27 +38,31 @@ function KeyChangeAlert() {
           <div className="keyAlert__track">
             <div className="keyAlert__circle">♭</div>
             <div className="keyAlert__dots">
+              <div
+                key={animationId}
+                className="keyAlert__indicator"
+                style={{
+                  '--key-alert-index': selectedIndex,
+                  '--key-alert-travel-x': `${indicatorTravelPx}px`,
+                }}
+              >
+                <svg
+                  className="keyAlert__triangle"
+                  viewBox="0 0 24 20"
+                  role="presentation"
+                  aria-hidden="true"
+                >
+                  <polygon points="12,20 0,0 24,0" fill="#d32f2f" stroke="#ffffff" strokeWidth="2" />
+                </svg>
+              </div>
               {dots.map((dotValue, idx) => {
                 const isSelected = value !== 0 && idx === selectedIndex
                 const isOrigin = dotValue === 0
-                const isIndicator = idx === selectedIndex
                 return (
                   <div
                     key={dotValue}
                     className={`keyAlert__dot ${isSelected ? 'keyAlert__dot--selected' : ''}`}
                   >
-                    {isIndicator ? (
-                      <div className="keyAlert__indicator">
-                        <svg
-                          className="keyAlert__triangle"
-                          viewBox="0 0 24 20"
-                          role="presentation"
-                          aria-hidden="true"
-                        >
-                          <polygon points="12,20 0,0 24,0" fill="#d32f2f" stroke="#ffffff" strokeWidth="2" />
-                        </svg>
-                      </div>
-                    ) : null}
                     {isOrigin ? (
                       <div className="keyAlert__origin">
                         <div className="keyAlert__originCircle">原</div>

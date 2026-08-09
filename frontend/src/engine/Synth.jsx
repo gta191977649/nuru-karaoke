@@ -6,7 +6,9 @@ import { DEFAULT_CONFIG } from './audioEngine.js'
 import { centsError } from './audio/pitch/utils/dspUtils.js'
 import { synthEngine } from './SynthEngine.js'
 import SynthPlaybackControls from './SynthPlaybackControls.jsx'
+import AutoGainDspMonitor from './AutoGainDspMonitor.jsx'
 import { useKaraokeStore } from '../state/karaokeStore.js'
+import { useSettingsStore } from '../state/settingsStore.js'
 import MelodyGuideCanvas from '../components/MelodyGuideCanvas.jsx'
 import ParticlePreview from '../components/particles/ParticlePreview.jsx'
 import SoundCanvasLcd from '../components/SoundCanvasLcd.jsx'
@@ -220,6 +222,8 @@ const buildBeatMapData = (reference, opts = {}) => {
 
 function Synth({ onNavigateHome }) {
   const state = useKaraokeStore()
+  const autoGainEnabled = useSettingsStore((settings) => settings.autoGainEnabled)
+  const setAutoGainEnabled = useSettingsStore((settings) => settings.setAutoGainEnabled)
   const detectedStandard = state.midiMapState?.detectedStandard
   const activeStandard = detectedStandard === 'GM2'
     ? 'GM'
@@ -1033,6 +1037,18 @@ function Synth({ onNavigateHome }) {
               />
             </div>
 
+          </div>
+        </Col>
+
+        <Col xs={12}>
+          <div className="p-3 border rounded-3">
+            <AutoGainDspMonitor
+              enabled={autoGainEnabled}
+              inputDb={state.autoGainInputDb}
+              gainDb={state.autoGainDb}
+              limiterDb={state.autoGainReductionDb}
+              onEnabledChange={setAutoGainEnabled}
+            />
           </div>
         </Col>
 
