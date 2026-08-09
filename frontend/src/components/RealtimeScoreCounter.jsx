@@ -8,7 +8,7 @@ const SCORE_DISPLAY_HOLD_MS = 3000
 export default function RealtimeScoreCounter({
     score = 0,
     ready = false,
-    label = '現在の得点',
+    label = '現在得点',
     updateKey = 0,
 }) {
     const [displayScore, setDisplayScore] = useState(0)
