@@ -77,9 +77,12 @@
 
 .karaokeSongIntro__content {
   position: absolute;
-  top: 120px;
+  top: clamp(72px, 12vh, 120px);
   left: 50%;
   transform: translateX(-50%);
+  width: calc(100% - 80px);
+  max-width: 1120px;
+  box-sizing: border-box;
   text-align: center;
   text-shadow: 0 6px 0 rgba(0, 0, 0, 0.55);
   color: #ffffff;
@@ -95,18 +98,28 @@
 
 .karaokeSongIntro__title {
   font-weight: bolder;
-  font-size: 5.5rem;
-  letter-spacing: 0.08em;
+  font-size: clamp(3rem, min(6.9vw, var(--karaoke-title-size, 5.5rem)), 5.5rem);
+  line-height: 1.08;
+  letter-spacing: clamp(0.02em, 0.35vw, 0.08em);
   -webkit-text-stroke: 2px #000000;
-  white-space: nowrap;
+  white-space: normal;
+  word-break: normal;
+  overflow-wrap: break-word;
+  line-break: strict;
+  text-wrap: balance;
 }
 
 .karaokeSongIntro__artist {
   font-weight: bold;
   margin-top: 6px;
-  font-size: 3.5rem;
+  font-size: clamp(2rem, 4.4vw, 3.5rem);
+  line-height: 1.12;
   -webkit-text-stroke: 2px #000000;
-  white-space: nowrap;
+  white-space: normal;
+  word-break: normal;
+  overflow-wrap: break-word;
+  line-break: strict;
+  text-wrap: balance;
 }
 
 .karaoke-screen {
@@ -423,6 +436,7 @@
 }
 
 .lyrics-container {
+  --karaoke-outline-width: 8px;
   font-family: 'BIZUDPMincho-Bold', 'Hiragino Mincho ProN', 'Yu Mincho', serif;
   font-weight: bolder;
   font-style: normal;
@@ -452,7 +466,7 @@
   font-size: 3.5rem;
   line-height: 1.2;
   white-space: nowrap;
-  -webkit-text-stroke: 6px #000000;
+  -webkit-text-stroke: var(--karaoke-outline-width) #000000;
   paint-order: stroke fill;
   opacity: 0;
   visibility: hidden;
@@ -513,7 +527,7 @@
 .text {
   font-size: 3.5rem;
   color: #ffffff;
-  -webkit-text-stroke: 6px #000000;
+  -webkit-text-stroke: var(--karaoke-outline-width) #000000;
   paint-order: stroke fill;
 
   /* text-shadow: 3px 3px 0px #000; */
@@ -530,7 +544,7 @@
 
 .karaokeTextBase {
   color: #ffffff;
-  -webkit-text-stroke: 6px #000000;
+  -webkit-text-stroke: var(--karaoke-outline-width) #000000;
   paint-order: stroke fill;
 
 }
@@ -543,22 +557,22 @@
 
 .karaokeRun--base {
   color: #ffffff;
-  -webkit-text-stroke: 6px #000000;
+  -webkit-text-stroke: var(--karaoke-outline-width) #000000;
 }
 
 .karaokeRun--fill {
   color: #e60000;
-  -webkit-text-stroke: 6px #ffffff;
+  -webkit-text-stroke: var(--karaoke-outline-width) #ffffff;
 }
 
 .karaokeRun--falsetto.karaokeRun--base {
   color: #008B8B;
-  -webkit-text-stroke: 6px #000000;
+  -webkit-text-stroke: var(--karaoke-outline-width) #000000;
 }
 
 .karaokeRun--falsetto.karaokeRun--fill {
   color: #008B8B;
-  -webkit-text-stroke: 6px #ffffff;
+  -webkit-text-stroke: var(--karaoke-outline-width) #ffffff;
 }
 
 .karaokeRuby {
@@ -567,14 +581,14 @@
 
 .karaokeRubyRt {
   color: inherit;
-  -webkit-text-stroke: 2px #000000;
+  -webkit-text-stroke: var(--karaoke-outline-width) #000000;
   paint-order: stroke fill;
   font-size: 0.42em;
   line-height: 1;
 }
 
 .karaokeRubyRt--fill {
-  -webkit-text-stroke: 2px #ffffff;
+  -webkit-text-stroke: var(--karaoke-outline-width) #ffffff;
 }
 
 .karaokeTextFill {
@@ -584,7 +598,7 @@
   width: var(--karaoke-progress);
   overflow: hidden;
   color: #e60000;
-  -webkit-text-stroke: 6px #ffffff;
+  -webkit-text-stroke: var(--karaoke-outline-width) #ffffff;
   paint-order: stroke fill;
   white-space: nowrap;
   pointer-events: none;
