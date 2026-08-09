@@ -119,6 +119,8 @@ const TECHNIQUE_ICON_OFFSET_PX = 20
 const SOLFEGE_LABEL_OFFSET_PX = 3
 const SOLFEGE_FONT_FAMILY = 'MS PGothic'
 const SOLFEGE_FONT_SIZE = 12
+const SOLFEGE_INTERVAL_DURATION_QUANTILE = 0.75
+const solfegeIntervalCache = new WeakMap()
 const RESULT_DELAY_SEC = 0.2
 const USER_GLOW_FILL_SPEED = 1.5 // speed for correct note fill animation
 const JITTER_WINDOW_SEC = 0.3 // 200-500 ms suggested; default 300 ms
@@ -149,6 +151,80 @@ function getSolfegeLabel(midi) {
   if (!Number.isFinite(m)) return null
   const pc = mod12(Math.round(m))
   return SOLFEGE_NAMES[pc] || null
+}
+
+function quantile(values, fraction) {
+  if (!values.length) return null
+  const sorted = values.slice().sort((a, b) => a - b)
+  const position = (sorted.length - 1) * fraction
+  const lowerIndex = Math.floor(position)
+  const upperIndex = Math.min(sorted.length - 1, lowerIndex + 1)
+  const weight = position - lowerIndex
+  return sorted[lowerIndex] + (sorted[upperIndex] - sorted[lowerIndex]) * weight
+}
+
+export function getAdaptiveSolfegeInterval(notes) {
+  if (!Array.isArray(notes) || !notes.length) return { unit: 'second', threshold: Infinity }
+  const cached = solfegeIntervalCache.get(notes)
+  if (cached) return cached
+
+  const beatDurations = notes
+    .map((note) => Number(note?.t1Beat) - Number(note?.t0Beat))
+    .filter((duration) => Number.isFinite(duration) && duration > 0)
+  const secondDurations = notes
+    .map((note) => Number(note?.t1Sec) - Number(note?.t0Sec))
+    .filter((duration) => Number.isFinite(duration) && duration > 0)
+  const useBeats = beatDurations.length >= Math.max(1, Math.ceil(notes.length * 0.8))
+  const durations = useBeats ? beatDurations : secondDurations
+  const threshold = quantile(durations, SOLFEGE_INTERVAL_DURATION_QUANTILE)
+  const interval = {
+    unit: useBeats ? 'beat' : 'second',
+    threshold: Number.isFinite(threshold) && threshold > 0 ? threshold : Infinity,
+  }
+  solfegeIntervalCache.set(notes, interval)
+  return interval
+}
+
+export function getSolfegeLabelNotes(notes, visibleStart, visibleEnd, intervalOverride = null) {
+  if (!Array.isArray(notes)) return []
+  const interval = intervalOverride || getAdaptiveSolfegeInterval(notes)
+  const labelledNotes = []
+  let previousMidi = null
+  let previousIntervalEnd = null
+
+  for (const note of notes) {
+    if (note?.midi == null) {
+      previousMidi = null
+      previousIntervalEnd = null
+      continue
+    }
+    const midi = Number(note.midi)
+    const startSec = Number(note.t0Sec)
+    const endSec = Number(note.t1Sec)
+    if (!Number.isFinite(midi) || !Number.isFinite(startSec) || !Number.isFinite(endSec)) {
+      previousMidi = null
+      previousIntervalEnd = null
+      continue
+    }
+    if (endSec < visibleStart || startSec > visibleEnd) continue
+
+    const intervalStart = interval.unit === 'beat' ? Number(note.t0Beat) : startSec
+    const intervalEnd = interval.unit === 'beat' ? Number(note.t1Beat) : endSec
+    if (
+      previousIntervalEnd != null &&
+      Number.isFinite(intervalStart) &&
+      intervalStart - previousIntervalEnd >= interval.threshold
+    ) {
+      previousMidi = null
+    }
+    const isNewPitch = previousMidi == null || midi !== previousMidi
+    previousMidi = midi
+    previousIntervalEnd = Number.isFinite(intervalEnd) ? intervalEnd : null
+
+    if (isNewPitch) labelledNotes.push(note)
+  }
+
+  return labelledNotes
 }
 
 function getNotesBounds(notes, transposition, fallbackMin, fallbackMax) {
@@ -842,23 +918,8 @@ function MelodyGuideCanvas({
           const labelPool = state.solfegeLabelPool || []
           let labelCount = 0
           if (snap.showSolfeges) {
-            let lastMidiKey = null
-            let lastNote = null
-            for (const note of notesData) {
+            for (const note of getSolfegeLabelNotes(notesData, visibleStart, visibleEnd)) {
               const midiKey = Number(note.midi)
-              if (!Number.isFinite(midiKey)) {
-                lastMidiKey = null
-                lastNote = null
-                continue
-              }
-              if (lastNote && note.t0Sec - lastNote.t1Sec > breakToleranceSec) {
-                lastMidiKey = null
-              }
-              const isDistinct = lastMidiKey == null || midiKey !== lastMidiKey
-              lastMidiKey = midiKey
-              lastNote = note
-              if (!isDistinct) continue
-              if (note.t1Sec < visibleStart || note.t0Sec > visibleEnd) continue
               const labelText = getSolfegeLabel(midiKey + transposition)
               if (!labelText) continue
               const x0 = playheadX + (note.t0Sec - songTimeSec) * pixelsPerSec
