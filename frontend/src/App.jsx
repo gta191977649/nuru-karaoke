@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { Button, Col, Container, Row, Tab, Tabs } from 'react-bootstrap'
+import { UserRound } from 'lucide-react'
 import WiiHomeMain from './home/WiiHomeMain.jsx'
 import { SCREENS } from './home/screens.js'
 import Karaoke from './karaoke/Karaoke.jsx'
@@ -232,6 +233,13 @@ function App({ onNavigate }) {
     })
   }, [resetPlayerScore, runTransition, setKaraokeView, showAlert, synth.midiName, synth.queue])
 
+  const rawUserName = !isGuest && authStatus === 'authenticated'
+    ? (user?.profile?.display_name || user?.username || 'USER')
+    : 'GUEST'
+  const displayUserName = rawUserName === 'GUEST' || rawUserName.endsWith('さん')
+    ? rawUserName
+    : `${rawUserName}さん`
+
   return (
     <div className="wiiHome">
       <WiiAlert />
@@ -265,10 +273,10 @@ function App({ onNavigate }) {
 
             <div className="joyTopStatus">
               <div className="joyTopUser">
-                <div className="joyTopUser__icon" aria-hidden="true" />
-                <div className="joyTopUser__name">
-                  {isGuest ? 'GUEST' : authStatus === 'authenticated' ? (user?.profile?.display_name || user?.username || 'USER') : 'GUEST'}
-                </div>
+                <span className="joyTopUser__icon" aria-hidden="true">
+                  <UserRound />
+                </span>
+                <div className="joyTopUser__name">{displayUserName}</div>
                 <button
                   className="joyTopUser__switch"
                   type="button"
