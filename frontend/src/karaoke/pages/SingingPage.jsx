@@ -438,6 +438,15 @@ function SingingPage({ onFinish, showInterludePrompt = true }) {
         micRmsGate,
     ])
 
+    const titleVisualLength = Array.from(String(songInfo.title ?? '')).reduce(
+        (length, character) => length + (/^[\x20-\x7E]$/.test(character) ? 0.55 : 1),
+        0,
+    )
+    const titleSizeRem = Math.max(
+        3,
+        Math.min(5.5, 25 / Math.sqrt(Math.max(titleVisualLength, 1))),
+    )
+
     return (
         <div className={`karaokePage${showSongInfo ? ' karaokePage--intro' : ''}`}>
             <RealtimeScoreCounter
@@ -450,7 +459,12 @@ function SingingPage({ onFinish, showInterludePrompt = true }) {
             <KeyChangeAlert />
             <div className="karaokeSongIntro">
                 <div className="karaokeSongIntro__content">
-                    <div className="karaokeSongIntro__title">{songInfo.title}</div>
+                    <div
+                        className="karaokeSongIntro__title"
+                        style={{ '--karaoke-title-size': `${titleSizeRem}rem` }}
+                    >
+                        {songInfo.title}
+                    </div>
                     {songInfo.artist ? <div className="karaokeSongIntro__artist">♪{songInfo.artist}</div> : null}
                 </div>
                 <img
