@@ -1,11 +1,11 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { Sequencer, WorkletSynthesizer } from 'spessasynth_lib'
 import processorUrl from 'spessasynth_lib/dist/spessasynth_processor.min.js?url'
-import defaultSoundFontUrl from '../soundfont/gm2.sf2'
+import defaultSoundFontUrl from '../soundfont/sc55.sf2'
 import { findActiveLyricIndex, parseLrc } from '../engine/lrc.js'
 import './DebugSynth.css'
 
-const DEFAULT_SOUNDFONT_DISPLAY_NAME = 'soundfont/gm2.sf2'
+const DEFAULT_SOUNDFONT_DISPLAY_NAME = 'soundfont/sc55.sf2'
 
 function formatTime(seconds) {
   if (!Number.isFinite(seconds) || seconds <= 0) return '0:00'

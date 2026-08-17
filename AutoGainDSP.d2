@@ -1,0 +1,154 @@
+vars: {
+  d2-config: {
+    layout-engine: dagre
+    theme-id: 4
+    dark-theme-id: 200
+    pad: 32
+  }
+}
+
+grid-columns: 1
+vertical-gap: 56
+
+title: "Nuru Karaoke — Auto Gain DSP Architecture" {
+  shape: text
+  near: top-center
+  style: {
+    font-size: 26
+    bold: true
+  }
+}
+
+audio: {
+  label: "AUDIO SIGNAL PATH"
+  direction: right
+
+  synth: "SpessaSynth\nPCM Output"
+  input: "Auto Gain\nInput"
+  dry: "Dry Gain"
+  gain: "Auto Gain\nGainNode"
+  compressor: "Dynamics Compressor\n−3 dB · 20:1\n3 ms / 250 ms"
+  ceiling: "Ceiling Gain\n−1 dB"
+  wet: "Wet Gain"
+  mix: "Mix" {
+    shape: circle
+  }
+  output: "AudioContext\nDestination"
+
+  synth -> input
+  input -> dry -> mix
+  input -> gain -> compressor -> ceiling -> wet -> mix
+  mix -> output
+}
+
+controllers: {
+  label: "AUTO GAIN CONTROL"
+  direction: right
+
+  initial: {
+    label: "1 · MIDI INITIAL GAIN ESTIMATOR"
+    direction: down
+
+    events: "MIDI Events\nVelocity · CC7 · CC11 · Polyphony"
+    power: "Tick-weighted Mean Power\nP̄ᴍɪᴅɪ"
+    calibration: "SoundFont Calibration\nLᴍɪᴅɪ = −36 + 20 log₁₀(√P̄ᴍɪᴅɪ)"
+    g0: "Initial Gain G₀\nclamp(−18 − Lᴍɪᴅɪ, −6, +20 dB)"
+
+    events -> power -> calibration -> g0
+  }
+
+  detector: {
+    label: "2 · REAL-TIME PCM LEVEL DETECTOR"
+    direction: down
+
+    analyser: "AnalyserNode\n2048 samples · update ≈ 100 ms"
+    rms: "Instant RMS Power\nP = Σx² / N"
+    smooth: "Power-domain Smoothing\nτLevel = 1.5 s"
+    gate: "Silence Gate\nLinst ≤ −50 dB → Hold" {
+      shape: diamond
+    }
+    input_level: "Smoothed Input Level\nLin = 10 log₁₀(P̄)"
+
+    analyser -> rms -> smooth -> gate -> input_level
+  }
+
+  law: {
+    label: "3 · GAIN CONTROL LAW"
+    direction: down
+
+    target: "Target Gain G*\nclamp(−18 − Lin, −6, +20 dB)"
+    direction_check: "Gain Direction" {
+      shape: diamond
+    }
+    fast_cut: "Fast Cut\nτ = 0.2 s"
+    slow_boost: "Slow Boost\nτ = 4.0 s"
+    smoothing: "Asymmetric dB Smoothing\nG ← G + α(G* − G)"
+    linear: "Linear Gain\nA = 10^(G/20)"
+
+    target -> direction_check
+    direction_check -> fast_cut: "reduce"
+    direction_check -> slow_boost: "increase"
+    fast_cut -> smoothing
+    slow_boost -> smoothing
+    smoothing -> linear
+  }
+}
+
+support: {
+  label: "SWITCHING AND TELEMETRY"
+  direction: right
+
+  switch: {
+    label: "AUTO GAIN SWITCH"
+    direction: down
+
+    enabled: "ON · Dry 0 / Wet 1"
+    crossfade: "30 ms Crossfade"
+    disabled: "OFF · Dry 1 / Wet 0"
+
+    enabled -> crossfade
+    disabled -> crossfade
+  }
+
+  debug: {
+    label: "SYNTH DEBUG · 500 ms telemetry"
+    direction: right
+
+    input: "Input\nRMS dBFS"
+    gain: "Gain\nAuto Gain dB"
+    limiter: "Limiter\nReduction dB"
+  }
+}
+
+controllers.initial.g0 -> audio.gain: "set before first note" {
+  style.stroke-dash: 5
+}
+
+audio.input -> controllers.detector.analyser: "pre-gain measurement" {
+  style.stroke-dash: 5
+}
+
+controllers.detector.input_level -> controllers.law.target: {
+  style.stroke-dash: 5
+}
+
+controllers.law.linear -> audio.gain: "continuous correction" {
+  style.stroke-dash: 5
+}
+
+support.switch.crossfade -> audio.dry: {
+  style.stroke-dash: 5
+}
+support.switch.crossfade -> audio.wet: {
+  style.stroke-dash: 5
+}
+
+controllers.detector.input_level -> support.debug.input: {
+  style.stroke-dash: 5
+}
+controllers.law.smoothing -> support.debug.gain: {
+  style.stroke-dash: 5
+}
+audio.compressor -> support.debug.limiter: {
+  style.stroke-dash: 5
+}
