@@ -12,7 +12,7 @@ import { estimateMidiInitialGainDb } from './midiGainEstimator.js'
 
 const DEFAULT_CONFIG = {
   enableMIDIStandardMapping: true,
-  reverb: 1.35,
+  reverb: 1.2,
   chorus: 1.2,
 }
 
