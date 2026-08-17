@@ -7,15 +7,19 @@
 
 import { detectMidiStandard, detectDrumChannels, MIDI_STANDARDS } from './MidiStandardDetector.js'
 import { createSmfKnifeConverter, parseSmfKnifeConfig } from './converters/SmfKnifeConverter.js'
-import xg80MkCfgText from './smf/xg/80MK.CFG?raw'
-import sc88pro88CfgText from './smf/88ish/PRO88.CFG?raw'
 import xg100MkCfgText from './smf/xg/10088.CFG?raw'
-import sc88MkCfgText from './smf/88ish/88MK.CFG?raw'
-import sc88ProMkCfgText from './smf/88ish/88PRO.CFG?raw'
+import xgSc55CfgText from './smf/xg/XGSC55.CFG?raw'
+import sc88Sc55CfgText from './smf/88ish/SC88SC55.CFG?raw'
 const STANDARD_MAPPINGS = {
-    [MIDI_STANDARDS.XG]: { type: 'smfknife', name: '10088.CFG', text: xg100MkCfgText },
-    // GS_88: { type: 'smfknife', name: 'PRO88MK55.CFG', text: sc88MkCfgText },
-    // GS_88PRO: { type: 'smfknife', name: '88PRO.CFG', text: sc88ProMkCfgText },
+    // Keep the established MU100/SC-88 voice translations while replacing
+    // only their drum section with the Synth Engine's dedicated SC-55 map.
+    [MIDI_STANDARDS.XG]: {
+        type: 'smfknife',
+        name: 'XGSC55.CFG',
+        text: xg100MkCfgText,
+        drumOverlayText: xgSc55CfgText,
+    },
+    GS_88: { type: 'smfknife', name: 'SC88SC55.CFG', text: sc88Sc55CfgText },
     // GM/GM2: no mapping by default
 }
 
@@ -29,7 +33,16 @@ function getSmfKnifeConfigForStandard(standard, gsModule) {
     const cacheKey = entry.name
     if (SMF_CONFIG_CACHE.has(cacheKey)) return SMF_CONFIG_CACHE.get(cacheKey)
     try {
-        const parsed = parseSmfKnifeConfig(entry.text, { name: entry.name })
+        let parsed = parseSmfKnifeConfig(entry.text, { name: entry.name })
+        if (entry.drumOverlayText) {
+            const drumOverlay = parseSmfKnifeConfig(entry.drumOverlayText, { name: entry.name })
+            parsed = {
+                ...parsed,
+                destination: drumOverlay.destination || parsed.destination,
+                drums: drumOverlay.drums,
+                _drumIndex: drumOverlay._drumIndex,
+            }
+        }
         SMF_CONFIG_CACHE.set(cacheKey, parsed)
         return parsed
     } catch (err) {

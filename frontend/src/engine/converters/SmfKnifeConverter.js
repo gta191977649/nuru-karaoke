@@ -139,7 +139,7 @@ export function parseSmfKnifeConfig(text, options = {}) {
         if (!line) continue
 
         if (line.startsWith('[')) {
-            section = line.replace(/[\[\]]/g, '').trim().toUpperCase()
+            section = line.replace(/\[|\]/g, '').trim().toUpperCase()
             currentDrumKit = null
             pendingExclusive = null
             continue
@@ -513,6 +513,21 @@ function formatSysexHex(bytes) {
     return Array.from(bytes, (b) => b.toString(16).padStart(2, '0').toUpperCase()).join(' ')
 }
 
+function isMidiModeReset(data) {
+    if (!data?.length) return false
+    const offset = data[0] === 0xF0 ? 1 : 0
+    const byte = (index) => Number(data[offset + index])
+
+    if (byte(0) === 0x7E && byte(1) === 0x7F && byte(2) === 0x09) {
+        return byte(3) === 0x01 || byte(3) === 0x03
+    }
+    if (byte(0) === 0x43 && (byte(1) & 0xF0) === 0x10 && byte(2) === 0x4C) {
+        return byte(3) === 0x00 && byte(4) === 0x00 && byte(5) === 0x7E && byte(6) === 0x00
+    }
+    return byte(0) === 0x41 && byte(2) === 0x42 && byte(3) === 0x12 &&
+        byte(4) === 0x40 && byte(5) === 0x00 && byte(6) === 0x7F && byte(7) === 0x00
+}
+
 export function createSmfKnifeConverter(config, options = {}) {
     if (!config) throw new Error('SMF Knife config required')
 
@@ -530,6 +545,7 @@ export function createSmfKnifeConverter(config, options = {}) {
         bankLSB: new Int16Array(16).fill(0),
         program: new Int16Array(16).fill(0),
         drumChannels: new Uint8Array(16).fill(0),
+        drumPartMode: new Int8Array(16).fill(-1), // -1 unknown, 0 melodic, 1 drum
         transpose: new Int16Array(16).fill(0),
         ccValues: Array.from({ length: 16 }, () => new Int16Array(128).fill(0)),
         activeDrumKits: Array.from({ length: 16 }, () => null),
@@ -552,6 +568,20 @@ export function createSmfKnifeConverter(config, options = {}) {
         if (!event) return []
 
         if (event.type === 'sysex' && event.data) {
+            // System On resets runtime part assignments. Non-default drum
+            // channels must be re-declared later by bank select or Part Mode.
+            if (isMidiModeReset(event.data)) {
+                state.bankMSB.fill(0)
+                state.bankLSB.fill(0)
+                state.program.fill(0)
+                state.drumChannels.fill(0)
+                state.drumChannels[9] = 1
+                state.drumPartMode.fill(-1)
+                state.activeDrumKits.fill(null)
+                state.noteMapCache.forEach((arr) => arr.fill(-1))
+                if (process.onStateChange) process.onStateChange(process.getState())
+            }
+
             // Yamaha XG Drum Setup (Multi Part / Part Mode)
             if (event.data.length >= 9 &&
                 event.data[0] === 0xF0 &&
@@ -565,6 +595,7 @@ export function createSmfKnifeConverter(config, options = {}) {
                 if (part >= 0x00 && part <= 0x0F) {
                     const ch = part
                     const isDrum = mode !== 0x00
+                    state.drumPartMode[ch] = isDrum ? 1 : 0
                     state.drumChannels[ch] = isDrum ? 1 : 0
                     if (!isDrum) {
                         state.activeDrumKits[ch] = null
@@ -597,6 +628,7 @@ export function createSmfKnifeConverter(config, options = {}) {
                     const ch = mapGsPartToChannel(addr1, addr2)
                     if (ch >= 0 && ch <= 15) {
                         const isDrum = value !== 0
+                        state.drumPartMode[ch] = isDrum ? 1 : 0
                         state.drumChannels[ch] = isDrum ? 1 : 0
                         if (!isDrum) {
                             state.activeDrumKits[ch] = null
@@ -677,7 +709,8 @@ export function createSmfKnifeConverter(config, options = {}) {
 
             if (cc === 0) {
                 state.bankMSB[ch] = event.value
-                const isDrum = state.bankMSB[ch] === 120 || state.bankMSB[ch] === 126 || state.bankMSB[ch] === 127 || ch === 9
+                const bankSelectsDrums = state.bankMSB[ch] === 120 || state.bankMSB[ch] === 126 || state.bankMSB[ch] === 127
+                const isDrum = bankSelectsDrums || state.drumPartMode[ch] === 1 || ch === 9
                 if (state.drumChannels[ch] !== (isDrum ? 1 : 0)) {
                     state.drumChannels[ch] = isDrum ? 1 : 0
                     if (!isDrum) {
@@ -698,7 +731,8 @@ export function createSmfKnifeConverter(config, options = {}) {
             const srcProgram = event.value
             state.program[ch] = srcProgram
 
-            const isDrum = state.bankMSB[ch] === 120 || state.bankMSB[ch] === 126 || state.bankMSB[ch] === 127 || ch === 9
+            const bankSelectsDrums = state.bankMSB[ch] === 120 || state.bankMSB[ch] === 126 || state.bankMSB[ch] === 127
+            const isDrum = bankSelectsDrums || state.drumPartMode[ch] === 1 || ch === 9
             if (state.drumChannels[ch] !== (isDrum ? 1 : 0)) {
                 state.drumChannels[ch] = isDrum ? 1 : 0
                 if (process.onStateChange) process.onStateChange(process.getState())
@@ -817,6 +851,7 @@ export function createSmfKnifeConverter(config, options = {}) {
         state.bankLSB.fill(0)
         state.program.fill(0)
         state.drumChannels.fill(0)
+        state.drumPartMode.fill(-1)
         state.drumChannels[9] = 1
         if (initialDrumChannels) {
             state.drumChannels.set(initialDrumChannels)

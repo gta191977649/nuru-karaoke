@@ -20,6 +20,8 @@ import { useKaraokeScoring } from '../hooks/useKaraokeScoring.js'
 import RealtimeScoreCounter from '../../components/RealtimeScoreCounter.jsx'
 import { usePlayerScoreStore } from '../../state/playerScoreStore.js'
 import logoTitle from '../../assets/logo_title.png'
+import { useSettingsStore } from '../../state/settingsStore.js'
+import KaraokeBackgroundVideo from '../components/KaraokeBackgroundVideo.jsx'
 
 function renderLyricSegments(segments, layer = 'base') {
     const layerClass = layer === 'fill' ? 'karaokeRun--fill' : 'karaokeRun--base'
@@ -152,6 +154,9 @@ const buildF0CurveByBeat = ({ history, reference, rmsGate }) => {
 
 function SingingPage({ onFinish, showInterludePrompt = true }) {
     const state = useKaraokeStore()
+    const karaokeBackgroundVideoEnabled = useSettingsStore(
+        (store) => store.karaokeBackgroundVideoEnabled,
+    )
     const pitchEngine = sharedPitchEngine
     const [micActive, setMicActive] = useState(false)
     const currentTimeRef = useRef(0)
@@ -449,6 +454,7 @@ function SingingPage({ onFinish, showInterludePrompt = true }) {
 
     return (
         <div className={`karaokePage${showSongInfo ? ' karaokePage--intro' : ''}`}>
+            {karaokeBackgroundVideoEnabled ? <KaraokeBackgroundVideo /> : null}
             <RealtimeScoreCounter
                 key={state.playbackSessionId}
                 score={liveScore}
