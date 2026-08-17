@@ -737,6 +737,7 @@ class SynthEngine {
   }
 
   _resetChannelActivity() {
+    const drumChannels = this._midiMapper?.getState?.()?.drumChannels
     this._channelActivityVelocity.fill(0)
     this._channelActivityTime.fill(-1)
     this._activityDirty = false
@@ -748,11 +749,11 @@ class SynthEngine {
     this._instrumentDirty = true
     this._midiChannelState = Array.from({ length: 16 }, (_, i) => ({
       channel: i,
-      isDrum: i === 9,
+      isDrum: i === 9 || Boolean(drumChannels?.[i]),
       program: 0,
       bankMSB: 0,
       bankLSB: 0,
-      name: i === 9 ? 'Drums' : '—',
+      name: i === 9 || drumChannels?.[i] ? 'Drums' : '—',
     }))
 
     this._setState({
@@ -761,6 +762,7 @@ class SynthEngine {
       channelInstrumentNames: this._channelInstrumentNames.slice(),
       midiChannels: this._cloneMidiChannelState(),
     })
+    this._bgSyncDrums(drumChannels)
   }
 
   _resetPolyphony() {
@@ -1299,4 +1301,4 @@ class SynthEngine {
 
 const synthEngine = new SynthEngine()
 
-export { synthEngine, DEFAULT_CONFIG }
+export { synthEngine, SynthEngine, DEFAULT_CONFIG }

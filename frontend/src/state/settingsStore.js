@@ -6,11 +6,14 @@ const useSettingsStore = create(
     (set) => ({
       guideMelodyEnabled: true,
       autoGainEnabled: true,
+      karaokeBackgroundVideoEnabled: false,
       microphoneDeviceId: '',
       setGuideMelodyEnabled: (guideMelodyEnabled) =>
         set({ guideMelodyEnabled: Boolean(guideMelodyEnabled) }),
       setAutoGainEnabled: (autoGainEnabled) =>
         set({ autoGainEnabled: Boolean(autoGainEnabled) }),
+      setKaraokeBackgroundVideoEnabled: (karaokeBackgroundVideoEnabled) =>
+        set({ karaokeBackgroundVideoEnabled: Boolean(karaokeBackgroundVideoEnabled) }),
       setMicrophoneDeviceId: (microphoneDeviceId) =>
         set({ microphoneDeviceId: String(microphoneDeviceId || '') }),
     }),
@@ -19,6 +22,7 @@ const useSettingsStore = create(
       partialize: (state) => ({
         guideMelodyEnabled: state.guideMelodyEnabled,
         autoGainEnabled: state.autoGainEnabled,
+        karaokeBackgroundVideoEnabled: state.karaokeBackgroundVideoEnabled,
         microphoneDeviceId: state.microphoneDeviceId,
       }),
     },

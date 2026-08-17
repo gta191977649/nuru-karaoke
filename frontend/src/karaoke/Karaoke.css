@@ -16,6 +16,8 @@
   --text-outline: #003366;
   --score-pink: #ff00cc;
   --karaoke-visual-opacity: 0.5;
+  /* 字幕大小统一设置：只需要修改这个值。 */
+  --karaoke-lyrics-font-size: 4rem;
 
   /* background-color: var(--bg-color); */
   background-image: url("../assets/bg/bg2.jpg");
@@ -25,6 +27,17 @@
   height: 100%;
   width: 100%;
   overflow: hidden;
+  position: relative;
+}
+
+.karaokeBackgroundVideo {
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  pointer-events: none;
 }
 
 .karaokeMessagePage {
@@ -47,6 +60,8 @@
 }
 
 .karaoke-stage {
+  position: relative;
+  z-index: 1;
   height: 100%;
   width: 100%;
   display: flex;
@@ -463,7 +478,7 @@
   align-items: center;
   justify-content: center;
   color: #ffffff;
-  font-size: 3.5rem;
+  font-size: var(--karaoke-lyrics-font-size);
   line-height: 1.2;
   white-space: nowrap;
   -webkit-text-stroke: var(--karaoke-outline-width) #000000;
@@ -525,7 +540,7 @@
 }
 
 .text {
-  font-size: 3.5rem;
+  font-size: var(--karaoke-lyrics-font-size);
   color: #ffffff;
   -webkit-text-stroke: var(--karaoke-outline-width) #000000;
   paint-order: stroke fill;
@@ -625,7 +640,7 @@
 }
 
 .lyrics-container[data-layout='three'] .text {
-  font-size: 2.8rem;
+  font-size: calc(var(--karaoke-lyrics-font-size) - 0.7rem);
 }
 
 .lyrics-container[data-layout='two'] .lyrics-lines--three {
@@ -637,7 +652,7 @@
 }
 
 .lyrics-measure .text {
-  font-size: 3.5rem;
+  font-size: var(--karaoke-lyrics-font-size);
   white-space: nowrap;
 }
 
@@ -651,15 +666,15 @@
   }
 
   .text {
-    font-size: 3rem;
+    font-size: calc(var(--karaoke-lyrics-font-size) - 0.5rem);
   }
 
   .interlude-prompt {
-    font-size: 3rem;
+    font-size: calc(var(--karaoke-lyrics-font-size) - 0.5rem);
   }
 
   .lyrics-measure .text {
-    font-size: 3rem;
+    font-size: calc(var(--karaoke-lyrics-font-size) - 0.5rem);
   }
 }
 
@@ -685,16 +700,16 @@
   }
 
   .text {
-    font-size: 2.4rem;
+    font-size: calc(var(--karaoke-lyrics-font-size) - 1.1rem);
     white-space: normal;
   }
 
   .interlude-prompt {
-    font-size: 2.4rem;
+    font-size: calc(var(--karaoke-lyrics-font-size) - 1.1rem);
   }
 
   .lyrics-measure .text {
-    font-size: 2.4rem;
+    font-size: calc(var(--karaoke-lyrics-font-size) - 1.1rem);
     white-space: nowrap;
   }
 }

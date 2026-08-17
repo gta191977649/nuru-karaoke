@@ -7,9 +7,15 @@ import { useSettingsStore } from '../state/settingsStore.js'
 function SettingsPage({ onBack }) {
   const guideMelodyEnabled = useSettingsStore((state) => state.guideMelodyEnabled)
   const autoGainEnabled = useSettingsStore((state) => state.autoGainEnabled)
+  const karaokeBackgroundVideoEnabled = useSettingsStore(
+    (state) => state.karaokeBackgroundVideoEnabled,
+  )
   const microphoneDeviceId = useSettingsStore((state) => state.microphoneDeviceId)
   const setGuideMelodyEnabled = useSettingsStore((state) => state.setGuideMelodyEnabled)
   const setAutoGainEnabled = useSettingsStore((state) => state.setAutoGainEnabled)
+  const setKaraokeBackgroundVideoEnabled = useSettingsStore(
+    (state) => state.setKaraokeBackgroundVideoEnabled,
+  )
   const setMicrophoneDeviceId = useSettingsStore((state) => state.setMicrophoneDeviceId)
   const [activeTab, setActiveTab] = useState('playback')
   const [microphones, setMicrophones] = useState([])
@@ -155,6 +161,27 @@ function SettingsPage({ onBack }) {
                   checked={autoGainEnabled}
                   onChange={(event) => setAutoGainEnabled(event.currentTarget.checked)}
                   aria-label="自動音量調整を切り替える"
+                />
+              </div>
+            </div>
+            <div className="settingsList__item">
+              <div className="settingsList__icon settingsList__icon--playback" aria-hidden="true">▶</div>
+              <div className="settingsList__body">
+                <div className="settingsList__label">KARAOKE背景動画</div>
+                <div className="settingsList__description">
+                  通信速度が遅い環境では、オンにしないことをおすすめします。
+                </div>
+              </div>
+              <div className="settingsList__control">
+                <span className={`settingsList__state ${karaokeBackgroundVideoEnabled ? 'is-on' : 'is-off'}`}>
+                  {karaokeBackgroundVideoEnabled ? 'ON' : 'OFF'}
+                </span>
+                <Form.Check
+                  type="switch"
+                  id="settings-karaoke-background-video"
+                  checked={karaokeBackgroundVideoEnabled}
+                  onChange={(event) => setKaraokeBackgroundVideoEnabled(event.currentTarget.checked)}
+                  aria-label="KARAOKE背景動画を切り替える"
                 />
               </div>
             </div>
