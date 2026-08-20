@@ -40,7 +40,9 @@ function App({ onNavigate }) {
   const mainRef = useRef(null)
   const karaokeTargetRef = useRef(null)
   const [karaokeBase, setKaraokeBase] = useState({ left: 0, top: 0, width: 0, height: 0 })
-  const synth = useKaraokeStore()
+  const midiName = useKaraokeStore((state) => state.midiName)
+  const isPlaying = useKaraokeStore((state) => state.isPlaying)
+  const queueLength = useKaraokeStore((state) => state.queue.length)
   const setKaraokeView = useKaraokeStore((state) => state.setKaraokeView)
   const resetPlayerScore = usePlayerScoreStore((state) => state.resetPlayerScore)
   const [transitionPhase, setTransitionPhase] = useState('idle')
@@ -134,41 +136,76 @@ function App({ onNavigate }) {
 
   useLayoutEffect(() => {
     if (!karaokeActive) return
-    const updateTransform = () => {
+    let resizeFrameId = 0
+    const valuesMatch = (left, right) => Math.abs(left - right) < 0.01
+    const measureTransform = () => {
+      resizeFrameId = 0
       if (!frameRef.current || !mainRef.current) return
       const frameRect = frameRef.current.getBoundingClientRect()
       const baseRect = mainRef.current.getBoundingClientRect()
-      setKaraokeBase({
+      const nextBase = {
         left: baseRect.left - frameRect.left,
         top: baseRect.top - frameRect.top,
         width: baseRect.width,
         height: baseRect.height,
-      })
+      }
+      setKaraokeBase((current) => (
+        valuesMatch(current.left, nextBase.left)
+        && valuesMatch(current.top, nextBase.top)
+        && valuesMatch(current.width, nextBase.width)
+        && valuesMatch(current.height, nextBase.height)
+          ? current
+          : nextBase
+      ))
+      if (baseRect.width <= 0 || baseRect.height <= 0) return
       if (!karaokeTargetRef.current) {
-        setKaraokeTransform({ x: 0, y: 0, sx: 1, sy: 1 })
+        setKaraokeTransform((current) => (
+          valuesMatch(current.x, 0)
+          && valuesMatch(current.y, 0)
+          && valuesMatch(current.sx, 1)
+          && valuesMatch(current.sy, 1)
+            ? current
+            : { x: 0, y: 0, sx: 1, sy: 1 }
+        ))
         return
       }
       const targetRect = karaokeTargetRef.current.getBoundingClientRect()
-      const x = targetRect.left - baseRect.left
-      const y = targetRect.top - baseRect.top
-      const sx = targetRect.width / baseRect.width
-      const sy = targetRect.height / baseRect.height
-      setKaraokeTransform({ x, y, sx, sy })
+      const nextTransform = {
+        x: targetRect.left - baseRect.left,
+        y: targetRect.top - baseRect.top,
+        sx: targetRect.width / baseRect.width,
+        sy: targetRect.height / baseRect.height,
+      }
+      setKaraokeTransform((current) => (
+        valuesMatch(current.x, nextTransform.x)
+        && valuesMatch(current.y, nextTransform.y)
+        && valuesMatch(current.sx, nextTransform.sx)
+        && valuesMatch(current.sy, nextTransform.sy)
+          ? current
+          : nextTransform
+      ))
+    }
+    const scheduleTransformUpdate = () => {
+      if (resizeFrameId) return
+      resizeFrameId = window.requestAnimationFrame(measureTransform)
     }
     if (!frameRef.current || !mainRef.current) return
-    updateTransform()
-    const frameObserver = new ResizeObserver(updateTransform)
-    const mainObserver = new ResizeObserver(updateTransform)
+    measureTransform()
+    const frameObserver = new ResizeObserver(scheduleTransformUpdate)
+    const mainObserver = new ResizeObserver(scheduleTransformUpdate)
     frameObserver.observe(frameRef.current)
     mainObserver.observe(mainRef.current)
-    const targetObserver = karaokeTargetRef.current ? new ResizeObserver(updateTransform) : null
+    const targetObserver = karaokeTargetRef.current
+      ? new ResizeObserver(scheduleTransformUpdate)
+      : null
     if (targetObserver && karaokeTargetRef.current) targetObserver.observe(karaokeTargetRef.current)
-    window.addEventListener('resize', updateTransform)
+    window.addEventListener('resize', scheduleTransformUpdate)
     return () => {
+      if (resizeFrameId) window.cancelAnimationFrame(resizeFrameId)
       frameObserver.disconnect()
       mainObserver.disconnect()
       if (targetObserver) targetObserver.disconnect()
-      window.removeEventListener('resize', updateTransform)
+      window.removeEventListener('resize', scheduleTransformUpdate)
     }
   }, [karaokeActive, karaokeMini, screen])
 
@@ -213,8 +250,9 @@ function App({ onNavigate }) {
   }, [])
 
   const handleStop = useCallback(async () => {
-    const hasQueued = Array.isArray(synth.queue) && synth.queue.length > 0
-    if (!synth.midiName && !hasQueued) return
+    const currentState = getKaraokeStoreState()
+    const hasQueued = Array.isArray(currentState.queue) && currentState.queue.length > 0
+    if (!currentState.midiName && !hasQueued) return
     showAlert({
       message: '演奏を停止しました',
       variant: 'warning',
@@ -231,7 +269,7 @@ function App({ onNavigate }) {
         setKaraokeView('singing')
       }
     })
-  }, [resetPlayerScore, runTransition, setKaraokeView, showAlert, synth.midiName, synth.queue])
+  }, [resetPlayerScore, runTransition, setKaraokeView, showAlert])
 
   const rawUserName = !isGuest && authStatus === 'authenticated'
     ? (user?.profile?.display_name || user?.username || 'USER')
@@ -361,8 +399,9 @@ function App({ onNavigate }) {
                 type="button"
                 onClick={async () => {
                   await synthEngine.resumeAudio()
+                  const { transposition } = getKaraokeStoreState()
                   synthEngine.shiftTransposition(-1)
-                  showKeyChangeAlert((synth.transposition || 0) - 1)
+                  showKeyChangeAlert((transposition || 0) - 1)
                 }}
               >
                 ▼ ♭
@@ -372,8 +411,9 @@ function App({ onNavigate }) {
                 type="button"
                 onClick={async () => {
                   await synthEngine.resumeAudio()
+                  const { transposition } = getKaraokeStoreState()
                   synthEngine.shiftTransposition(1)
-                  showKeyChangeAlert((synth.transposition || 0) + 1)
+                  showKeyChangeAlert((transposition || 0) + 1)
                 }}
               >
                 ▲ ♯
@@ -402,8 +442,11 @@ function App({ onNavigate }) {
               <Button
                 className="wiiFooterKaraokeControl__btn"
                 type="button"
-                onClick={() => synthEngine.seek(Math.max(0, synth.currentTime - 5))}
-                disabled={!synth.midiName}
+                onClick={() => {
+                  const { currentTime } = getKaraokeStoreState()
+                  synthEngine.seek(Math.max(0, currentTime - 5))
+                }}
+                disabled={!midiName}
               >
                 ◀◀
                 <span>巻戻し</span>
@@ -413,19 +456,22 @@ function App({ onNavigate }) {
                 type="button"
                 onClick={async () => {
                   await synthEngine.resumeAudio()
-                  if (synth.isPlaying) synthEngine.pause()
+                  if (isPlaying) synthEngine.pause()
                   else synthEngine.play()
                 }}
-                disabled={!synth.midiName}
+                disabled={!midiName}
               >
-                {synth.isPlaying ? 'Ⅱ' : '▶'}
+                {isPlaying ? 'Ⅱ' : '▶'}
                 <span>一時停止</span>
               </Button>
               <Button
                 className="wiiFooterKaraokeControl__btn"
                 type="button"
-                onClick={() => synthEngine.seek(Math.min(synth.duration || 0, synth.currentTime + 5))}
-                disabled={!synth.midiName}
+                onClick={() => {
+                  const { currentTime, duration } = getKaraokeStoreState()
+                  synthEngine.seek(Math.min(duration || 0, currentTime + 5))
+                }}
+                disabled={!midiName}
               >
                 ▶▶
                 <span>早送り</span>
@@ -441,7 +487,7 @@ function App({ onNavigate }) {
               </Button>
 
               <Button className="wiiFooterAction wiiFooterBtn--green" type="button" onClick={() => navigateScreen(SCREENS.queue)}>
-                予約確認 <span className="wiiFooterAction__count">({synth.queue.length}曲)</span>
+                予約確認 <span className="wiiFooterAction__count">({queueLength}曲)</span>
               </Button>
             </div>
           </div>

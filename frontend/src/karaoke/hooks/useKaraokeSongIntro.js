@@ -1,5 +1,7 @@
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useState } from 'react'
 import { useKaraokeStore } from '../../state/karaokeStore.js'
+import { UI_CONFIG } from '../../config.js'
+import { hasVisibleMelodyGuideNote } from '../songIntroVisibility.js'
 
 function useKaraokeSongIntro({
   midiUrl,
@@ -16,7 +18,6 @@ function useKaraokeSongIntro({
   const [songInfo, setSongInfo] = useState({ title: '', artist: '', code: '' })
   const lastIntroMidiUrl = useKaraokeStore((state) => state.lastIntroMidiUrl)
   const setLastIntroMidiUrl = useKaraokeStore((state) => state.setLastIntroMidiUrl)
-  const introTimerRef = useRef(null)
 
   const currentSong = queueIndex >= 0 ? queue?.[queueIndex] : null
   const title = currentSong?.title || midiName || ''
@@ -26,14 +27,18 @@ function useKaraokeSongIntro({
     ? `${playbackSessionId ?? 0}:${midiUrl || `${queueIndex ?? -1}:${midiName || ''}`}`
     : ''
 
-  // Force hide if melody is visible (approaching within 3 seconds)
+  // Start the cross-fade only when a note actually enters the same visible
+  // time window used by MelodyGuideCanvas.
   useEffect(() => {
     if (!showSongInfo || !reference?.notes?.length) return
-    const firstNoteTime = reference.notes[0].t0Sec
-    // If first note is within 3 seconds (visible window roughly), hide intro
-    if (firstNoteTime < currentTime + 3.0) {
+    if (hasVisibleMelodyGuideNote(
+      reference.notes,
+      currentTime,
+      UI_CONFIG.melodyGuideWindowSec,
+      UI_CONFIG.melodyGuidePlayheadRatio,
+    )) {
       // eslint-disable-next-line react-hooks/set-state-in-effect
-      if (showSongInfo) setShowSongInfo(false)
+      setShowSongInfo(false)
     }
   }, [showSongInfo, reference, currentTime])
 
@@ -48,8 +53,8 @@ function useKaraokeSongIntro({
     }
   }, [artist, code, songInfo.artist, songInfo.code, songInfo.title, title])
 
-  // Start the intro once per playback session. The timer is deliberately kept
-  // outside this effect's cleanup so the store update below cannot cancel it.
+  // Start the intro once per playback session. Its end is controlled by the
+  // first note entering the Melody Guide rather than a fixed timeout.
   useEffect(() => {
     if (!introKey || !title || introKey === lastIntroMidiUrl) return
 
@@ -58,11 +63,6 @@ function useKaraokeSongIntro({
     // eslint-disable-next-line react-hooks/set-state-in-effect
     setShowSongInfo(true)
 
-    if (introTimerRef.current) clearTimeout(introTimerRef.current)
-    introTimerRef.current = setTimeout(() => {
-      introTimerRef.current = null
-      setShowSongInfo(false)
-    }, 5000)
   }, [
     introKey,
     title,
@@ -71,10 +71,6 @@ function useKaraokeSongIntro({
     lastIntroMidiUrl,
     setLastIntroMidiUrl,
   ])
-
-  useEffect(() => () => {
-    if (introTimerRef.current) clearTimeout(introTimerRef.current)
-  }, [])
 
   return { showSongInfo, songInfo }
 }

@@ -9,6 +9,7 @@ const initialEngineState = {
   midiUrl: '',
   midiName: '',
   isPlaying: false,
+  playbackFinished: false,
   currentTime: 0,
   duration: 0,
   reverbGain: 1.5,

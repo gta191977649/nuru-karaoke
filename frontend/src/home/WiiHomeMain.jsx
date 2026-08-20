@@ -108,7 +108,7 @@ function WiiHomeMain({ screen, onNavigate, onOpenKaraoke, karaokeTargetRef, main
         )
       case SCREENS.findSongKeywords:
         return (
-          <main className="wiiHome__main" ref={mainRef}>
+          <main className="wiiHome__main wiiHome__main--songBrowser" ref={mainRef}>
             <FindSongKeywords
               onBack={() => onNavigate(SCREENS.home)}
               onSelectSong={(song) => {

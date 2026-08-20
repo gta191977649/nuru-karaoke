@@ -5,6 +5,10 @@ const PLAYER_CONFIG = {
 
 const UI_CONFIG = {
   karaokeTransitionMs: 1000,
+  melodyGuideWindowSec: 8,
+  melodyGuidePlayheadRatio: 0.7,
+  // Number of songs shown on each keyword-search results page.
+  songBrowserPageSize: 8,
 }
 
 export { PLAYER_CONFIG, UI_CONFIG }

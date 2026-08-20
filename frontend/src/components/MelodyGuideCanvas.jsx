@@ -1,8 +1,9 @@
-import { useEffect, useRef, forwardRef, useState } from 'react'
+import { memo, useEffect, useRef, forwardRef, useState } from 'react'
 import { Application, Container, Graphics, Sprite, Text, TextStyle } from 'pixi.js'
 import { BloomFilter } from 'pixi-filters'
 import { getTargetNoteAtTick, mergeAdjacentNotesByPitch } from '../engine/audio/midi/referenceMelody.js'
 import { DEFAULT_CONFIG } from '../engine/audioEngine.js'
+import { UI_CONFIG } from '../config.js'
 import { DEFAULT_PARTICLE_CONFIG, createParticleSystem, createComboSystem } from './particles/particleSystem.js'
 import Spectrogram from './Spectrogram.jsx'
 import WaveformPixi from './WaveformPixi.jsx'
@@ -352,7 +353,7 @@ function MelodyGuideCanvas({
   userOffsetSec = 0,
   width = 900,
   height = 220,
-  windowSec = 8,
+  windowSec = UI_CONFIG.melodyGuideWindowSec,
   minMidi = 36,
   maxMidi = 96,
   smoothAlpha = 0.1,
@@ -872,7 +873,7 @@ function MelodyGuideCanvas({
           }
           state.grid.stroke()
         }
-        const playheadX = w * 0.7
+        const playheadX = w * UI_CONFIG.melodyGuidePlayheadRatio
         const pixelsPerSec = w / snap.windowSec
         const visibleStart = songTimeSec - playheadX / pixelsPerSec
         const visibleEnd = songTimeSec + (w - playheadX) / pixelsPerSec
@@ -1908,4 +1909,4 @@ const CountBox = forwardRef(({ label, count, borderColor, icon, labelColor }, re
 })
 CountBox.displayName = 'CountBox'
 
-export default MelodyGuideCanvas
+export default memo(MelodyGuideCanvas)

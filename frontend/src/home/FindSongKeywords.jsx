@@ -7,6 +7,9 @@ import useAlertStore from '../state/alertStore.js'
 import useFavoriteStore from '../state/favoriteStore.js'
 import useUserStore from '../state/userStore.js'
 import ArtistLink from '../components/ArtistLink.jsx'
+import { UI_CONFIG } from '../config.js'
+
+const SONGS_PER_PAGE = UI_CONFIG.songBrowserPageSize
 
 function FindSongKeywords({ onBack, onSelectSong, onConfirm }) {
     const showAlert = useAlertStore((state) => state.showAlert)
@@ -107,6 +110,7 @@ function FindSongKeywords({ onBack, onSelectSong, onConfirm }) {
             q: term,
             tag: activeTag || undefined,
             page,
+            pageSize: SONGS_PER_PAGE,
             signal: controller.signal,
         })
             .then((data) => {
@@ -130,14 +134,14 @@ function FindSongKeywords({ onBack, onSelectSong, onConfirm }) {
         }
     }, [activeTag, page, term])
 
-    const totalPages = useMemo(() => Math.max(1, Math.ceil(totalCount / 10)), [totalCount])
+    const totalPages = useMemo(() => Math.max(1, Math.ceil(totalCount / SONGS_PER_PAGE)), [totalCount])
     const favoriteSongCodes = useMemo(
         () => new Set(favoriteItems.map((item) => item.song_code)),
         [favoriteItems],
     )
 
     return (
-        <div className="wiiFind h-100 d-flex flex-column">
+        <div className="wiiFind wiiFind--keywords h-100 d-flex flex-column">
 
             {/* Redesigned Header */}
             <div className="wiiFind__headerRed">
@@ -195,14 +199,17 @@ function FindSongKeywords({ onBack, onSelectSong, onConfirm }) {
             <Row className="g-0 flex-grow-1 overflow-hidden">
                 {/* Song List Column - Expand to fill available space */}
                 <Col className="h-100 d-flex flex-column" style={{ minWidth: 0 }}>
-                    <div className="wiiList h-100">
+                    <div
+                        className="wiiList wiiList--songBrowser h-100"
+                        style={{ '--song-page-size': SONGS_PER_PAGE }}
+                    >
                         {isLoading ? (
-                            <div className="text-muted small mt-2 d-flex align-items-center gap-2">
+                            <div className="wiiList__status text-muted small d-flex align-items-center gap-2">
                                 <Spinner animation="border" size="sm" />
                                 読み込み中…
                             </div>
                         ) : null}
-                        {loadError ? <div className="text-danger small mt-2">{loadError}</div> : null}
+                        {loadError ? <div className="wiiList__status wiiList__status--error text-danger small">{loadError}</div> : null}
 
                         {results.length ? (
                             results.map((song) => (

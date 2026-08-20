@@ -289,6 +289,11 @@
   background: #000;
 }
 
+.wiiHome__main--songBrowser {
+  display: flex;
+  overflow: hidden;
+}
+
 .wiiHome__main--karaoke::after {
   display: none;
 }
@@ -308,6 +313,8 @@
   position: absolute;
   z-index: 10;
   overflow: hidden;
+  contain: layout paint;
+  isolation: isolate;
 }
 
 .joyHome {
@@ -1932,6 +1939,130 @@
   font-weight: 700;
   color: #333;
   min-height: 64px;
+}
+
+/* Keep one complete search-results page visible without mouse scrolling. */
+.wiiFind--keywords {
+  min-height: 0;
+  overflow: hidden;
+  width: 100%;
+}
+
+.wiiFind--keywords .wiiFind__headerRed,
+.wiiFind--keywords .wiiFind__tabs {
+  flex: 0 0 auto;
+}
+
+.wiiFind--keywords .wiiFind__headerRed {
+  gap: clamp(0.2rem, 0.7vw, 0.5rem);
+  margin-bottom: clamp(0.2rem, 0.7dvh, 0.5rem);
+}
+
+.wiiFind--keywords .wiiFind__inputRed {
+  height: clamp(34px, 6dvh, 48px);
+  font-size: clamp(1.1rem, 3.2dvh, 2rem) !important;
+}
+
+.wiiFind--keywords .wiiFind__backRed {
+  font-size: clamp(1rem, 2.3dvh, 1.4rem) !important;
+}
+
+.wiiFind--keywords .wiiFind__backIcon {
+  font-size: clamp(1.3rem, 3dvh, 1.8rem);
+}
+
+.wiiFind--keywords .wiiFind__suffix {
+  font-size: clamp(0.8rem, 2dvh, 1.2rem);
+}
+
+.wiiFind--keywords .wiiFind__countRed {
+  font-size: clamp(1rem, 2.7dvh, 1.6rem);
+}
+
+.wiiFind--keywords .wiiFind__tabs {
+  gap: clamp(1px, 0.35vw, 4px);
+  padding: 0 0.5rem clamp(0.2rem, 0.7dvh, 0.5rem);
+}
+
+.wiiFind--keywords .wiiFind__tabBtn {
+  flex: 1 1 auto;
+  min-width: 0;
+  padding: clamp(2px, 0.75dvh, 6px) 2px !important;
+  font-size: clamp(0.58rem, 1.15vw, 0.9rem) !important;
+}
+
+.wiiList--songBrowser {
+  display: grid;
+  grid-template-rows: repeat(var(--song-page-size, 7), minmax(0, 1fr));
+  gap: clamp(2px, 0.65dvh, 0.5rem);
+  overflow: hidden;
+  padding: clamp(1px, 0.35dvh, 0.2rem);
+  position: relative;
+}
+
+.wiiList--songBrowser .wiiList__item {
+  height: 100%;
+  min-height: 0;
+  overflow: hidden;
+}
+
+.wiiList--songBrowser .wiiList__title {
+  min-width: 0;
+}
+
+.wiiList--songBrowser .wiiList__artist {
+  max-width: clamp(90px, 18vw, 260px);
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.wiiList--songBrowser .wiiList__status {
+  align-items: center;
+  background: rgba(255, 255, 255, 0.94);
+  border-radius: 999px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.16);
+  display: flex;
+  left: 50%;
+  padding: 0.35rem 0.75rem;
+  pointer-events: none;
+  position: absolute;
+  top: 0.4rem;
+  transform: translateX(-50%);
+  z-index: 2;
+}
+
+.wiiList--songBrowser .wiiList__status--error {
+  top: 2.8rem;
+}
+
+.wiiList--songBrowser .wiiList__empty {
+  align-self: center;
+  grid-row: 1 / -1;
+  justify-self: center;
+}
+
+@media (max-width: 767.98px) {
+  .wiiHome__main--songBrowser {
+    padding: 0.5rem;
+  }
+
+  .wiiFind--keywords .wiiFind__headerRed {
+    padding-inline: 0;
+  }
+
+  .wiiFind--keywords .wiiFind__headerRed .mx-2 {
+    margin-inline: 0.25rem !important;
+  }
+
+  .wiiFind--keywords .wiiFind__tabBtn {
+    font-size: clamp(0.48rem, 1.4vw, 0.72rem) !important;
+    padding-inline: 0 !important;
+  }
+
+  .wiiList--songBrowser .wiiList__item {
+    grid-template-columns: auto minmax(0, 1fr) minmax(60px, auto) auto;
+  }
+
 }
 
 .wiiList__iconBadge {

@@ -3,6 +3,9 @@ import { Sequencer, WorkletSynthesizer } from 'spessasynth_lib'
 import processorUrl from 'spessasynth_lib/dist/spessasynth_processor.min.js?url'
 import defaultSoundFontUrl from '../soundfont/sc55.sf2'
 import { findActiveLyricIndex, parseLrc } from '../engine/lrc.js'
+import { setSynthChannelMuted } from '../engine/synthChannelMute.js'
+import { resetSynthControllers } from '../engine/synthControllerReset.js'
+import { getSynthMasterParameter, setSynthMasterParameter } from '../engine/synthMasterParameters.js'
 import './DebugSynth.css'
 
 const DEFAULT_SOUNDFONT_DISPLAY_NAME = 'soundfont/sc55.sf2'
@@ -112,24 +115,22 @@ function DebugSynth() {
     const context = new AudioContext()
     await context.audioWorklet.addModule(processorUrl)
 
-    const synth = new WorkletSynthesizer(context, {
-      initializeChorusProcessor: true,
-      initializeReverbProcessor: true,
-    })
+    const synth = new WorkletSynthesizer(context)
+    await synth.isReady
     synth.connect(context.destination)
 
     contextRef.current = context
     synthRef.current = synth
 
     try {
-      setReverbGain(Number(synth.getMasterParameter('reverbGain')) || 0)
-      setChorusGain(Number(synth.getMasterParameter('chorusGain')) || 0)
+      setReverbGain(Number(getSynthMasterParameter(synth, 'reverbGain')) || 0)
+      setChorusGain(Number(getSynthMasterParameter(synth, 'chorusGain')) || 0)
     } catch {
       // ignore
     }
 
     enabledChannelsRef.current.forEach((isEnabled, index) => {
-      synth.muteChannel(index, !isEnabled)
+      setSynthChannelMuted(synth, index, !isEnabled)
     })
   }, [])
 
@@ -152,7 +153,7 @@ function DebugSynth() {
     }
     if (synth) {
       synth.stopAll(true)
-      synth.resetControllers()
+      resetSynthControllers(synth)
     }
     setIsPlaying(false)
     setIsSeeking(false)
@@ -163,15 +164,15 @@ function DebugSynth() {
   const setEffectGain = useCallback((effect, value) => {
     const synth = synthRef.current
     if (!synth) return
-    if (effect === 'reverb') synth.setMasterParameter('reverbGain', value)
-    if (effect === 'chorus') synth.setMasterParameter('chorusGain', value)
+    if (effect === 'reverb') setSynthMasterParameter(synth, 'reverbGain', value)
+    if (effect === 'chorus') setSynthMasterParameter(synth, 'chorusGain', value)
   }, [])
 
   const setChannelEnabled = useCallback((channelIndex, isEnabled) => {
     enabledChannelsRef.current[channelIndex] = isEnabled
     const synth = synthRef.current
     if (!synth) return
-    synth.muteChannel(channelIndex, !isEnabled)
+    setSynthChannelMuted(synth, channelIndex, !isEnabled)
   }, [])
 
   const resetSynth = useCallback(async () => {
@@ -186,12 +187,12 @@ function DebugSynth() {
         synth.systemExclusive([0x7e, 0x7f, 0x09, 0x01, 0xf7])
 
         // Keep playback running; just reset synth state and re-apply local overrides.
-        synth.resetControllers()
+        resetSynthControllers(synth)
         synth.keyModifierManager.clearModifiers()
         setEffectGain('reverb', reverbGain)
         setEffectGain('chorus', chorusGain)
         enabledChannelsRef.current.forEach((isEnabled, index) => {
-          synth.muteChannel(index, !isEnabled)
+          setSynthChannelMuted(synth, index, !isEnabled)
         })
       }
       setStatus('Sent GM reset to synth.')

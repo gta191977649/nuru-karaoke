@@ -2424,15 +2424,17 @@ spectrogram@^0.0.7:
   resolved "https://registry.yarnpkg.com/spectrogram/-/spectrogram-0.0.7.tgz#59bf2e4e747560ca03a5a484e9ffb917e153ba8d"
   integrity sha512-lBua7BXerhLev7x2FWEdVUDGtCkHLK2+Bf1/sX9EyH/qVOJyCkLe2cs9DTDiX29GzytFFumOebqNZ856A+M+Vg==
 
-spessasynth_core@^4.0.24, spessasynth_core@latest:
-  version "4.0.24"
-  resolved "https://registry.yarnpkg.com/spessasynth_core/-/spessasynth_core-4.0.24.tgz#7a718be69d14628514177d8c17fea6e8988ca735"
-  integrity sha512-uEu8DqSlgpqJAnpOnLvY5fd6RcVPQyTmoB7ygD0njXdGzSYI8xTPhH9bvefia8rS8lIUa2bI9zzn/YqVNaYVXw==
+spessasynth_core@4.3.20, spessasynth_core@latest:
+  version "4.3.20"
+  resolved "https://registry.yarnpkg.com/spessasynth_core/-/spessasynth_core-4.3.20.tgz#e416a606e223c71e7c023b9a2d1d0d3c8df99611"
+  integrity sha512-RcYCXemGESRKIRbGEAGOwFgNSXcsuLMptjk3BmRTJJWtF6RH4KLRXKkUs6rzREUh3ooInfsJla/sRmWvwZzjhw==
+  dependencies:
+    stb-vorbis latest
 
-spessasynth_lib@^4.0.19:
-  version "4.0.19"
-  resolved "https://registry.yarnpkg.com/spessasynth_lib/-/spessasynth_lib-4.0.19.tgz#4befba90f3325783ccbc01db2b55dc7ab88f0a37"
-  integrity sha512-f2xKjvFN5kCX8XLxJvBVVp2ShBlTQ/t8CtPySlFCu8mFPD4KZjL/v+oLaFfQ+fCoeX/Hpu3SofmwRc5r78NmOQ==
+spessasynth_lib@4.3.14:
+  version "4.3.14"
+  resolved "https://registry.yarnpkg.com/spessasynth_lib/-/spessasynth_lib-4.3.14.tgz#a7e7fb9da8302e4d1af957b0ff413ffa54d5c228"
+  integrity sha512-M3In44Erc0OPlbLwOrPoqnMiva0nbh7LCbGfNTi21JV+NMN/B4sun2d8HR17J/dSGp+PEQnJ0ZkujnWEHWfi4Q==
   dependencies:
     spessasynth_core latest
 
@@ -2445,6 +2447,11 @@ stackback@0.0.2:
   version "0.0.2"
   resolved "https://registry.yarnpkg.com/stackback/-/stackback-0.0.2.tgz#1ac8a0d9483848d1695e418b6d031a3c3ce68e3b"
   integrity sha512-1XMJE5fQo1jGH6Y/7ebnwPOBEkIEnT4QF32d5R1+VXdXveM0IBMJt8zfaxX1P3QhVwrYe+576+jkANtSS2mBbw==
+
+stb-vorbis@latest:
+  version "0.0.6"
+  resolved "https://registry.yarnpkg.com/stb-vorbis/-/stb-vorbis-0.0.6.tgz#9425bf7415d8792d1b26742c87247b0ec8207f08"
+  integrity sha512-CyvjJEGROIdnuZknwFvdOfMIO1ssUxO2OawsXCR3IlbJ8z2IMBjDe8FDxFJqBfLgf1ZOdqvoHAYx3Xk8q9rbbg==
 
 std-env@^3.5.0:
   version "3.10.0"

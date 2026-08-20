@@ -1,5 +1,6 @@
 import '../Karaoke.css'
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
+import { useShallow } from 'zustand/react/shallow'
 import { useKaraokeStore } from '../../state/karaokeStore.js'
 import { synthEngine } from '../../engine/SynthEngine.js'
 import { parseLyricSegments } from '../../engine/lrc.js'
@@ -153,7 +154,22 @@ const buildF0CurveByBeat = ({ history, reference, rmsGate }) => {
 }
 
 function SingingPage({ onFinish, showInterludePrompt = true }) {
-    const state = useKaraokeStore()
+    const state = useKaraokeStore(useShallow((store) => ({
+        ready: store.ready,
+        status: store.status,
+        playbackFinished: store.playbackFinished,
+        midiName: store.midiName,
+        midiUrl: store.midiUrl,
+        currentTime: store.currentTime,
+        duration: store.duration,
+        transposition: store.transposition,
+        queue: store.queue,
+        queueIndex: store.queueIndex,
+        playbackSessionId: store.playbackSessionId,
+        lrcEntries: store.lrcEntries,
+        activeLyricIndex: store.activeLyricIndex,
+        karaokeProgress: store.karaokeProgress,
+    })))
     const karaokeBackgroundVideoEnabled = useSettingsStore(
         (store) => store.karaokeBackgroundVideoEnabled,
     )
@@ -262,10 +278,10 @@ function SingingPage({ onFinish, showInterludePrompt = true }) {
 
     // Technique Counts (Validated)
     const techniqueCountsRef = useRef({ glissup: 0, kobushi: 0, glissdown: 0, vibrato: 0 })
-    const handleTechniqueCountsChange = (counts) => {
+    const handleTechniqueCountsChange = useCallback((counts) => {
         techniqueCountsRef.current = counts
         setTechniqueCounts(counts)
-    }
+    }, [setTechniqueCounts])
 
 
 
@@ -413,7 +429,11 @@ function SingingPage({ onFinish, showInterludePrompt = true }) {
 
         // Wait until playback has actually reached the end, then explicitly flush
         // the final active note and delayed note evaluations before reading score.
-        if (state.currentTime >= state.duration - 0.03 || state.status === 'Finished') {
+        if (
+            state.playbackFinished
+            || state.currentTime >= state.duration - 0.03
+            || state.status === 'Finished'
+        ) {
             hasFinishedRef.current = true
             if (onFinish) {
                 const finalScore = finalizeScore(state.duration)
@@ -432,6 +452,7 @@ function SingingPage({ onFinish, showInterludePrompt = true }) {
     }, [
         state.currentTime,
         state.duration,
+        state.playbackFinished,
         onFinish,
         finalizeScore,
         songInfo,
