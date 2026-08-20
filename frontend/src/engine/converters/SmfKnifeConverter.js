@@ -532,6 +532,7 @@ export function createSmfKnifeConverter(config, options = {}) {
     if (!config) throw new Error('SMF Knife config required')
 
     const drumBankRemap = options.enableDrumBankRemap === true
+    const preserveDrumDynamics = options.preserveDrumDynamics === true
     const ignoreEq = options.ignoreEq === true || (options.ignoreEqForXg === true && config.sourceHint === 'XG')
     const ignoreFx = options.ignoreFx === true || (options.ignoreFxForXg === true && config.sourceHint === 'XG')
     const initialDrumChannels = options.initialDrumChannels?.length === 16
@@ -757,8 +758,10 @@ export function createSmfKnifeConverter(config, options = {}) {
                     event.value = clamp7bit(programValue)
                     events.push(event)
 
-                    const adjustmentEvents = applyAdjustments(state, ch, kit, { ignoreEq, ignoreFx })
-                    if (adjustmentEvents.length) events.push(...adjustmentEvents)
+                    if (!preserveDrumDynamics) {
+                        const adjustmentEvents = applyAdjustments(state, ch, kit, { ignoreEq, ignoreFx })
+                        if (adjustmentEvents.length) events.push(...adjustmentEvents)
+                    }
 
                     return events
                 }
@@ -800,7 +803,15 @@ export function createSmfKnifeConverter(config, options = {}) {
                     if (mapping) {
                         const mappedNote = Number.isFinite(mapping.destNote) ? mapping.destNote : note
                         if (!isNoteOff) {
-                            const mappedVelocity = clamp7bit(velocity + (mapping.velocity ?? 0))
+                            // The legacy conversion tables contain subjective
+                            // level balancing for other hardware modules. In
+                            // drum-table-only mode, preserve the MIDI's own
+                            // dynamics. Keep -127 as the explicit "no usable
+                            // SC-55 articulation" sentinel.
+                            const velocityDelta = preserveDrumDynamics && mapping.velocity !== -127
+                                ? 0
+                                : (mapping.velocity ?? 0)
+                            const mappedVelocity = clamp7bit(velocity + velocityDelta)
                             velocity = mappedVelocity
                             state.noteMapCache[ch][note] = mappedNote
                         } else {

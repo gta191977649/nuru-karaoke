@@ -35,7 +35,7 @@ function createSc88Midi() {
 }
 
 describe('XG to SC-55 mapping', () => {
-    it('preserves voice mapping while remapping Room Kit low snare and bass drum notes', () => {
+    it('leaves channel 1 voices untouched while remapping Room Kit snare and bass drum notes', () => {
         const mapper = createMidiMapper(createXgSystemOnMidi())
 
         expect(mapper.getState()).toMatchObject({
@@ -44,12 +44,20 @@ describe('XG to SC-55 mapping', () => {
             mappingDestination: 'Roland SC-55',
         })
 
-        mapper({ type: 'cc', channel: 0, controller: 0, value: 0 })
-        mapper({ type: 'cc', channel: 0, controller: 32, value: 0 })
-        expect(mapper({ type: 'program', channel: 0, value: 0 }).slice(0, 3)).toEqual([
-            expect.objectContaining({ type: 'cc', channel: 0, controller: 0, value: 0 }),
-            expect.objectContaining({ type: 'cc', channel: 0, controller: 32, value: 2 }),
-            expect.objectContaining({ type: 'program', channel: 0, value: 0 }),
+        expect(mapper({ type: 'cc', channel: 0, controller: 0, value: 0 })).toEqual([
+            { type: 'cc', channel: 0, controller: 0, value: 0 },
+        ])
+        expect(mapper({ type: 'cc', channel: 0, controller: 32, value: 0 })).toEqual([
+            { type: 'cc', channel: 0, controller: 32, value: 0 },
+        ])
+        expect(mapper({ type: 'program', channel: 0, value: 0 })).toEqual([
+            { type: 'program', channel: 0, value: 0 },
+        ])
+        expect(mapper({ type: 'cc', channel: 0, controller: 7, value: 100 })).toEqual([
+            { type: 'cc', channel: 0, controller: 7, value: 100 },
+        ])
+        expect(mapper({ type: 'note_on', channel: 0, note: 60, velocity: 96 })).toEqual([
+            { type: 'note_on', channel: 0, note: 60, velocity: 96 },
         ])
 
         mapper({ type: 'program', channel: 9, value: 8 })
@@ -76,9 +84,107 @@ describe('XG to SC-55 mapping', () => {
         mapper({ type: 'cc', channel: 8, controller: 0, value: 127 })
         expect(mapper.getState().drumChannels[8]).toBe(1)
     })
+
+    it('covers the XG drum-kit families and remaps XG-only keys to SC-55 sounds', () => {
+        const mapper = createMidiMapper(createXgSystemOnMidi(), { enableDrumBankRemap: true })
+
+        mapper({ type: 'cc', channel: 9, controller: 0, value: 127 })
+        mapper({ type: 'cc', channel: 9, controller: 32, value: 0 })
+
+        const expectedPrograms = new Map([
+            [0, 0], [1, 0], [2, 0], [3, 0], [5, 0], [6, 0],
+            [7, 24], [8, 8], [9, 8], [16, 16], [17, 16],
+            [24, 24], [25, 25], [26, 25], [27, 24], [28, 25],
+            [29, 25], [30, 25], [31, 25], [32, 32], [33, 32],
+            [40, 40], [41, 40], [48, 48], [64, 25], [65, 25], [66, 25],
+        ])
+
+        for (const [sourceProgram, destinationProgram] of expectedPrograms) {
+            mapper({ type: 'cc', channel: 9, controller: 7, value: 100 })
+            mapper({ type: 'cc', channel: 9, controller: 11, value: 127 })
+            mapper({ type: 'cc', channel: 9, controller: 10, value: 127 })
+            const events = mapper({ type: 'program', channel: 9, value: sourceProgram })
+            expect(events).toEqual(expect.arrayContaining([
+                expect.objectContaining({ type: 'cc', channel: 9, controller: 32, value: 1 }),
+                expect.objectContaining({ type: 'program', channel: 9, value: destinationProgram }),
+            ]))
+            expect(events).not.toEqual(expect.arrayContaining([
+                expect.objectContaining({ type: 'cc', channel: 9, controller: 7 }),
+            ]))
+            expect(events).not.toEqual(expect.arrayContaining([
+                expect.objectContaining({ type: 'cc', channel: 9, controller: 11 }),
+            ]))
+            expect(events).not.toEqual(expect.arrayContaining([
+                expect.objectContaining({ type: 'cc', channel: 9, controller: 10 }),
+            ]))
+        }
+
+        mapper({ type: 'program', channel: 9, value: 16 })
+        expect(mapper({ type: 'note_on', channel: 9, note: 29, velocity: 96 }))
+            .toEqual([{ type: 'note_on', channel: 9, note: 38, velocity: 0 }])
+        expect(mapper({ type: 'note_on', channel: 9, note: 40, velocity: 96 }))
+            .toEqual([{ type: 'note_on', channel: 9, note: 38, velocity: 96 }])
+
+        mapper({ type: 'program', channel: 9, value: 25 })
+        expect(mapper({ type: 'note_on', channel: 9, note: 29, velocity: 96 }))
+            .toEqual([{ type: 'note_on', channel: 9, note: 38, velocity: 96 }])
+        expect(mapper({ type: 'note_off', channel: 9, note: 29, velocity: 0 }))
+            .toEqual([{ type: 'note_off', channel: 9, note: 38, velocity: 0 }])
+        expect(mapper({ type: 'note_on', channel: 9, note: 35, velocity: 96 }))
+            .toEqual([{ type: 'note_on', channel: 9, note: 36, velocity: 96 }])
+        expect(mapper({ type: 'note_on', channel: 9, note: 40, velocity: 96 }))
+            .toEqual([{ type: 'note_on', channel: 9, note: 38, velocity: 96 }])
+        expect(mapper({ type: 'note_on', channel: 9, note: 38, velocity: 16 }))
+            .toEqual([{ type: 'note_on', channel: 9, note: 38, velocity: 16 }])
+        expect(mapper({ type: 'note_on', channel: 9, note: 78, velocity: 96 }))
+            .toEqual([{ type: 'note_on', channel: 9, note: 29, velocity: 96 }])
+
+        mapper({ type: 'program', channel: 9, value: 40 })
+        expect(mapper({ type: 'note_on', channel: 9, note: 25, velocity: 96 }))
+            .toEqual([{ type: 'note_on', channel: 9, note: 38, velocity: 96 }])
+        expect(mapper({ type: 'note_on', channel: 9, note: 27, velocity: 96 }))
+            .toEqual([{ type: 'note_on', channel: 9, note: 39, velocity: 96 }])
+
+        mapper({ type: 'program', channel: 9, value: 48 })
+        expect(mapper({ type: 'note_on', channel: 9, note: 49, velocity: 96 }))
+            .toEqual([{ type: 'note_on', channel: 9, note: 59, velocity: 96 }])
+
+        mapper({ type: 'cc', channel: 9, controller: 0, value: 126 })
+        mapper({ type: 'cc', channel: 9, controller: 10, value: 127 })
+        expect(mapper({ type: 'program', channel: 9, value: 0 })).not.toEqual(expect.arrayContaining([
+            expect.objectContaining({ type: 'cc', channel: 9, controller: 10 }),
+        ]))
+        expect(mapper({ type: 'note_on', channel: 9, note: 36, velocity: 96 }))
+            .toEqual([{ type: 'note_on', channel: 9, note: 48, velocity: 96 }])
+        mapper({ type: 'program', channel: 9, value: 1 })
+        expect(mapper({ type: 'note_on', channel: 9, note: 84, velocity: 96 }))
+            .toEqual([{ type: 'note_on', channel: 9, note: 73, velocity: 96 }])
+    })
 })
 
 describe('SC-88 to SC-55 mapping', () => {
+    it('forces every mapped drum kit to center pan', () => {
+        const mapper = createMidiMapper(createSc88Midi())
+        const drumProgramsByBank = new Map([
+            [2, [0, 1, 8, 16, 24, 25, 26, 32, 40, 48, 49, 50, 56, 57, 64, 65]],
+            [1, [0, 8, 16, 25, 32, 40, 48, 56, 127]],
+        ])
+
+        for (const [bankLsb, programs] of drumProgramsByBank) {
+            mapper({ type: 'cc', channel: 9, controller: 0, value: 0 })
+            mapper({ type: 'cc', channel: 9, controller: 32, value: bankLsb })
+
+            for (const program of programs) {
+                mapper({ type: 'cc', channel: 9, controller: 10, value: 0 })
+                expect(mapper({ type: 'program', channel: 9, value: program })).toEqual(
+                    expect.arrayContaining([
+                        expect.objectContaining({ type: 'cc', channel: 9, controller: 10, value: 64 }),
+                    ]),
+                )
+            }
+        }
+    })
+
     it('maps primary and secondary drums without changing melodic programs', () => {
         const mapper = createMidiMapper(createSc88Midi())
 

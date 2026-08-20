@@ -7,17 +7,15 @@
 
 import { detectMidiStandard, detectDrumChannels, MIDI_STANDARDS } from './MidiStandardDetector.js'
 import { createSmfKnifeConverter, parseSmfKnifeConfig } from './converters/SmfKnifeConverter.js'
-import xg100MkCfgText from './smf/xg/10088.CFG?raw'
 import xgSc55CfgText from './smf/xg/XGSC55.CFG?raw'
 import sc88Sc55CfgText from './smf/88ish/SC88SC55.CFG?raw'
 const STANDARD_MAPPINGS = {
-    // Keep the established MU100/SC-88 voice translations while replacing
-    // only their drum section with the Synth Engine's dedicated SC-55 map.
+    // XG conversion is deliberately drum-only. Melodic bank/program/CC/note
+    // events must pass through unchanged so valid SC-55 voices keep sounding.
     [MIDI_STANDARDS.XG]: {
         type: 'smfknife',
         name: 'XGSC55.CFG',
-        text: xg100MkCfgText,
-        drumOverlayText: xgSc55CfgText,
+        text: xgSc55CfgText,
     },
     GS_88: { type: 'smfknife', name: 'SC88SC55.CFG', text: sc88Sc55CfgText },
     // GM/GM2: no mapping by default
@@ -33,16 +31,7 @@ function getSmfKnifeConfigForStandard(standard, gsModule) {
     const cacheKey = entry.name
     if (SMF_CONFIG_CACHE.has(cacheKey)) return SMF_CONFIG_CACHE.get(cacheKey)
     try {
-        let parsed = parseSmfKnifeConfig(entry.text, { name: entry.name })
-        if (entry.drumOverlayText) {
-            const drumOverlay = parseSmfKnifeConfig(entry.drumOverlayText, { name: entry.name })
-            parsed = {
-                ...parsed,
-                destination: drumOverlay.destination || parsed.destination,
-                drums: drumOverlay.drums,
-                _drumIndex: drumOverlay._drumIndex,
-            }
-        }
+        const parsed = parseSmfKnifeConfig(entry.text, { name: entry.name })
         SMF_CONFIG_CACHE.set(cacheKey, parsed)
         return parsed
     } catch (err) {
@@ -154,6 +143,10 @@ export function createMidiMapper(buffer, options = {}) {
             ...options,
             ignoreEq: true,
             ignoreFx: true,
+            // XG -> SC-55 is a drum-table translation, not a remix. The
+            // source MIDI remains authoritative for CC7/CC11 and velocity.
+            preserveDrumDynamics:
+                options.preserveDrumDynamics ?? resolvedStandard === MIDI_STANDARDS.XG,
             ignoreEqForXg,
             ignoreFxForXg,
             initialDrumChannels,

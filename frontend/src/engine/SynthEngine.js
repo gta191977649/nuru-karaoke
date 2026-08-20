@@ -9,6 +9,9 @@ import { PLAYER_CONFIG } from '../config.js'
 import { getKaraokeStoreState, setKaraokeStoreState } from '../state/karaokeStore.js'
 import { AutoGainController } from './autoGainController.js'
 import { estimateMidiInitialGainDb } from './midiGainEstimator.js'
+import { setSynthChannelDrums } from './synthChannelDrums.js'
+import { setSynthChannelMuted } from './synthChannelMute.js'
+import { getSynthMasterParameter, setSynthMasterParameter } from './synthMasterParameters.js'
 
 const DEFAULT_CONFIG = {
   enableMIDIStandardMapping: true,
@@ -380,7 +383,8 @@ class SynthEngine {
         const context = audioEngine.ensureAudioContext()
         await context.audioWorklet.addModule(processorUrl)
 
-        const synth = new WorkletSynthesizer(context, { initializeChorusProcessor: true, initializeReverbProcessor: true })
+        const synth = new WorkletSynthesizer(context)
+        await synth.isReady
         const autoGainController = new AutoGainController(context, {
           onMetrics: ({ enabled, gainDb, inputLevelDb, reductionDb }) => {
             this._setState({
@@ -426,7 +430,7 @@ class SynthEngine {
         this._applyDefaultEffects()
 
         const { enabledChannels } = getKaraokeStoreState()
-        enabledChannels.forEach((enabled, i) => synth.muteChannel(i, !enabled))
+        enabledChannels.forEach((enabled, i) => setSynthChannelMuted(synth, i, !enabled))
 
         this._initialized = true
         this._setState({
@@ -458,16 +462,16 @@ class SynthEngine {
     if (!this._synth) return
     try {
       if (Number.isFinite(DEFAULT_CONFIG.reverb)) {
-        this._synth.setMasterParameter('reverbGain', DEFAULT_CONFIG.reverb)
+        setSynthMasterParameter(this._synth, 'reverbGain', DEFAULT_CONFIG.reverb)
       }
       if (Number.isFinite(DEFAULT_CONFIG.chorus)) {
-        this._synth.setMasterParameter('chorusGain', DEFAULT_CONFIG.chorus)
+        setSynthMasterParameter(this._synth, 'chorusGain', DEFAULT_CONFIG.chorus)
       }
 
       this._setState({
-        reverbGain: Number(this._synth.getMasterParameter('reverbGain')) || 0,
-        chorusGain: Number(this._synth.getMasterParameter('chorusGain')) || 0,
-        transposition: Number(this._synth.getMasterParameter('transposition')) || 0,
+        reverbGain: Number(getSynthMasterParameter(this._synth, 'reverbGain')) || 0,
+        chorusGain: Number(getSynthMasterParameter(this._synth, 'chorusGain')) || 0,
+        transposition: Number(getSynthMasterParameter(this._synth, 'transposition')) || 0,
       })
     } catch (e) {
       console.warn('Failed to apply default effects', e)
@@ -542,7 +546,12 @@ class SynthEngine {
         }
 
         const isPlaying = !seq.paused && !seq.isFinished
-        const patch = { currentTime, duration, isPlaying }
+        const patch = {
+          currentTime,
+          duration,
+          isPlaying,
+          playbackFinished: Boolean(seq.isFinished),
+        }
         if (this._activityDirty) {
           patch.channelActivityVelocity = this._channelActivityVelocity.slice()
           patch.channelActivityTime = this._channelActivityTime.slice()
@@ -590,7 +599,6 @@ class SynthEngine {
 
   _bgSyncDrums(drumChannels) {
     if (!this._synth || !drumChannels) return
-    if (typeof this._synth.setDrums !== 'function') return
     try {
       drumChannels.forEach((isDrum, channel) => {
         const next = isDrum ? 1 : 0
@@ -601,11 +609,7 @@ class SynthEngine {
           entry.isDrum = Boolean(isDrum)
           if (entry.isDrum && !entry.name) entry.name = 'Drums'
         }
-        this._synth.setDrums(channel, Boolean(isDrum))
-        const program = this._channelPrograms?.[channel]?.program ?? 0
-        if (typeof this._synth.programChange === 'function') {
-          this._synth.programChange(channel, program)
-        }
+        setSynthChannelDrums(this._synth, channel, Boolean(isDrum))
       })
       this._setState({ midiChannels: this._cloneMidiChannelState() })
     } catch (e) {
@@ -830,13 +834,6 @@ class SynthEngine {
         : typeof synth.sendMessage === 'function'
           ? (channel, program) => synth.sendMessage(new Uint8Array([0xc0 + channel, program]))
           : null
-    if (typeof synth.resetControllers === 'function') {
-      try {
-        synth.resetControllers()
-      } catch {
-        // ignore
-      }
-    }
     if (sendController) {
       // Reset controllers/effects and stop active notes without stopping playback.
       for (let ch = 0; ch < 16; ch++) {
@@ -850,19 +847,17 @@ class SynthEngine {
         if (sendProgram) sendProgram(ch, 0)
       }
     }
-    if (typeof synth.setDrums === 'function') {
-      for (let ch = 0; ch < 16; ch++) {
-        const isDrum = ch === 9
-        synth.setDrums(ch, isDrum)
-        const entry = this._midiChannelState?.[ch]
-        if (entry) {
-          entry.isDrum = isDrum
-          entry.name = isDrum ? 'Drums' : (this._channelInstrumentNames?.[ch] || '—')
-        }
-        this._drumChannelsApplied[ch] = isDrum ? 1 : 0
+    for (let ch = 0; ch < 16; ch++) {
+      const isDrum = ch === 9
+      setSynthChannelDrums(synth, ch, isDrum)
+      const entry = this._midiChannelState?.[ch]
+      if (entry) {
+        entry.isDrum = isDrum
+        entry.name = isDrum ? 'Drums' : (this._channelInstrumentNames?.[ch] || '—')
       }
-      this._setState({ midiChannels: this._cloneMidiChannelState() })
+      this._drumChannelsApplied[ch] = isDrum ? 1 : 0
     }
+    this._setState({ midiChannels: this._cloneMidiChannelState() })
     if (typeof synth.stopAll === 'function') {
       try {
         synth.stopAll(true)
@@ -870,11 +865,9 @@ class SynthEngine {
         // ignore
       }
     }
-    if (typeof synth.muteChannel === 'function') {
-      const enabled = getKaraokeStoreState().enabledChannels || []
-      for (let ch = 0; ch < 16; ch++) {
-        synth.muteChannel(ch, !enabled[ch])
-      }
+    const enabled = getKaraokeStoreState().enabledChannels || []
+    for (let ch = 0; ch < 16; ch++) {
+      setSynthChannelMuted(synth, ch, !enabled[ch])
     }
     // Reset internal instrument tracking to default state
     this._channelPrograms.forEach((state, channel) => {
@@ -943,14 +936,21 @@ class SynthEngine {
 
     this._resetChannelActivity()
     this._resetPolyphony()
-    this._setState({ isPlaying: false, currentTime: 0, duration: 0 })
+    this._setState({ isPlaying: false, playbackFinished: false, currentTime: 0, duration: 0 })
 
     this._seq.pause()
     this._synth.stopAll(true)
     this._seq.loadNewSongList([{ binary: buffer, fileName: midiName }])
     this._seq.currentTime = 0
     const initialDuration = this._seq?.duration || 0
-    this._setState({ midiUrl, midiName, status: `MIDI loaded: ${midiName}`, duration: initialDuration, currentTime: 0 })
+    this._setState({
+      midiUrl,
+      midiName,
+      status: `MIDI loaded: ${midiName}`,
+      duration: initialDuration,
+      currentTime: 0,
+      playbackFinished: false,
+    })
     requestAnimationFrame(() => {
       if (!this._seq) return
       const nextDuration = this._seq.duration || 0
@@ -1057,11 +1057,9 @@ class SynthEngine {
     const playbackSessionId = (Number(getKaraokeStoreState().playbackSessionId) || 0) + 1
     this._setState({ queueIndex: i, playbackSessionId })
     await this.loadMidiFromUrl(song.url, { autoPlay: false })
-    if (typeof this._synth?.muteChannel === 'function') {
-      const channelZeroEnabled = getKaraokeStoreState().enabledChannels?.[0] !== false
-      const guideMelodyEnabled = song.guideMelodyEnabled !== false
-      this._synth.muteChannel(0, !(channelZeroEnabled && guideMelodyEnabled))
-    }
+    const channelZeroEnabled = getKaraokeStoreState().enabledChannels?.[0] !== false
+    const guideMelodyEnabled = song.guideMelodyEnabled !== false
+    setSynthChannelMuted(this._synth, 0, !(channelZeroEnabled && guideMelodyEnabled))
 
     if (song.lrc) {
       try {
@@ -1098,7 +1096,8 @@ class SynthEngine {
   play() {
     if (!this._seq) return
     this._seq.play()
-    this._setState({ isPlaying: true })
+    this._prevFinished = false
+    this._setState({ isPlaying: true, playbackFinished: false })
     this._startClock()
   }
 
@@ -1117,7 +1116,7 @@ class SynthEngine {
     this._resetChannelActivity()
     this._resetPolyphony()
     this._autoGainController?.reset()
-    this._setState({ isPlaying: false, currentTime: 0 })
+    this._setState({ isPlaying: false, playbackFinished: false, currentTime: 0 })
     this._stopClock()
   }
 
@@ -1128,7 +1127,7 @@ class SynthEngine {
 
     this._isStopping = true
     const fadeMs = Math.max(0, Number(options.fadeMs ?? PLAYER_CONFIG.stopFadeMs))
-    const startGain = Number(this._synth.getMasterParameter('masterGain')) || 1
+    const startGain = Number(getSynthMasterParameter(this._synth, 'masterGain')) || 1
 
     try {
       if (fadeMs > 0) {
@@ -1137,7 +1136,7 @@ class SynthEngine {
           const step = (now) => {
             const t = Math.min(1, (now - start) / fadeMs)
             const nextGain = startGain * (1 - t)
-            this._synth.setMasterParameter('masterGain', nextGain)
+            setSynthMasterParameter(this._synth, 'masterGain', nextGain)
             if (t >= 1) resolve()
             else requestAnimationFrame(step)
           }
@@ -1145,11 +1144,11 @@ class SynthEngine {
 
         })
       } else {
-        this._synth.setMasterParameter('masterGain', 0)
+        setSynthMasterParameter(this._synth, 'masterGain', 0)
       }
 
       this.stop()
-      this._synth.setMasterParameter('masterGain', startGain)
+      setSynthMasterParameter(this._synth, 'masterGain', startGain)
       await new Promise((resolve) => setTimeout(resolve, fadeMs))
       await this._advanceQueue({ autoPlayNext: true })
       const { queueIndex } = getKaraokeStoreState()
@@ -1192,14 +1191,14 @@ class SynthEngine {
   setReverbGain(value) {
     if (!this._synth) return
     const v = Math.max(0, Number(value) || 0)
-    this._synth.setMasterParameter('reverbGain', v)
+    setSynthMasterParameter(this._synth, 'reverbGain', v)
     this._setState({ reverbGain: v })
   }
 
   setChorusGain(value) {
     if (!this._synth) return
     const v = Math.max(0, Number(value) || 0)
-    this._synth.setMasterParameter('chorusGain', v)
+    setSynthMasterParameter(this._synth, 'chorusGain', v)
     this._setState({ chorusGain: v })
   }
 
@@ -1243,7 +1242,7 @@ class SynthEngine {
   setTransposition(semitones) {
     if (!this._synth) return
     const v = Number(semitones) || 0
-    this._synth.setMasterParameter('transposition', v)
+    setSynthMasterParameter(this._synth, 'transposition', v)
     this._setState({ transposition: v })
   }
 
@@ -1264,7 +1263,7 @@ class SynthEngine {
     if (!Number.isInteger(idx) || idx < 0 || idx > 15) return
     const next = getKaraokeStoreState().enabledChannels.slice()
     next[idx] = Boolean(enabled)
-    this._synth.muteChannel(idx, !next[idx])
+    setSynthChannelMuted(this._synth, idx, !next[idx])
     this._setState({ enabledChannels: next })
   }
 

@@ -23,8 +23,8 @@
     "react-bootstrap": "^2.10.10",
     "react-dom": "^19.2.0",
     "spectrogram": "^0.0.7",
-    "spessasynth_core": "^4.0.24",
-    "spessasynth_lib": "^4.0.19",
+    "spessasynth_core": "4.3.20",
+    "spessasynth_lib": "4.3.14",
     "zustand": "^5.0.9"
   },
   "devDependencies": {

@@ -1,4 +1,4 @@
-import { useCallback, useRef, useState } from 'react'
+import { memo, useCallback, useRef, useState } from 'react'
 
 const videoModules = import.meta.glob(
   ['../../assets/bg_video/*.mp4', '../../assets/bg_video/*.mov'],
@@ -60,4 +60,4 @@ function KaraokeBackgroundVideo() {
   )
 }
 
-export default KaraokeBackgroundVideo
+export default memo(KaraokeBackgroundVideo)
