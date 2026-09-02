@@ -1,24 +1,24 @@
 import { useCallback, useEffect, useRef } from 'react'
-import { DEFAULT_CONFIG } from '../../engine/audioEngine.js'
+import { resolveMicAlignedSongTime } from '../../engine/audio/micTiming.js'
 import {
     SCORING_ALGORITHM_VERSION,
     SimpleScoreCalculator,
 } from '../scoring/SimpleScoreCalculator.js'
 
-export function resolvePitchSongTime({ pitch, songTimeSec, userOffsetSec = 0, audioContext }) {
-    const songTime = Number(songTimeSec)
-    if (!Number.isFinite(songTime)) return null
-    const offset = Number.isFinite(userOffsetSec) ? Number(userOffsetSec) : 0
-    let alignedTime = songTime - offset
-    const contextTime = Number(audioContext?.currentTime)
-    const frameTime = Number(pitch?.tAcSec)
-    if (Number.isFinite(contextTime) && Number.isFinite(frameTime)) {
-        const callbackLag = Math.max(0, Math.min(0.25, contextTime - frameTime))
-        const sampleRate = Number(audioContext?.sampleRate) || DEFAULT_CONFIG.sampleRate
-        const halfWindowSec = Number(DEFAULT_CONFIG.windowSize) / (2 * sampleRate)
-        alignedTime -= callbackLag + halfWindowSec
-    }
-    return alignedTime
+export function resolvePitchSongTime({
+    pitch,
+    songTimeSec,
+    userOffsetSec = 0,
+    microphoneLatencySec = 0,
+    audioContext,
+}) {
+    const legacyOffset = Number.isFinite(userOffsetSec) ? Number(userOffsetSec) : 0
+    return resolveMicAlignedSongTime({
+        pitch,
+        songTimeSec: Number(songTimeSec) - legacyOffset,
+        microphoneLatencySec,
+        audioContext,
+    })
 }
 
 export function useKaraokeScoring({
@@ -28,6 +28,7 @@ export function useKaraokeScoring({
     transpositionRef,
     rmsGate = 0.01,
     userOffsetSec = 0,
+    microphoneLatencySec = 0,
     enabled = true,
     resetKey,
     debug = false,
@@ -82,6 +83,7 @@ export function useKaraokeScoring({
                 pitch,
                 songTimeSec: songTime,
                 userOffsetSec,
+                microphoneLatencySec,
                 audioContext: pitchEngine.getAudioContext?.(),
             })
             if (
@@ -142,6 +144,7 @@ export function useKaraokeScoring({
         currentTimeRef,
         transpositionRef,
         userOffsetSec,
+        microphoneLatencySec,
         debug,
         debugIntervalMs,
         debugRef,

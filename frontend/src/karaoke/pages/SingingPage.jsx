@@ -21,7 +21,10 @@ import { useKaraokeScoring } from '../hooks/useKaraokeScoring.js'
 import RealtimeScoreCounter from '../../components/RealtimeScoreCounter.jsx'
 import { usePlayerScoreStore } from '../../state/playerScoreStore.js'
 import logoTitle from '../../assets/logo_title.png'
-import { useSettingsStore } from '../../state/settingsStore.js'
+import {
+    normalizeMicrophoneDeviceKey,
+    useSettingsStore,
+} from '../../state/settingsStore.js'
 import KaraokeBackgroundVideo from '../components/KaraokeBackgroundVideo.jsx'
 
 function renderLyricSegments(segments, layer = 'base') {
@@ -173,8 +176,13 @@ function SingingPage({ onFinish, showInterludePrompt = true }) {
     const karaokeBackgroundVideoEnabled = useSettingsStore(
         (store) => store.karaokeBackgroundVideoEnabled,
     )
+    const microphoneDeviceId = useSettingsStore((store) => store.microphoneDeviceId)
+    const microphoneLatencyByDevice = useSettingsStore(
+        (store) => store.microphoneLatencyByDevice,
+    )
     const pitchEngine = sharedPitchEngine
     const [micActive, setMicActive] = useState(false)
+    const [activeMicDeviceId, setActiveMicDeviceId] = useState('')
     const currentTimeRef = useRef(0)
     const transpositionRef = useRef(0)
     const lyricsContainerRef = useRef(null)
@@ -184,6 +192,12 @@ function SingingPage({ onFinish, showInterludePrompt = true }) {
     const overflowLockIndexRef = useRef(-1)
     const [scoreUpdateKey, setScoreUpdateKey] = useState(0)
     const micRmsGate = 0.01
+    const microphoneLatencySec = useMemo(() => {
+        const key = normalizeMicrophoneDeviceKey(activeMicDeviceId || microphoneDeviceId)
+        const latencyMs = Number(microphoneLatencyByDevice?.[key]?.latencyMs)
+        if (!Number.isFinite(latencyMs)) return 0
+        return Math.max(0, Math.min(1000, latencyMs)) / 1000
+    }, [activeMicDeviceId, microphoneDeviceId, microphoneLatencyByDevice])
     const liveScore = usePlayerScoreStore((store) => store.liveScore)
     const liveScoreReady = usePlayerScoreStore((store) => store.liveScoreReady)
     const setLiveScore = usePlayerScoreStore((store) => store.setLiveScore)
@@ -258,10 +272,16 @@ function SingingPage({ onFinish, showInterludePrompt = true }) {
         transpositionRef,
         rmsGate: micRmsGate,
         resetKey: state.playbackSessionId,
+        microphoneLatencySec,
     })
 
     // Technique Detection
-    const { techniqueEventsRef, resetCounts } = useSingingTechnique(pitchEngine, currentTimeRef, micActive)
+    const { techniqueEventsRef, resetCounts } = useSingingTechnique(
+        pitchEngine,
+        currentTimeRef,
+        micActive,
+        microphoneLatencySec,
+    )
 
     // Scoring
     const { finalizeScore, scoringVisualRef } = useKaraokeScoring({
@@ -274,6 +294,7 @@ function SingingPage({ onFinish, showInterludePrompt = true }) {
         debugIntervalMs: 500,
         onScoreChange: handleLiveScoreChange,
         resetKey: state.playbackSessionId,
+        microphoneLatencySec,
     })
 
     // Technique Counts (Validated)
@@ -401,8 +422,11 @@ function SingingPage({ onFinish, showInterludePrompt = true }) {
         let cancelled = false
         const start = async () => {
             try {
-                await startSharedMic()
-                if (!cancelled) setMicActive(true)
+                const resolvedDeviceId = await startSharedMic()
+                if (!cancelled) {
+                    setActiveMicDeviceId(resolvedDeviceId || microphoneDeviceId || '')
+                    setMicActive(true)
+                }
             } catch (err) {
                 if (!cancelled) console.error(err)
             }
@@ -412,8 +436,9 @@ function SingingPage({ onFinish, showInterludePrompt = true }) {
             cancelled = true
             stopSharedMic()
             setMicActive(false)
+            setActiveMicDeviceId('')
         }
-    }, [pitchEngine])
+    }, [pitchEngine, microphoneDeviceId])
 
     // End of Song Detection
     const hasFinishedRef = useRef(false)

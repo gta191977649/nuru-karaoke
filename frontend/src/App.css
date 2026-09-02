@@ -2468,6 +2468,184 @@
   margin-top: 0.35rem;
 }
 
+.settingsList__message--success {
+  color: #19723a;
+}
+
+.settingsList__item--latency {
+  cursor: default;
+}
+
+.settingsList__icon--latency {
+  background: linear-gradient(#ec3541, #a50813);
+  font-size: 0.92rem;
+  letter-spacing: -0.04em;
+}
+
+.settingsLatency__openButton,
+.settingsLatency__primaryButton,
+.settingsLatency__secondaryButton {
+  border-radius: 7px;
+  font-weight: 900;
+  min-height: 42px;
+  padding: 0.5rem 1rem;
+}
+
+.settingsLatency__openButton,
+.settingsLatency__primaryButton {
+  background: linear-gradient(#ee3541, #aa0914);
+  border: 1px solid #870811;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.36), 0 2px 0 rgba(0, 0, 0, 0.12);
+  color: #fff;
+  text-shadow: 0 1px 1px rgba(0, 0, 0, 0.25);
+}
+
+.settingsLatency__openButton:disabled {
+  cursor: wait;
+  opacity: 0.62;
+}
+
+.settingsLatency {
+  background: linear-gradient(#fff, #eef0f2);
+  border: 1px solid rgba(0, 0, 0, 0.2);
+  border-left: 5px solid #c31420;
+  border-radius: 8px;
+  box-shadow: inset 0 1px 0 #fff, 0 2px 0 rgba(0, 0, 0, 0.08);
+  color: #4c4c4c;
+  padding: clamp(1rem, 3vw, 1.6rem);
+  text-align: center;
+}
+
+.settingsLatency p {
+  font-size: 0.82rem;
+  font-weight: 700;
+  margin: 0.8rem auto;
+  max-width: 680px;
+}
+
+.settingsLatency__statusTitle {
+  color: #252525;
+  font-size: 1.25rem;
+  font-weight: 900;
+}
+
+.settingsLatency__statusTitle--error {
+  color: #ad0d18;
+}
+
+.settingsLatency__steps {
+  background: rgba(255, 255, 255, 0.72);
+  border: 1px solid rgba(0, 0, 0, 0.11);
+  border-radius: 8px;
+  display: inline-flex;
+  flex-direction: column;
+  font-size: 0.86rem;
+  font-weight: 800;
+  gap: 0.45rem;
+  margin: 1rem auto 0;
+  padding: 0.8rem 1.1rem 0.8rem 2.2rem;
+  text-align: left;
+}
+
+.settingsLatency__notice {
+  color: #8a5a12;
+}
+
+.settingsLatency__pulseRow {
+  display: flex;
+  gap: 0.65rem;
+  justify-content: center;
+  margin: 1.25rem 0 0.9rem;
+}
+
+.settingsLatency__pulse {
+  background: #b7bcc0;
+  border: 2px solid #8b9094;
+  border-radius: 50%;
+  height: 24px;
+  width: 24px;
+}
+
+.settingsLatency__pulse.is-complete {
+  background: #c31420;
+  border-color: #8d0912;
+}
+
+.settingsLatency__pulse.is-active {
+  animation: settingsLatencyPulse 0.75s ease-in-out infinite;
+  background: #f04853;
+  border-color: #ad0d18;
+  box-shadow: 0 0 0 6px rgba(195, 20, 32, 0.12);
+}
+
+@keyframes settingsLatencyPulse {
+  50% { transform: scale(1.18); }
+}
+
+.settingsLatency__level {
+  background: #c8cccf;
+  border: 1px solid #a4a8ab;
+  border-radius: 999px;
+  height: 12px;
+  margin: 0 auto;
+  max-width: 420px;
+  overflow: hidden;
+}
+
+.settingsLatency__level span {
+  background: linear-gradient(90deg, #3278c9 0 45%, #3daf59 45% 75%, #f0b92c 75% 90%, #db2430 90%);
+  display: block;
+  height: 100%;
+  min-width: 2px;
+  transition: width 80ms linear;
+}
+
+.settingsLatency__result {
+  align-items: center;
+  display: flex;
+  flex-direction: column;
+  gap: 0.15rem;
+}
+
+.settingsLatency__result span {
+  color: #565656;
+  font-size: 0.9rem;
+  font-weight: 900;
+}
+
+.settingsLatency__result strong {
+  color: #ad0d18;
+  font-size: clamp(2.4rem, 8vw, 4.5rem);
+  line-height: 1;
+}
+
+.settingsLatency__result small {
+  font-size: 0.35em;
+}
+
+.settingsLatency__result em {
+  background: #207943;
+  border-radius: 999px;
+  color: #fff;
+  font-size: 0.72rem;
+  font-style: normal;
+  font-weight: 900;
+  padding: 0.2rem 0.65rem;
+}
+
+.settingsLatency__actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.65rem;
+  justify-content: center;
+}
+
+.settingsLatency__secondaryButton {
+  background: linear-gradient(#fafafa, #d9dcde);
+  border: 1px solid #a2a6a9;
+  color: #3e3e3e;
+}
+
 .settingsPanel {
   background: linear-gradient(#ffffff, #f1f3f4);
   border: 1px solid rgba(0, 0, 0, 0.16);
@@ -2689,6 +2867,15 @@
     max-width: none;
     min-width: 0;
     width: calc(100% - 48px - 0.65rem);
+  }
+
+  .settingsList__item--latency {
+    grid-template-columns: auto minmax(0, 1fr);
+  }
+
+  .settingsLatency__openButton {
+    grid-column: 1 / -1;
+    width: 100%;
   }
 
   .settingsRow {

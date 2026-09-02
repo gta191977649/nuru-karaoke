@@ -1,6 +1,7 @@
 import { useEffect, useRef } from 'react'
 import { getTargetNoteAtTick } from '../../engine/audio/midi/referenceMelody.js'
 import { normalizePitchClass } from '../scoring/SimpleScoreCalculator.js'
+import { resolveMicAlignedSongTime } from '../../engine/audio/micTiming.js'
 
 function useKaraokePitchHistory({
   pitchEngine,
@@ -9,6 +10,7 @@ function useKaraokePitchHistory({
   transpositionRef,
   rmsGate = 0,
   resetKey = '',
+  microphoneLatencySec = 0,
 }) {
   const lastPitchRef = useRef(null)
   const pitchHistoryRef = useRef([])
@@ -28,7 +30,12 @@ function useKaraokePitchHistory({
     const unsubscribe = pitchEngine.onPitch((result) => {
       lastPitchRef.current = result
 
-      const songTimeSec = currentTimeRef.current
+      const songTimeSec = resolveMicAlignedSongTime({
+        pitch: result,
+        songTimeSec: currentTimeRef.current,
+        microphoneLatencySec,
+        audioContext: pitchEngine.getAudioContext?.(),
+      })
       if (!Number.isFinite(songTimeSec)) return
 
       // Short rolling buffer at detector rate (or close to it), for per-frame stability.
@@ -96,7 +103,7 @@ function useKaraokePitchHistory({
       while (history.length && history[0].t < cutoff) history.shift()
     })
     return () => unsubscribe()
-  }, [pitchEngine, reference, rmsGate, currentTimeRef, transpositionRef])
+  }, [pitchEngine, reference, rmsGate, currentTimeRef, transpositionRef, microphoneLatencySec])
 
   return { lastPitchRef, pitchHistoryRef, fullHistoryRef, framePitchHistoryRef }
 }
