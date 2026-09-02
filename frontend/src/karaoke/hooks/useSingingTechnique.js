@@ -1,6 +1,12 @@
 import { useRef, useEffect, useState, useCallback } from 'react'
+import { resolveMicAlignedSongTime } from '../../engine/audio/micTiming.js'
 
-export function useSingingTechnique(pitchEngine, currentTimeRef, micActive) {
+export function useSingingTechnique(
+    pitchEngine,
+    currentTimeRef,
+    micActive,
+    microphoneLatencySec = 0,
+) {
     const workerRef = useRef(null)
 
     // Accumulated counts for the session
@@ -17,6 +23,7 @@ export function useSingingTechnique(pitchEngine, currentTimeRef, micActive) {
     // Trace history for debug graph (Circular buffers)
     const historySize = 300
     const techniqueEventsRef = useRef([])
+    const latestAlignedTimeRef = useRef(0)
 
     // Use state to hold stable mutable arrays - safe to access in render
     const [techniqueHistory] = useState(() => ({
@@ -58,7 +65,7 @@ export function useSingingTechnique(pitchEngine, currentTimeRef, micActive) {
                                 }
 
                                 // Push to event history for visualization
-                                const songTime = currentTimeRef?.current ?? 0
+                                const songTime = latestAlignedTimeRef.current
                                 techniqueEventsRef.current.push({
                                     type,
                                     t: songTime,
@@ -99,12 +106,19 @@ export function useSingingTechnique(pitchEngine, currentTimeRef, micActive) {
 
         // Subscribe to high-frequency pitch updates
         const unsubscribe = pitchEngine.onPitch((result) => {
-            const time = result.time || (performance.now() / 1000)
+            const alignedSongTime = resolveMicAlignedSongTime({
+                pitch: result,
+                songTimeSec: currentTimeRef?.current,
+                microphoneLatencySec,
+                audioContext: pitchEngine.getAudioContext?.(),
+            })
+            if (!Number.isFinite(alignedSongTime)) return
+            latestAlignedTimeRef.current = alignedSongTime
             const f0 = result.f0Hz
 
             worker.postMessage({
                 type: 'push',
-                payload: { time, f0 }
+                payload: { time: alignedSongTime, f0 }
             })
         })
 
@@ -113,7 +127,7 @@ export function useSingingTechnique(pitchEngine, currentTimeRef, micActive) {
             workerRef.current?.postMessage({ type: 'stop' }) // Use ref specific check
             workerRef.current?.terminate()
         }
-    }, [pitchEngine, micActive, techniqueHistory, currentTimeRef])
+    }, [pitchEngine, micActive, techniqueHistory, currentTimeRef, microphoneLatencySec])
 
     const resetCounts = useCallback(() => {
         setCounts({ vibrato: 0, kobushi: 0, glissup: 0, glissdown: 0 })

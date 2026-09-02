@@ -76,6 +76,15 @@ describe('useKaraokeScoring event integration', () => {
     expect(first).toBeCloseTo(9.93678, 4)
   })
 
+  it('subtracts a measured microphone latency from scoring time', () => {
+    const aligned = resolvePitchSongTime({
+      pitch: {},
+      songTimeSec: 10,
+      microphoneLatencySec: 0.167,
+    })
+    expect(aligned).toBeCloseTo(9.833, 6)
+  })
+
   it('publishes score and hit visuals only after the complete note decision delay', () => {
     const note = {
       t0Sec: 0,

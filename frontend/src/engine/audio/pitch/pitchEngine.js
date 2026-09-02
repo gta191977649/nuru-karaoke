@@ -9,6 +9,7 @@ class PitchEngine {
 
     this._listeners = new Set()
     this._debugListeners = new Set()
+    this._pcmListeners = new Set()
 
     const registry = createDefaultPitchRegistry({ includeCrepe: false })
     this._detectors = registry.list().map((plugin) => ({ id: plugin.id, name: plugin.name }))
@@ -121,8 +122,27 @@ class PitchEngine {
     return () => this._debugListeners.delete(cb)
   }
 
+  onPcmFrame(cb) {
+    if (typeof cb !== 'function') return () => { }
+    this._pcmListeners.add(cb)
+    if (this._pcmListeners.size === 1) {
+      this._workletNode?.port.postMessage({ type: 'pcm-capture', enabled: true })
+    }
+    return () => {
+      this._pcmListeners.delete(cb)
+      if (this._pcmListeners.size === 0) {
+        this._workletNode?.port.postMessage({ type: 'pcm-capture', enabled: false })
+      }
+    }
+  }
+
+  getActiveInputDeviceId() {
+    const track = this._stream?.getAudioTracks?.()[0]
+    return String(track?.getSettings?.().deviceId || '')
+  }
+
   async startMic(options = {}) {
-    if (this._stream) return
+    if (this._stream) return this.getActiveInputDeviceId()
     if (this._starting) {
       this._stopRequested = false
       return this._starting
@@ -172,6 +192,16 @@ class PitchEngine {
         }
         if (msg.type === 'pipeline-debug') {
           for (const cb of this._debugListeners) cb(msg)
+          return
+        }
+        if (msg.type === 'pcm-frame') {
+          if (!(msg.samples instanceof Float32Array)) return
+          const frame = {
+            tAcSec: Number(msg.tAcSec),
+            sampleRate: Number(msg.sampleRate),
+            samples: msg.samples,
+          }
+          for (const cb of this._pcmListeners) cb(frame)
         }
       }
 
@@ -189,6 +219,9 @@ class PitchEngine {
 
       this.configureDetector(this._config)
       this.setDetector(this._algoId)
+      if (this._pcmListeners.size > 0) {
+        this._workletNode.port.postMessage({ type: 'pcm-capture', enabled: true })
+      }
       if (this._debugWantsConnect) {
         console.log('[PitchEngine] startMic connecting debug chain')
         this._connectDebugChain()
@@ -201,6 +234,7 @@ class PitchEngine {
 
     try {
       await this._starting
+      return this.getActiveInputDeviceId()
     } finally {
       this._starting = null
     }
@@ -304,6 +338,7 @@ class PitchEngine {
 
     this._stream.getTracks().forEach((track) => track.stop())
     this._stream = null
+    this._pcmListeners.clear()
     this._stopRequested = false
   }
 }

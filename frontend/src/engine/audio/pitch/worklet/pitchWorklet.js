@@ -85,11 +85,16 @@ class PitchFrameProcessor extends AudioWorkletProcessor {
       holdLeft: 0,
     }
     this._debugCounter = 0
+    this._pcmCaptureEnabled = false
 
     if (this._detector?.configure) this._detector.configure(this._config)
 
     this.port.onmessage = (event) => {
       const msg = event.data
+      if (msg?.type === 'pcm-capture') {
+        this._pcmCaptureEnabled = msg.enabled === true
+        return
+      }
       if (msg?.type !== 'config') return
       this._applyConfig(msg)
       this._setAlgo(msg.algoId)
@@ -200,6 +205,14 @@ class PitchFrameProcessor extends AudioWorkletProcessor {
     if (!input || !input[0]) return true
     const channel = input[0]
     if (!channel.length) return true
+
+    if (this._pcmCaptureEnabled) {
+      const samples = channel.slice()
+      this.port.postMessage(
+        { type: 'pcm-frame', tAcSec: currentTime, sampleRate, samples },
+        [samples.buffer],
+      )
+    }
 
     this._append(channel)
     this._flush()

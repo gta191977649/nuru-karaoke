@@ -36,6 +36,7 @@ const startSharedMic = async () => {
       throw error
     }
   }
+  return sharedPitchEngine.getActiveInputDeviceId()
 }
 
 const switchSharedMicDevice = async (deviceId) => {
@@ -59,6 +60,8 @@ const switchSharedMicDevice = async (deviceId) => {
   }
 }
 
+const getActiveSharedMicDeviceId = () => sharedPitchEngine.getActiveInputDeviceId()
+
 const stopSharedMic = () => {
   if (activeUsers <= 0) return
   activeUsers -= 1
@@ -78,4 +81,5 @@ export {
   ensureSharedDebugAnalyser,
   getSharedDebugAnalyser,
   switchSharedMicDevice,
+  getActiveSharedMicDeviceId,
 }
