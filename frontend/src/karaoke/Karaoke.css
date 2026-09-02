@@ -457,6 +457,8 @@
 
 .lyrics-container {
   --karaoke-outline-width: 8px;
+  --karaoke-two-line-font-size: var(--karaoke-lyrics-font-size);
+  --karaoke-three-line-font-size: calc(var(--karaoke-lyrics-font-size) - 0.7rem);
   font-family: 'BIZUDPMincho-Bold', 'Hiragino Mincho ProN', 'Yu Mincho', serif;
   font-weight: bolder;
   font-style: normal;
@@ -644,8 +646,14 @@
   margin-bottom: 14px;
 }
 
-.lyrics-container[data-layout='three'] .text {
-  font-size: calc(var(--karaoke-lyrics-font-size) - 0.7rem);
+.lyrics-container[data-layout='three'] .lyrics-lines--three .text {
+  font-size: var(--karaoke-adaptive-font-size, var(--karaoke-three-line-font-size));
+  white-space: nowrap;
+}
+
+.lyrics-container[data-layout='two'] .lyrics-lines--two .text {
+  font-size: var(--karaoke-adaptive-font-size, var(--karaoke-two-line-font-size));
+  white-space: nowrap;
 }
 
 .lyrics-container[data-layout='two'] .lyrics-lines--three {
@@ -656,9 +664,15 @@
   display: none;
 }
 
-.lyrics-measure .text {
-  font-size: var(--karaoke-lyrics-font-size);
+.lyrics-measure .lyrics-measure__line {
+  display: block;
+  width: max-content;
+  font-size: var(--karaoke-two-line-font-size);
   white-space: nowrap;
+}
+
+.lyrics-measure .lyrics-measure__line--three {
+  font-size: var(--karaoke-three-line-font-size);
 }
 
 @media (max-width: 980px) {
@@ -670,6 +684,11 @@
     padding: 0 24px 24px;
   }
 
+  .lyrics-container {
+    --karaoke-two-line-font-size: calc(var(--karaoke-lyrics-font-size) - 0.5rem);
+    --karaoke-three-line-font-size: calc(var(--karaoke-lyrics-font-size) - 1.2rem);
+  }
+
   .text {
     font-size: calc(var(--karaoke-lyrics-font-size) - 0.5rem);
   }
@@ -678,9 +697,6 @@
     font-size: calc(var(--karaoke-lyrics-font-size) - 0.5rem);
   }
 
-  .lyrics-measure .text {
-    font-size: calc(var(--karaoke-lyrics-font-size) - 0.5rem);
-  }
 }
 
 @media (max-width: 720px) {
@@ -704,6 +720,11 @@
     flex-wrap: wrap;
   }
 
+  .lyrics-container {
+    --karaoke-two-line-font-size: calc(var(--karaoke-lyrics-font-size) - 1.1rem);
+    --karaoke-three-line-font-size: calc(var(--karaoke-lyrics-font-size) - 1.8rem);
+  }
+
   .text {
     font-size: calc(var(--karaoke-lyrics-font-size) - 1.1rem);
     white-space: normal;
@@ -713,10 +734,6 @@
     font-size: calc(var(--karaoke-lyrics-font-size) - 1.1rem);
   }
 
-  .lyrics-measure .text {
-    font-size: calc(var(--karaoke-lyrics-font-size) - 1.1rem);
-    white-space: nowrap;
-  }
 }
 
 @media (prefers-reduced-motion: reduce) {

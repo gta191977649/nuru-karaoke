@@ -12,12 +12,13 @@ import {
   runMicrophoneLatencyCalibration,
 } from '../engine/audio/latencyCalibration.js'
 import microphoneLatencyBeepUrl from '../assets/sfx/mic-latency-beep.wav'
+import { requestMicrophoneStream } from '../engine/audio/microphoneDevice.js'
 import {
   normalizeMicrophoneDeviceKey,
   useSettingsStore,
 } from '../state/settingsStore.js'
 
-function SettingsPage({ onBack }) {
+function SettingsPage({ onBack, initialTab = 'playback' }) {
   const guideMelodyEnabled = useSettingsStore((state) => state.guideMelodyEnabled)
   const autoGainEnabled = useSettingsStore((state) => state.autoGainEnabled)
   const karaokeBackgroundVideoEnabled = useSettingsStore(
@@ -39,7 +40,9 @@ function SettingsPage({ onBack }) {
   const clearMicrophoneLatencyCalibration = useSettingsStore(
     (state) => state.clearMicrophoneLatencyCalibration,
   )
-  const [activeTab, setActiveTab] = useState('playback')
+  const [activeTab, setActiveTab] = useState(
+    initialTab === 'microphone' ? 'microphone' : 'playback',
+  )
   const [microphones, setMicrophones] = useState([])
   const [isLoadingMicrophones, setIsLoadingMicrophones] = useState(false)
   const [microphoneMessage, setMicrophoneMessage] = useState('')
@@ -77,11 +80,20 @@ function SettingsPage({ onBack }) {
         (device) => device.kind === 'audioinput' && device.deviceId && device.label,
       )
       if (requestPermission && navigator.mediaDevices.getUserMedia) {
-        permissionStream = await navigator.mediaDevices.getUserMedia({
-          audio: microphoneDeviceId
+        const permissionResult = await requestMicrophoneStream(
+          navigator.mediaDevices,
+          microphoneDeviceId
             ? { deviceId: { exact: microphoneDeviceId } }
             : true,
-        })
+        )
+        permissionStream = permissionResult.stream
+        if (permissionResult.usedDefaultDeviceFallback) {
+          const fallbackDeviceId = String(
+            permissionStream.getAudioTracks?.()[0]?.getSettings?.().deviceId || '',
+          )
+          setMicrophoneDeviceId(fallbackDeviceId)
+          setMicrophoneMessage('選択したマイクが見つからないため、既定のマイクを使用します。')
+        }
         if (!microphoneDeviceId) {
           const resolvedDeviceId = permissionStream.getAudioTracks?.()[0]?.getSettings?.().deviceId
           setResolvedDefaultDeviceId(String(resolvedDeviceId || ''))
@@ -105,7 +117,7 @@ function SettingsPage({ onBack }) {
       permissionStream?.getTracks().forEach((track) => track.stop())
       setIsLoadingMicrophones(false)
     }
-  }, [microphoneDeviceId])
+  }, [microphoneDeviceId, setMicrophoneDeviceId])
 
   useEffect(() => {
     loadMicrophones()

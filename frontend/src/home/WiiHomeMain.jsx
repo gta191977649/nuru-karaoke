@@ -13,6 +13,7 @@ import ArtistPage from './ArtistPage.jsx'
 import useUiStore from '../state/uiStore.js'
 import { SCREENS } from './screens.js'
 import logo from '../assets/logo.png'
+import MicrophoneStatusButton from './MicrophoneStatusButton.jsx'
 
 function WiiScreen({ title, subtitle, onBack }) {
   return (
@@ -37,6 +38,8 @@ function WiiHomeMain({ screen, onNavigate, onOpenKaraoke, karaokeTargetRef, main
   const closeArtist = useUiStore((state) => state.closeArtist)
   const songDetailReturnScreen = useUiStore((state) => state.songDetailReturnScreen)
   const setSongDetailReturnScreen = useUiStore((state) => state.setSongDetailReturnScreen)
+  const settingsTab = useUiStore((state) => state.settingsTab)
+  const setSettingsTab = useUiStore((state) => state.setSettingsTab)
 
   if (screen !== SCREENS.home) {
     switch (screen) {
@@ -79,7 +82,10 @@ function WiiHomeMain({ screen, onNavigate, onOpenKaraoke, karaokeTargetRef, main
       case SCREENS.settings:
         return (
           <main className="wiiHome__main" ref={mainRef}>
-            <SettingsPage onBack={() => onNavigate(SCREENS.home)} />
+            <SettingsPage
+              initialTab={settingsTab}
+              onBack={() => onNavigate(SCREENS.home)}
+            />
           </main>
         )
       case SCREENS.comfirmSongs:
@@ -248,6 +254,13 @@ function WiiHomeMain({ screen, onNavigate, onOpenKaraoke, karaokeTargetRef, main
           </Button>
         </Col>
       </Row>
+
+      <MicrophoneStatusButton
+        onOpenSettings={() => {
+          setSettingsTab('microphone')
+          onNavigate(SCREENS.settings)
+        }}
+      />
     </main>
   )
 }
