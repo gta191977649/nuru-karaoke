@@ -26,6 +26,7 @@ import {
     useSettingsStore,
 } from '../../state/settingsStore.js'
 import KaraokeBackgroundVideo from '../components/KaraokeBackgroundVideo.jsx'
+import { fitLyricFontSize } from '../lyricFit.js'
 
 function renderLyricSegments(segments, layer = 'base') {
     const layerClass = layer === 'fill' ? 'karaokeRun--fill' : 'karaokeRun--base'
@@ -188,6 +189,7 @@ function SingingPage({ onFinish, showInterludePrompt = true }) {
     const lyricsContainerRef = useRef(null)
     const lyricsMeasureLeftRef = useRef(null)
     const lyricsMeasureRightRef = useRef(null)
+    const lyricsMeasureThreeRefs = useRef([])
     const overflowLayoutRef = useRef(false)
     const overflowLockIndexRef = useRef(-1)
     const [scoreUpdateKey, setScoreUpdateKey] = useState(0)
@@ -357,30 +359,56 @@ function SingingPage({ onFinish, showInterludePrompt = true }) {
             const containerWidth = container.clientWidth
             const leftWidth = measurerLeft.scrollWidth
             const rightWidth = measurerRight.scrollWidth
-            const textWidth = Math.max(leftWidth, rightWidth)
+            const rightAvailableWidth = containerWidth * 0.9
+            const textWidthRatio = Math.max(
+                leftWidth / Math.max(1, containerWidth),
+                rightWidth / Math.max(1, rightAvailableWidth),
+            )
             const hysteresisPx = 24
             const currentlyOverflowing = overflowLayoutRef.current
             const next = currentlyOverflowing
-                ? textWidth > containerWidth - hysteresisPx
-                : textWidth > containerWidth + 1
+                ? textWidthRatio > (containerWidth - hysteresisPx) / Math.max(1, containerWidth)
+                : textWidthRatio > 1
             const activeIndex = Number.isFinite(state.activeLyricIndex) ? state.activeLyricIndex : -1
             const activePairStart = activeIndex >= 0 ? activeIndex - (activeIndex % 2) : -1
+            let layout = 'two'
             if (next) {
                 overflowLayoutRef.current = true
                 overflowLockIndexRef.current = activePairStart
-                if (container.dataset.layout !== 'three') {
-                    container.dataset.layout = 'three'
+                layout = 'three'
+            } else {
+                const isLocked = overflowLockIndexRef.current >= 0 && activeIndex <= overflowLockIndexRef.current + 1
+                if (isLocked) {
+                    layout = 'three'
+                } else {
+                    overflowLayoutRef.current = false
+                    overflowLockIndexRef.current = -1
                 }
-                return
             }
 
-            const isLocked = overflowLockIndexRef.current >= 0 && activeIndex <= overflowLockIndexRef.current + 1
-            if (isLocked) return
+            container.dataset.layout = layout
 
-            overflowLayoutRef.current = false
-            overflowLockIndexRef.current = -1
-            if (container.dataset.layout !== 'two') {
-                container.dataset.layout = 'two'
+            const outlineWidth = Number.parseFloat(
+                getComputedStyle(container).getPropertyValue('--karaoke-outline-width'),
+            ) || 0
+            const safetyPx = outlineWidth * 2 + 8
+            const measureRows = layout === 'three'
+                ? lyricsMeasureThreeRefs.current
+                    .filter(Boolean)
+                    .map((node) => ({ contentWidth: node.scrollWidth, availableWidth: containerWidth }))
+                : [
+                    { contentWidth: leftWidth, availableWidth: containerWidth },
+                    { contentWidth: rightWidth, availableWidth: rightAvailableWidth },
+                ]
+            const fontSource = layout === 'three'
+                ? lyricsMeasureThreeRefs.current.find(Boolean)
+                : measurerLeft
+            const baseFontSize = Number.parseFloat(getComputedStyle(fontSource).fontSize)
+            const fittedFontSize = fitLyricFontSize({ baseFontSize, rows: measureRows, safetyPx })
+            if (Number.isFinite(fittedFontSize) && fittedFontSize > 0) {
+                container.style.setProperty('--karaoke-adaptive-font-size', `${fittedFontSize}px`)
+            } else {
+                container.style.removeProperty('--karaoke-adaptive-font-size')
             }
         }
 
@@ -563,16 +591,29 @@ function SingingPage({ onFinish, showInterludePrompt = true }) {
                     <div className="bottom-section">
                         <div className="lyrics-container" ref={lyricsContainerRef} data-layout="two">
                             <span className="lyrics-measure" aria-hidden="true">
-                                <span className="text" ref={lyricsMeasureLeftRef}>
+                                <span className="text lyrics-measure__line lyrics-measure__line--two" ref={lyricsMeasureLeftRef}>
                                     <span className="karaokeTextWrap">
                                         <span className="karaokeTextBase">{renderLyricSegments(measureLeftSegments, 'base')}</span>
                                     </span>
                                 </span>
-                                <span className="text" ref={lyricsMeasureRightRef}>
+                                <span className="text lyrics-measure__line lyrics-measure__line--two" ref={lyricsMeasureRightRef}>
                                     <span className="karaokeTextWrap">
                                         <span className="karaokeTextBase">{renderLyricSegments(measureRightSegments, 'base')}</span>
                                     </span>
                                 </span>
+                                {lineRowsThree.map((row, idx) => (
+                                    <span
+                                        className="text lyrics-measure__line lyrics-measure__line--three"
+                                        key={`measure-three-${idx}`}
+                                        ref={(node) => {
+                                            lyricsMeasureThreeRefs.current[idx] = node
+                                        }}
+                                    >
+                                        <span className="karaokeTextWrap">
+                                            <span className="karaokeTextBase">{renderLyricSegments(row.segments, 'base')}</span>
+                                        </span>
+                                    </span>
+                                ))}
                             </span>
                             <div
                                 className={`lyrics-lines lyrics-lines--two${interludeDisplay.lyricsVisible ? ' lyrics-lines--visible' : ''}`}

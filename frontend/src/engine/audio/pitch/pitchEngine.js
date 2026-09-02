@@ -1,5 +1,6 @@
 import { createDefaultPitchRegistry } from './registry.js'
 import { DEFAULT_CONFIG, getKaraokeAudioEngine } from '../../audioEngine.js'
+import { requestMicrophoneStream } from '../microphoneDevice.js'
 import pitchWorkletUrl from './worklet/pitchWorklet.js?worker&url'
 
 class PitchEngine {
@@ -171,7 +172,10 @@ class PitchEngine {
         audioConstraints.deviceId = { exact: microphoneDeviceId }
       }
 
-      const stream = await navigator.mediaDevices.getUserMedia({ audio: audioConstraints })
+      const { stream } = await requestMicrophoneStream(
+        navigator.mediaDevices,
+        audioConstraints,
+      )
 
       const source = audioContext.createMediaStreamSource(stream)
       const workletNode = new AudioWorkletNode(audioContext, 'pitch-frame-processor', {

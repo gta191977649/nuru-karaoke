@@ -16,6 +16,8 @@ import useFavoriteStore from './state/favoriteStore.js'
 import useUserStore from './state/userStore.js'
 import { UI_CONFIG } from './config.js'
 import { getUiAudioEngine } from './engine/audioEngine.js'
+import { getSettingsStoreState } from './state/settingsStore.js'
+import { resolveMicrophoneStatus } from './home/microphoneStatus.js'
 import './App.css'
 
 const TRANSITION_MS = UI_CONFIG.karaokeTransitionMs
@@ -28,6 +30,7 @@ function App({ onNavigate }) {
   const karaokeActive = useUiStore((state) => state.karaokeActive)
   const karaokeMini = useUiStore((state) => state.karaokeMini)
   const setScreen = useUiStore((state) => state.setScreen)
+  const setSettingsTab = useUiStore((state) => state.setSettingsTab)
   const setKaraokeMini = useUiStore((state) => state.setKaraokeMini)
   const openKaraoke = useUiStore((state) => state.openKaraoke)
   const [karaokeTransform, setKaraokeTransform] = useState({
@@ -230,6 +233,33 @@ function App({ onNavigate }) {
   }, [refreshUser])
 
   useEffect(() => {
+    const mediaDevices = navigator.mediaDevices
+    if (!mediaDevices?.enumerateDevices) return
+    let cancelled = false
+    const syncSelectedMicrophone = async () => {
+      try {
+        const devices = await mediaDevices.enumerateDevices()
+        if (cancelled) return
+        const settings = getSettingsStoreState()
+        const resolved = resolveMicrophoneStatus(devices, settings.microphoneDeviceId)
+        const nextDeviceId = resolved.available ? resolved.resolvedDeviceId : ''
+        if (nextDeviceId !== settings.microphoneDeviceId) {
+          settings.setMicrophoneDeviceId(nextDeviceId)
+        }
+      } catch {
+        // Keep the last selection when the browser temporarily blocks enumeration.
+      }
+    }
+    const initialSyncTimer = window.setTimeout(syncSelectedMicrophone, 0)
+    mediaDevices.addEventListener?.('devicechange', syncSelectedMicrophone)
+    return () => {
+      cancelled = true
+      window.clearTimeout(initialSyncTimer)
+      mediaDevices.removeEventListener?.('devicechange', syncSelectedMicrophone)
+    }
+  }, [])
+
+  useEffect(() => {
     if (authStatus === 'authenticated' && accessToken) {
       loadFavorites(accessToken).catch(() => {})
       return
@@ -297,7 +327,10 @@ function App({ onNavigate }) {
                 if (!key) return
                 if (key === SCREENS.home) navigateScreen(SCREENS.home)
                 if (key === SCREENS.moreModes) navigateScreen(SCREENS.moreModes)
-                if (key === SCREENS.settings) navigateScreen(SCREENS.settings)
+                if (key === SCREENS.settings) {
+                  setSettingsTab('playback')
+                  navigateScreen(SCREENS.settings)
+                }
                 if (key === SCREENS.mySongs) navigateScreen(SCREENS.mySongs)
               }}
               id="joy-top-tabs"

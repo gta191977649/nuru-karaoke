@@ -7,6 +7,7 @@ const useUiStore = create((set) => ({
   songSearchMode: 'title',
   artistReturnScreen: SCREENS.home,
   songDetailReturnScreen: SCREENS.findSongs,
+  settingsTab: 'playback',
   karaokeActive: true,
   karaokeMini: true,
   setScreen: (screen) => set({ screen }),
@@ -17,6 +18,9 @@ const useUiStore = create((set) => ({
       karaokeMini: state.karaokeActive ? true : state.karaokeMini,
     })),
   setSongDetailReturnScreen: (songDetailReturnScreen) => set({ songDetailReturnScreen }),
+  setSettingsTab: (settingsTab) => set({
+    settingsTab: settingsTab === 'microphone' ? 'microphone' : 'playback',
+  }),
   openArtist: (artist) =>
     set((state) => ({
       screen: SCREENS.artist,
