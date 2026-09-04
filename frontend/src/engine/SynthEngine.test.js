@@ -1,5 +1,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { SynthEngine } from './SynthEngine.js'
+import { getKaraokeStoreState, setKaraokeStoreState } from '../state/karaokeStore.js'
 
 function createEngineWithDrums(...channels) {
   const engine = new SynthEngine()
@@ -15,6 +16,56 @@ function createEngineWithDrums(...channels) {
   }
   return engine
 }
+
+describe('results queue advancement', () => {
+  afterEach(() => setKaraokeStoreState({ queue: [], queueIndex: -1, history: [] }))
+
+  function setup(queue = [{ url: 'A.mid' }, { url: 'B.mid' }, { url: 'C.mid' }]) {
+    setKaraokeStoreState({ queue, queueIndex: 0, history: [] })
+    const engine = new SynthEngine()
+    engine.ensureInitialized = vi.fn().mockResolvedValue()
+    engine.stop = vi.fn()
+    engine.playQueueFrom = vi.fn().mockResolvedValue()
+    return engine
+  }
+
+  it('removes the completed song once, then starts the next without a synth fade', async () => {
+    const engine = setup()
+    await engine.advanceFromResults()
+    expect(getKaraokeStoreState().queue.map((song) => song.url)).toEqual(['B.mid', 'C.mid'])
+    expect(getKaraokeStoreState().history.map((song) => song.url)).toEqual(['A.mid'])
+    expect(engine.playQueueFrom).toHaveBeenCalledTimes(1)
+    expect(engine.playQueueFrom).toHaveBeenCalledWith(0)
+    expect(engine.stop).toHaveBeenCalledTimes(1)
+  })
+
+  it('retries the failed next song instead of skipping it', async () => {
+    const engine = setup()
+    engine.playQueueFrom.mockRejectedValueOnce(new Error('network'))
+    await expect(engine.advanceFromResults()).rejects.toThrow('network')
+    await engine.advanceFromResults()
+    expect(getKaraokeStoreState().queue.map((song) => song.url)).toEqual(['B.mid', 'C.mid'])
+    expect(getKaraokeStoreState().history).toHaveLength(1)
+    expect(engine.playQueueFrom.mock.calls).toEqual([[0], [0]])
+  })
+
+  it('ignores simultaneous advance attempts', async () => {
+    const engine = setup()
+    const first = engine.advanceFromResults()
+    await engine.advanceFromResults()
+    await first
+    expect(engine.playQueueFrom).toHaveBeenCalledTimes(1)
+    expect(getKaraokeStoreState().history).toHaveLength(1)
+  })
+
+  it('clears the final song without attempting another playback', async () => {
+    const engine = setup([{ url: 'A.mid' }])
+    await engine.advanceFromResults()
+    expect(getKaraokeStoreState().queueIndex).toBe(-1)
+    expect(getKaraokeStoreState().queue).toEqual([])
+    expect(engine.playQueueFrom).not.toHaveBeenCalled()
+  })
+})
 
 function createEngineWithCurrentDrumApi(...channels) {
   const engine = createEngineWithDrums(...channels)

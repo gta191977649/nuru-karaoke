@@ -117,6 +117,8 @@ function createUiAudioEngine() {
 
   let bgmFadeRaf = null
   let bgmFadeToken = 0
+  let bgmStopPromise = null
+  let resolveBgmStop = null
 
   function ensureSfxAudio() {
     if (!sfxAudio) {
@@ -171,6 +173,9 @@ function createUiAudioEngine() {
   }
 
   function cancelBgmFade() {
+    resolveBgmStop?.()
+    resolveBgmStop = null
+    bgmStopPromise = null
     if (bgmFadeRaf) {
       cancelAnimationFrame(bgmFadeRaf)
       bgmFadeRaf = null
@@ -233,13 +238,16 @@ function createUiAudioEngine() {
 
   function stopBgm(options = {}) {
     const audio = bgmAudio
-    if (!audio) return
+    if (!audio) return Promise.resolve()
 
     const fadeMs = Math.max(0, Number(options.fadeMs) || 0)
     const reset = options.reset !== false
 
     // Prevent looping back to the start while fading/stopping.
     audio.loop = false
+
+    // Cleanup and repeated stop requests share the original fade/deadline.
+    if (fadeMs > 0 && bgmStopPromise) return bgmStopPromise
 
     if (fadeMs <= 0) {
       cancelBgmFade()
@@ -250,10 +258,13 @@ function createUiAudioEngine() {
       } catch {
         // ignore
       }
-      return
+      return Promise.resolve()
     }
 
+    if (audio.paused) return Promise.resolve()
+
     const token = cancelBgmFade()
+    bgmStopPromise = new Promise((resolve) => { resolveBgmStop = resolve })
     const startAt = performance.now()
     const startVol = Number.isFinite(audio.volume) ? audio.volume : state.bgmVolume
 
@@ -274,9 +285,13 @@ function createUiAudioEngine() {
       } catch {
         // ignore
       }
+      resolveBgmStop?.()
+      resolveBgmStop = null
+      bgmStopPromise = null
     }
 
     bgmFadeRaf = requestAnimationFrame(tick)
+    return bgmStopPromise
   }
 
   return {

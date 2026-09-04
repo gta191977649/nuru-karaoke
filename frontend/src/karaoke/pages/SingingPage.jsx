@@ -174,9 +174,6 @@ function SingingPage({ onFinish, showInterludePrompt = true }) {
     const lyricsContainerRef = useRef(null)
     const lyricsMeasureLeftRef = useRef(null)
     const lyricsMeasureRightRef = useRef(null)
-    const lyricsMeasureThreeRefs = useRef([])
-    const overflowLayoutRef = useRef(false)
-    const overflowLockIndexRef = useRef(-1)
     const [scoreUpdateKey, setScoreUpdateKey] = useState(0)
     const micRmsGate = 0.01
     const microphoneLatencySec = useMemo(() => {
@@ -303,7 +300,7 @@ function SingingPage({ onFinish, showInterludePrompt = true }) {
     }, [pitchEngine, micRmsGate])
     // Live score now updates via onScoreChange from the scoring hook.
 
-    const { lineRowsTwo, lineRowsThree, measureLeftSegments, measureRightSegments } = useMemo(
+    const { lineRowsTwo, measureLeftSegments, measureRightSegments } = useMemo(
         () => getLyricRows(state.lrcEntries || [], state.activeLyricIndex ?? -1, state.karaokeProgress ?? 0),
         [state.karaokeProgress, state.activeLyricIndex, state.lrcEntries],
     )
@@ -318,50 +315,15 @@ function SingingPage({ onFinish, showInterludePrompt = true }) {
             const leftWidth = measurerLeft.scrollWidth
             const rightWidth = measurerRight.scrollWidth
             const rightAvailableWidth = containerWidth * 0.9
-            const textWidthRatio = Math.max(
-                leftWidth / Math.max(1, containerWidth),
-                rightWidth / Math.max(1, rightAvailableWidth),
-            )
-            const hysteresisPx = 24
-            const currentlyOverflowing = overflowLayoutRef.current
-            const next = currentlyOverflowing
-                ? textWidthRatio > (containerWidth - hysteresisPx) / Math.max(1, containerWidth)
-                : textWidthRatio > 1
-            const activeIndex = Number.isFinite(state.activeLyricIndex) ? state.activeLyricIndex : -1
-            const activePairStart = activeIndex >= 0 ? activeIndex - (activeIndex % 2) : -1
-            let layout = 'two'
-            if (next) {
-                overflowLayoutRef.current = true
-                overflowLockIndexRef.current = activePairStart
-                layout = 'three'
-            } else {
-                const isLocked = overflowLockIndexRef.current >= 0 && activeIndex <= overflowLockIndexRef.current + 1
-                if (isLocked) {
-                    layout = 'three'
-                } else {
-                    overflowLayoutRef.current = false
-                    overflowLockIndexRef.current = -1
-                }
-            }
-
-            container.dataset.layout = layout
-
             const outlineWidth = Number.parseFloat(
                 getComputedStyle(container).getPropertyValue('--karaoke-outline-width'),
             ) || 0
             const safetyPx = outlineWidth * 2 + 8
-            const measureRows = layout === 'three'
-                ? lyricsMeasureThreeRefs.current
-                    .filter(Boolean)
-                    .map((node) => ({ contentWidth: node.scrollWidth, availableWidth: containerWidth }))
-                : [
-                    { contentWidth: leftWidth, availableWidth: containerWidth },
-                    { contentWidth: rightWidth, availableWidth: rightAvailableWidth },
-                ]
-            const fontSource = layout === 'three'
-                ? lyricsMeasureThreeRefs.current.find(Boolean)
-                : measurerLeft
-            const baseFontSize = Number.parseFloat(getComputedStyle(fontSource).fontSize)
+            const measureRows = [
+                { contentWidth: leftWidth, availableWidth: containerWidth },
+                { contentWidth: rightWidth, availableWidth: rightAvailableWidth },
+            ]
+            const baseFontSize = Number.parseFloat(getComputedStyle(measurerLeft).fontSize)
             const fittedFontSize = fitLyricFontSize({ baseFontSize, rows: measureRows, safetyPx })
             if (Number.isFinite(fittedFontSize) && fittedFontSize > 0) {
                 container.style.setProperty('--karaoke-adaptive-font-size', `${fittedFontSize}px`)
@@ -371,10 +333,20 @@ function SingingPage({ onFinish, showInterludePrompt = true }) {
         }
 
         measureOverflow()
-        if (typeof ResizeObserver === 'undefined' || !lyricsContainerRef.current) return
-        const observer = new ResizeObserver(measureOverflow)
-        observer.observe(lyricsContainerRef.current)
-        return () => observer.disconnect()
+        let disposed = false
+        document.fonts?.ready.then(() => {
+            if (!disposed) measureOverflow()
+        })
+        document.fonts?.addEventListener('loadingdone', measureOverflow)
+        window.addEventListener('resize', measureOverflow)
+        const observer = typeof ResizeObserver !== 'undefined' ? new ResizeObserver(measureOverflow) : null
+        if (lyricsContainerRef.current) observer?.observe(lyricsContainerRef.current)
+        return () => {
+            disposed = true
+            observer?.disconnect()
+            document.fonts?.removeEventListener('loadingdone', measureOverflow)
+            window.removeEventListener('resize', measureOverflow)
+        }
     }, [measureLeftSegments, measureRightSegments, state.activeLyricIndex, state.lrcEntries])
 
     // Audio start logic
@@ -547,7 +519,7 @@ function SingingPage({ onFinish, showInterludePrompt = true }) {
                     </div>
 
                     <div className="bottom-section">
-                        <div className="lyrics-container" ref={lyricsContainerRef} data-layout="two">
+                        <div className="lyrics-container" ref={lyricsContainerRef}>
                             <span className="lyrics-measure" aria-hidden="true">
                                 <span className="text lyrics-measure__line lyrics-measure__line--two" ref={lyricsMeasureLeftRef}>
                                     <span className="karaokeTextWrap">
@@ -559,46 +531,12 @@ function SingingPage({ onFinish, showInterludePrompt = true }) {
                                         <span className="karaokeTextBase">{renderLyricSegments(measureRightSegments, 'base')}</span>
                                     </span>
                                 </span>
-                                {lineRowsThree.map((row, idx) => (
-                                    <span
-                                        className="text lyrics-measure__line lyrics-measure__line--three"
-                                        key={`measure-three-${idx}`}
-                                        ref={(node) => {
-                                            lyricsMeasureThreeRefs.current[idx] = node
-                                        }}
-                                    >
-                                        <span className="karaokeTextWrap">
-                                            <span className="karaokeTextBase">{renderLyricSegments(row.segments, 'base')}</span>
-                                        </span>
-                                    </span>
-                                ))}
                             </span>
                             <div
                                 className={`lyrics-lines lyrics-lines--two${interludeDisplay.lyricsVisible ? ' lyrics-lines--visible' : ''}`}
                             >
                                 {lineRowsTwo.map((row, idx) => (
                                     <div className={`lyric-row ${row.align}`} key={`two-${row.align}-${idx}`}>
-                                        <span className="text">
-                                            <span
-                                                className="karaokeTextWrap"
-                                                style={{
-                                                    '--karaoke-progress': `${row.progress}%`,
-                                                }}
-                                            >
-                                                <span className="karaokeTextBase">{renderLyricSegments(row.segments, 'base')}</span>
-                                                <span className="karaokeTextFill" aria-hidden="true">
-                                                    {renderLyricSegments(row.segments, 'fill')}
-                                                </span>
-                                            </span>
-                                        </span>
-                                    </div>
-                                ))}
-                            </div>
-                            <div
-                                className={`lyrics-lines lyrics-lines--three${interludeDisplay.lyricsVisible ? ' lyrics-lines--visible' : ''}`}
-                            >
-                                {lineRowsThree.map((row, idx) => (
-                                    <div className={`lyric-row ${row.align}`} key={`three-${row.align}-${idx}`}>
                                         <span className="text">
                                             <span
                                                 className="karaokeTextWrap"

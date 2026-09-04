@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useMemo, useRef } from 'react'
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import './ResultsPage.css'
 import { LiquidTube } from './components/LiquidTube'
 import { CenterScore } from './components/CenterScore'
@@ -11,11 +11,13 @@ import resultBgm from '../../assets/sfx/result.mp3'
 import { UI_CONFIG } from '../../config.js'
 import { getUiAudioEngine } from '../../engine/audioEngine.js'
 import { SCORING_ALGORITHM_VERSION } from '../scoring/SimpleScoreCalculator.js'
+import { useKaraokeStore } from '../../state/karaokeStore.js'
+import { hasNextResultsSong, startResultsCountdown } from '../resultsTransition.js'
 
 // Importing icons for components if needed, but components likely handle their own or use text/emoji for now.
 import { Play, Pause } from 'lucide-react'
 
-function ResultsPage({ score, techniques, songInfo, onNext }) {
+function ResultsPage({ score, techniques, songInfo, onNext, exiting = false, exitError = '' }) {
     const finalScore = usePlayerScoreStore((store) => store.finalScore)
     //const finalScore = 30
     const techniqueCounts = usePlayerScoreStore((store) => store.techniqueCounts)
@@ -25,6 +27,32 @@ function ResultsPage({ score, techniques, songInfo, onNext }) {
     const isGuest = useUserStore((store) => store.isGuest)
     const accessToken = useUserStore((store) => store.accessToken)
     const submitOnceRef = useRef(false)
+    const hasNext = useKaraokeStore(hasNextResultsSong)
+    const [secondsLeft, setSecondsLeft] = useState(Math.ceil(UI_CONFIG.resultsAutoAdvanceMs / 1000))
+    const cancelCountdownRef = useRef(null)
+    const onNextRef = useRef(onNext)
+    const exitingRef = useRef(exiting)
+
+    useEffect(() => {
+        onNextRef.current = onNext
+        exitingRef.current = exiting
+        if (exiting) cancelCountdownRef.current?.()
+    }, [onNext, exiting])
+
+    useEffect(() => {
+        if (!hasNext || exitingRef.current) return
+        const cancel = startResultsCountdown({
+            durationMs: UI_CONFIG.resultsAutoAdvanceMs,
+            onTick: setSecondsLeft,
+            onTimeout: () => {
+                if (!exitingRef.current && hasNextResultsSong(useKaraokeStore.getState())) {
+                    onNextRef.current?.({ automatic: true })
+                }
+            },
+        })
+        cancelCountdownRef.current = cancel
+        return cancel
+    }, [hasNext])
 
     // Mock Analysis Data (since we don't have real analytics for these yet)
     // In the future this should come from the backend/analysis engine
@@ -44,12 +72,6 @@ function ResultsPage({ score, techniques, songInfo, onNext }) {
     const resolvedSongInfo = songInfo || storedSongInfo
     const resolvedSongCode = resolvedSongInfo?.code || resolvedSongInfo?.id || ''
     const scoreRatio = (Number(resolvedScore) || 0) / 100;
-
-    const stopResultBgm = useCallback((fadeMs) => {
-        const uiAudio = getUiAudioEngine()
-        // Keep playback position unchanged while fading out; next play will restart anyway.
-        uiAudio.stopBgm({ fadeMs, reset: false })
-    }, [])
 
     const bottomPanelCounts = useMemo(() => ({
         kobushi: resolvedTechniques?.kobushi || 0,
@@ -92,10 +114,9 @@ function ResultsPage({ score, techniques, songInfo, onNext }) {
     }, [])
 
     const handleNext = useCallback(() => {
-        // Start fading immediately so the BGM doesn't keep playing during the transition overlay.
-        stopResultBgm(UI_CONFIG.karaokeTransitionMs)
+        if (exiting) return
         onNext?.()
-    }, [onNext, stopResultBgm])
+    }, [onNext, exiting])
 
     return (
         <div className="resultsPageNew">
@@ -126,6 +147,11 @@ function ResultsPage({ score, techniques, songInfo, onNext }) {
                         </div>
                         <div className="font-mono-tech" style={{ color: '#bae6fd', letterSpacing: '0.1em', opacity: 0.8, fontSize: '1.2em' }}>
                             {new Date().toLocaleString('ja-JP', { year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit' })}
+                        </div>
+                        <div className="rp-next-status" role="status">
+                            {exiting
+                                ? '次の曲へ移動中…'
+                                : exitError || (hasNext ? `次の曲まであと ${secondsLeft} 秒` : '次の予約曲はありません')}
                         </div>
                     </div>
                 </header>
@@ -166,7 +192,7 @@ function ResultsPage({ score, techniques, songInfo, onNext }) {
 
                 {/* Footer Controls */}
                 <div className="rp-footer">
-                    <button className="rp-btn rp-btn-red" onClick={handleNext}>
+                    <button className="rp-btn rp-btn-red" onClick={handleNext} disabled={exiting}>
                         <Pause style={{ fill: 'white', height: '50%', aspectRatio: '1/1' }} />
                         <span>演奏停止</span>
                     </button>
@@ -178,7 +204,7 @@ function ResultsPage({ score, techniques, songInfo, onNext }) {
                         <button className="rp-btn rp-btn-blue">
                             <span>マイルームに保存</span>
                         </button>
-                        <button className="rp-btn rp-btn-cyan" onClick={handleNext}>
+                        <button className="rp-btn rp-btn-cyan" onClick={handleNext} disabled={exiting}>
                             <Play style={{ fill: 'white', height: '50%', aspectRatio: '1/1' }} />
                             <span>プレビュー</span>
                         </button>
