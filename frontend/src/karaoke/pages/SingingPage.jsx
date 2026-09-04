@@ -3,7 +3,7 @@ import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } fr
 import { useShallow } from 'zustand/react/shallow'
 import { useKaraokeStore } from '../../state/karaokeStore.js'
 import { synthEngine } from '../../engine/SynthEngine.js'
-import { parseLyricSegments } from '../../engine/lrc.js'
+import { getLyricRows } from '../lyricRows.js'
 import { sharedPitchEngine, startSharedMic, stopSharedMic } from '../../engine/audio/pitch/sharedPitchEngine.js'
 import {
     findInterludeRanges,
@@ -50,21 +50,6 @@ function renderLyricSegments(segments, layer = 'base') {
             </span>
         )
     })
-}
-
-function resolveLyricEntry(entry) {
-    if (!entry) return null
-    if (Array.isArray(entry.segments) && entry.segments.length) {
-        return {
-            segments: entry.segments,
-            plainText: typeof entry.plainText === 'string' ? entry.plainText : entry.segments.map((seg) => seg.text).join(''),
-        }
-    }
-    const parsed = parseLyricSegments(entry.text)
-    return {
-        segments: parsed.segments,
-        plainText: parsed.plainText,
-    }
 }
 
 const medianNumber = (values) => {
@@ -318,37 +303,10 @@ function SingingPage({ onFinish, showInterludePrompt = true }) {
     }, [pitchEngine, micRmsGate])
     // Live score now updates via onScoreChange from the scoring hook.
 
-    const progressPercent = Math.round((state.karaokeProgress ?? 0) * 1000) / 10
-
-    const { lineRowsTwo, lineRowsThree, measureLeftSegments, measureRightSegments } = useMemo(() => {
-        const entries = state.lrcEntries || []
-        const i = state.activeLyricIndex ?? -1
-        const placeholder = { segments: [{ text: '…', ruby: '', falsetto: false }], plainText: '…' }
-        const safeEntry = (entry) => resolveLyricEntry(entry) || placeholder
-
-        const pairStart = i >= 0 ? i - (i % 2) : -1
-        const current = pairStart >= 0 ? safeEntry(entries[pairStart]) : placeholder
-        const next = pairStart + 1 < entries.length ? safeEntry(entries[pairStart + 1]) : placeholder
-        const activeInPair = i >= 0 ? i % 2 : 0
-
-        const prev = i - 1 >= 0 ? safeEntry(entries[i - 1]) : placeholder
-        const curr = i >= 0 ? safeEntry(entries[i]) : placeholder
-        const nextThree = i + 1 < entries.length ? safeEntry(entries[i + 1]) : placeholder
-
-        return {
-            lineRowsTwo: [
-                { segments: current.segments, align: 'text-left', progress: activeInPair === 0 ? progressPercent : 100 },
-                { segments: next.segments, align: 'text-right lyric-row--indent', progress: activeInPair === 1 ? progressPercent : 0 },
-            ],
-            lineRowsThree: [
-                { segments: prev.segments, align: 'text-center', progress: i - 1 >= 0 ? 100 : 0 },
-                { segments: curr.segments, align: 'text-center', progress: progressPercent },
-                { segments: nextThree.segments, align: 'text-center', progress: 0 },
-            ],
-            measureLeftSegments: current.segments,
-            measureRightSegments: next.segments,
-        }
-    }, [progressPercent, state.activeLyricIndex, state.lrcEntries])
+    const { lineRowsTwo, lineRowsThree, measureLeftSegments, measureRightSegments } = useMemo(
+        () => getLyricRows(state.lrcEntries || [], state.activeLyricIndex ?? -1, state.karaokeProgress ?? 0),
+        [state.karaokeProgress, state.activeLyricIndex, state.lrcEntries],
+    )
 
     useLayoutEffect(() => {
         const measureOverflow = () => {
