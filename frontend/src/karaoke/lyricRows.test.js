@@ -43,10 +43,13 @@ describe('getLyricRows', () => {
             .toEqual([['E', 'D'], ['A', 'B'], ['C', 'B'], ['C', 'B'], ['A', 'B']])
     })
 
-    it('leaves three-line selection and highlights unchanged', () => {
-        const { lineRowsThree } = getLyricRows(entries, 1, 0.75)
-        expect(texts(lineRowsThree)).toEqual(['A', 'B', 'C'])
-        expect(lineRowsThree.map((row) => row.progress)).toEqual([100, 75, 0])
+    it('only returns two rows with left/right alignment throughout playback', () => {
+        for (let i = 0; i < entries.length; i++) {
+            const result = getLyricRows(entries, i, 0.75)
+            expect(result).not.toHaveProperty('lineRowsThree')
+            expect(result.lineRowsTwo).toHaveLength(2)
+            expect(result.lineRowsTwo.map((row) => row.align)).toEqual(['text-left', 'text-right lyric-row--indent'])
+        }
     })
 
     it('measures the displayed preview and preserves long text, ruby and falsetto', () => {

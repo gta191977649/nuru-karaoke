@@ -323,6 +323,8 @@ class SynthEngine {
     this._prevFinished = false
     this._isAdvancing = false
     this._isStopping = false
+    this._isAdvancingResults = false
+    this._resultsQueueAdvanced = false
     this._sequencerEventsBound = false
     this._autoPlayOnNextSong = false
 
@@ -1040,6 +1042,8 @@ class SynthEngine {
   }
 
   async playQueueFrom(index = 0) {
+    // An explicit new playback abandons any failed results-page retry.
+    if (!this._isAdvancingResults) this._resultsQueueAdvanced = false
     await this.ensureInitialized()
     const i = Number(index)
     const queue = getKaraokeStoreState().queue
@@ -1118,6 +1122,25 @@ class SynthEngine {
     this._autoGainController?.reset()
     this._setState({ isPlaying: false, playbackFinished: false, currentTime: 0 })
     this._stopClock()
+  }
+
+  async advanceFromResults() {
+    if (this._isAdvancingResults) return
+    this._isAdvancingResults = true
+    try {
+      await this.ensureInitialized()
+      this.stop()
+      if (!this._resultsQueueAdvanced) {
+        await this._advanceQueue({ autoPlayNext: false })
+        this._resultsQueueAdvanced = true
+      }
+      // A failed load can be retried without removing another queued song.
+      const { queueIndex } = getKaraokeStoreState()
+      if (queueIndex >= 0) await this.playQueueFrom(queueIndex)
+      this._resultsQueueAdvanced = false
+    } finally {
+      this._isAdvancingResults = false
+    }
   }
 
   async stopAndAdvance(options = {}) {

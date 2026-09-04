@@ -18,6 +18,7 @@ import { UI_CONFIG } from './config.js'
 import { getUiAudioEngine } from './engine/audioEngine.js'
 import { getSettingsStoreState } from './state/settingsStore.js'
 import { resolveMicrophoneStatus } from './home/microphoneStatus.js'
+import { hasNextResultsSong, runKaraokeTransition } from './karaoke/resultsTransition.js'
 import './App.css'
 
 const TRANSITION_MS = UI_CONFIG.karaokeTransitionMs
@@ -50,6 +51,7 @@ function App({ onNavigate }) {
   const resetPlayerScore = usePlayerScoreStore((state) => state.resetPlayerScore)
   const [transitionPhase, setTransitionPhase] = useState('idle')
   const transitionLockRef = useRef(false)
+  const [resultsExitError, setResultsExitError] = useState('')
   const dockTransitionTimerRef = useRef(null)
   const [animateKaraokeDock, setAnimateKaraokeDock] = useState(false)
   const [karaokeResetKey, setKaraokeResetKey] = useState(0)
@@ -267,38 +269,50 @@ function App({ onNavigate }) {
     resetFavorites()
   }, [accessToken, authStatus, loadFavorites, resetFavorites])
 
-  const runTransition = useCallback(async (action) => {
-    if (transitionLockRef.current) return
-    transitionLockRef.current = true
-    setTransitionPhase('in')
-    await wait(TRANSITION_MS)
-    if (action) await action()
-    setTransitionPhase('out')
-    await wait(TRANSITION_MS)
-    setTransitionPhase('idle')
-    transitionLockRef.current = false
-  }, [])
+  const runTransition = useCallback((action, before) => runKaraokeTransition({
+    lock: transitionLockRef,
+    setPhase: setTransitionPhase,
+    fadeMs: TRANSITION_MS,
+    before,
+    action,
+    wait,
+  }), [])
 
-  const handleStop = useCallback(async () => {
+  const handleStop = useCallback(async (options = {}) => {
+    if (transitionLockRef.current) return false
     const currentState = getKaraokeStoreState()
+    const fromResults = currentState.karaokeView === 'results'
+    if (options.automatic === true && (!fromResults || !hasNextResultsSong(currentState))) return false
     const hasQueued = Array.isArray(currentState.queue) && currentState.queue.length > 0
-    if (!currentState.midiName && !hasQueued) return
-    showAlert({
+    if (!fromResults && !currentState.midiName && !hasQueued) return false
+    setResultsExitError('')
+    if (options.automatic !== true) showAlert({
       message: '演奏を停止しました',
       variant: 'warning',
       timeoutMs: 3000,
     })
-    await runTransition(async () => {
-      resetPlayerScore()
-      setKaraokeResetKey((prev) => prev + 1)
-      await synthEngine.stopAndAdvance({ fadeMs: TRANSITION_MS })
-      const { queue, queueIndex } = getKaraokeStoreState()
-      if (!queue.length && queueIndex < 0) {
-        setKaraokeView('message')
-      } else {
-        setKaraokeView('singing')
-      }
-    })
+    try {
+      return await runTransition(async () => {
+        if (fromResults) {
+          await synthEngine.advanceFromResults()
+        } else {
+          await synthEngine.stopAndAdvance({ fadeMs: TRANSITION_MS })
+        }
+        // Do not remount SingingPage with the previous song's finished flag.
+        resetPlayerScore()
+        setKaraokeResetKey((prev) => prev + 1)
+        const { queue, queueIndex } = getKaraokeStoreState()
+        setKaraokeView(!queue.length && queueIndex < 0 ? 'message' : 'singing')
+      }, fromResults
+        ? () => getUiAudioEngine().stopBgm({ fadeMs: TRANSITION_MS, reset: false })
+        : undefined)
+    } catch (error) {
+      console.error('Failed to advance karaoke queue', error)
+      const message = '曲の切り替えに失敗しました。演奏停止ボタンで再試行してください。'
+      if (fromResults) setResultsExitError(message)
+      showAlert({ message, variant: 'danger', timeoutMs: 5000 })
+      return false
+    }
   }, [resetPlayerScore, runTransition, setKaraokeView, showAlert])
 
   const rawUserName = !isGuest && authStatus === 'authenticated'
@@ -409,6 +423,8 @@ function App({ onNavigate }) {
               >
                 <Karaoke
                   onStop={handleStop}
+                  onResultsNext={handleStop}
+                  resultsExitError={resultsExitError}
                   resetKey={karaokeResetKey}
                   transitionPhase={transitionPhase}
                   displayMode={karaokeDockMode}
