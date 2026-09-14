@@ -1724,6 +1724,380 @@
   height: 18px;
 }
 
+.sc-lcd__metaIcon--xgover55 {
+  width: auto;
+  max-width: 28px;
+  height: 18px;
+  object-fit: contain;
+}
+
+.sc-lcd__metaLogoButton {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 22px;
+  padding: 2px;
+  border: 0;
+  border-radius: 3px;
+  background: transparent;
+  color: inherit;
+  cursor: pointer;
+  transition: opacity 120ms ease, background-color 120ms ease;
+}
+
+.sc-lcd__metaLogoButton:hover,
+.sc-lcd__metaLogoButton:focus-visible {
+  background: rgba(64, 36, 0, 0.14);
+  outline: none;
+}
+
+.sc-lcd__metaLogoButton:focus-visible {
+  box-shadow: 0 0 0 1px rgba(64, 36, 0, 0.7);
+}
+
+.xgover55-modal {
+  max-width: 560px;
+}
+
+.xgover55-modal .modal-content {
+  border: 2px solid #3e2a08;
+  border-radius: 8px;
+  background: #251c0b;
+  box-shadow: 0 16px 60px rgba(0, 0, 0, 0.55);
+}
+
+.xgover55-modal__body {
+  position: relative;
+  padding: 18px;
+}
+
+.xgover55-modal__close {
+  position: absolute;
+  z-index: 2;
+  top: 2px;
+  right: 7px;
+  padding: 0 5px;
+  border: 0;
+  background: transparent;
+  color: rgba(42, 35, 4, 0.72);
+  font: 700 1.5rem/1 'VCR OSD Mono', 'Courier New', monospace;
+  cursor: pointer;
+}
+
+.xgover55-modal__screen {
+  position: relative;
+  overflow: hidden;
+  min-height: 430px;
+  padding: 24px 28px 20px;
+  border: 3px solid #6c5f19;
+  border-radius: 5px;
+  background-color: #d5d53d;
+  background-image:
+    linear-gradient(rgba(255, 255, 220, 0.12) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(255, 255, 220, 0.12) 1px, transparent 1px);
+  background-size: 4px 4px;
+  color: #181b07;
+  font-family: 'VCR OSD Mono', 'Courier New', monospace;
+  text-shadow: 1px 1px rgba(255, 255, 210, 0.18);
+  box-shadow: inset 0 0 26px rgba(57, 49, 0, 0.28);
+}
+
+.xgover55-modal__screen::after {
+  position: absolute;
+  z-index: 3;
+  top: -35%;
+  right: 0;
+  left: 0;
+  height: 24%;
+  background: linear-gradient(transparent, rgba(255, 255, 215, 0.16), transparent);
+  content: '';
+  pointer-events: none;
+  animation: xgover55-scan 4.2s linear infinite;
+}
+
+.xgover55-modal__topline {
+  display: flex;
+  justify-content: space-between;
+  gap: 20px;
+  font-size: clamp(0.82rem, 3vw, 1.1rem);
+  font-weight: 700;
+  line-height: 1.18;
+  letter-spacing: 0.04em;
+}
+
+.xgover55-modal__brand {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  margin: 8px auto 6px;
+  font-size: clamp(1.35rem, 5vw, 2rem);
+  line-height: 1;
+  letter-spacing: 0.03em;
+}
+
+.xgover55-modal__brand img {
+  display: block;
+  width: min(76%, 330px);
+  height: 118px;
+  object-fit: contain;
+  filter: brightness(0);
+}
+
+.xgover55-modal__translator {
+  position: relative;
+  z-index: 1;
+  margin: 8px 0 12px;
+  border: 2px solid rgba(24, 27, 7, 0.72);
+  background: rgba(24, 27, 7, 0.07);
+  box-shadow: inset 0 0 12px rgba(24, 27, 7, 0.12);
+}
+
+.xgover55-modal__translatorHeader {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 4px 6px;
+  border-bottom: 1px solid rgba(24, 27, 7, 0.7);
+  font-size: clamp(0.48rem, 1.8vw, 0.62rem);
+  font-weight: 700;
+  letter-spacing: 0.04em;
+}
+
+.xgover55-modal__translatorHeader > span:last-child {
+  display: inline-flex;
+  flex: 0 0 auto;
+  align-items: center;
+  gap: 4px;
+}
+
+.xgover55-modal__translatorHeader i {
+  width: 6px;
+  height: 6px;
+  border: 1px solid currentColor;
+  border-radius: 50%;
+  background: transparent;
+}
+
+.xgover55-modal__translatorHeader .is-running i {
+  background: currentColor;
+  animation: xgover55-pulse 720ms steps(2, end) infinite;
+}
+
+.xgover55-modal__commandLog {
+  height: 108px;
+  overflow: hidden;
+  padding: 4px 6px;
+  scroll-behavior: smooth;
+}
+
+.xgover55-modal__command {
+  display: grid;
+  grid-template-columns: 44px minmax(0, 1fr);
+  gap: 5px;
+  min-height: 24px;
+  opacity: 0.5;
+  font-size: clamp(0.52rem, 2vw, 0.68rem);
+  line-height: 1.14;
+  animation: xgover55-command-in 180ms steps(3, end);
+}
+
+.xgover55-modal__command > span:first-child {
+  font-variant-numeric: tabular-nums;
+}
+
+.xgover55-modal__command b,
+.xgover55-modal__command em {
+  display: block;
+  overflow: hidden;
+  font-style: normal;
+  font-weight: 400;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.xgover55-modal__command em {
+  padding-left: 7px;
+}
+
+.xgover55-modal__command.is-latest {
+  opacity: 1;
+  font-weight: 700;
+  text-shadow: 0 0 5px rgba(24, 27, 7, 0.35);
+}
+
+.xgover55-modal__midiStatus {
+  position: relative;
+  z-index: 1;
+  margin-top: 7px;
+  border-top: 2px solid rgba(24, 27, 7, 0.74);
+  padding-top: 7px;
+}
+
+.xgover55-modal__statusGrid {
+  display: grid;
+  grid-template-columns: 0.85fr 1.45fr 0.9fr;
+  gap: 5px;
+}
+
+.xgover55-modal__statusGrid > div {
+  display: grid;
+  min-width: 0;
+  padding: 4px 5px;
+  border: 1px solid rgba(24, 27, 7, 0.55);
+  background: rgba(24, 27, 7, 0.06);
+  text-align: center;
+}
+
+.xgover55-modal__statusGrid span,
+.xgover55-modal__statusGrid small {
+  overflow: hidden;
+  font-size: clamp(0.45rem, 1.7vw, 0.58rem);
+  line-height: 1.1;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.xgover55-modal__statusGrid strong {
+  font-size: clamp(1rem, 4vw, 1.35rem);
+  line-height: 1.05;
+  letter-spacing: 0.08em;
+}
+
+.xgover55-modal__velocity {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) 28px;
+  align-items: center;
+  gap: 7px;
+  margin-top: 6px;
+  font-size: clamp(0.5rem, 1.8vw, 0.62rem);
+}
+
+.xgover55-modal__velocity > div {
+  display: grid;
+  grid-template-columns: repeat(8, minmax(4px, 1fr));
+  gap: 2px;
+}
+
+.xgover55-modal__velocity i {
+  height: 7px;
+  border: 1px solid rgba(24, 27, 7, 0.34);
+  background: rgba(24, 27, 7, 0.08);
+}
+
+.xgover55-modal__velocity i.is-active {
+  border-color: rgba(24, 27, 7, 0.85);
+  background: rgba(24, 27, 7, 0.82);
+  box-shadow: 0 0 4px rgba(24, 27, 7, 0.32);
+}
+
+.xgover55-modal__velocity output {
+  font-variant-numeric: tabular-nums;
+  font-weight: 700;
+  text-align: right;
+}
+
+.xgover55-modal__midiClock {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin-top: 5px;
+  font-size: clamp(0.48rem, 1.8vw, 0.62rem);
+  letter-spacing: 0.04em;
+}
+
+.xgover55-modal__midiClock b {
+  font-size: clamp(0.72rem, 2.8vw, 0.92rem);
+  font-variant-numeric: tabular-nums;
+  letter-spacing: 0.09em;
+}
+
+.xgover55-modal__monitorDisabled {
+  position: relative;
+  z-index: 1;
+  display: grid;
+  place-items: center;
+  min-height: 92px;
+  margin-top: 7px;
+  border: 2px dashed rgba(24, 27, 7, 0.5);
+  padding: 12px;
+  background: rgba(24, 27, 7, 0.04);
+  text-align: center;
+}
+
+.xgover55-modal__monitorDisabled strong {
+  font-size: clamp(0.68rem, 2.5vw, 0.86rem);
+  letter-spacing: 0.08em;
+}
+
+.xgover55-modal__monitorDisabled span {
+  font-size: clamp(0.48rem, 1.8vw, 0.62rem);
+  opacity: 0.68;
+}
+
+.xgover55-modal__credit {
+  padding: 12px 4px 0;
+  color: #d5d53d;
+  font-family: 'VCR OSD Mono', 'Courier New', monospace;
+  font-size: 0.82rem;
+  letter-spacing: 0.08em;
+  text-align: center;
+}
+
+@media (max-width: 575.98px) {
+  .xgover55-modal {
+    margin: 12px;
+  }
+
+  .xgover55-modal__body {
+    padding: 12px;
+  }
+
+  .xgover55-modal__screen {
+    min-height: 405px;
+    padding: 22px 16px 16px;
+  }
+
+  .xgover55-modal__brand img {
+    width: 88%;
+    height: 105px;
+  }
+}
+
+@keyframes xgover55-scan {
+  to {
+    transform: translateY(600%);
+  }
+}
+
+@keyframes xgover55-pulse {
+  50% {
+    opacity: 0.2;
+  }
+}
+
+@keyframes xgover55-command-in {
+  from {
+    opacity: 0;
+    transform: translateX(-5px);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .xgover55-modal__screen::after,
+  .xgover55-modal__translatorHeader .is-running i,
+  .xgover55-modal__command {
+    animation: none;
+  }
+
+  .xgover55-modal__commandLog {
+    scroll-behavior: auto;
+  }
+}
+
 .sc-lcd__metaValue {
   font-variant-numeric: tabular-nums;
   letter-spacing: 0.12em;

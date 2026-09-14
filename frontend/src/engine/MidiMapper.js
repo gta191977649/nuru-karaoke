@@ -7,16 +7,9 @@
 
 import { detectMidiStandard, detectDrumChannels, MIDI_STANDARDS } from './MidiStandardDetector.js'
 import { createSmfKnifeConverter, parseSmfKnifeConfig } from './converters/SmfKnifeConverter.js'
-import xgSc55CfgText from './smf/xg/XGSC55.CFG?raw'
+import { createXGOver55EventMapper } from './plugins/xg-over-55/XGOver55Engine.js'
 import sc88Sc55CfgText from './smf/88ish/SC88SC55.CFG?raw'
 const STANDARD_MAPPINGS = {
-    // XG conversion is deliberately drum-only. Melodic bank/program/CC/note
-    // events must pass through unchanged so valid SC-55 voices keep sounding.
-    [MIDI_STANDARDS.XG]: {
-        type: 'smfknife',
-        name: 'XGSC55.CFG',
-        text: xgSc55CfgText,
-    },
     GS_88: { type: 'smfknife', name: 'SC88SC55.CFG', text: sc88Sc55CfgText },
     // GM/GM2: no mapping by default
 }
@@ -53,8 +46,6 @@ export function createMidiMapper(buffer, options = {}) {
     let convertSC88 = false
     let detectedModule = null
     let smfKnifeConfig = options.smfKnifeConfig || null
-    let ignoreEqForXg = options.ignoreEqForXg ?? false
-    let ignoreFxForXg = options.ignoreFxForXg ?? false
     let resolvedStandard = detectedStandard
     let initialDrumChannels = options.initialDrumChannels || null
 
@@ -72,13 +63,6 @@ export function createMidiMapper(buffer, options = {}) {
     }
 
     resolvedStandard = detectedStandard
-
-    if (!options.ignoreEqForXg && detectedStandard === MIDI_STANDARDS.XG) {
-        ignoreEqForXg = true
-    }
-    if (!options.ignoreFxForXg && detectedStandard === MIDI_STANDARDS.XG) {
-        ignoreFxForXg = true
-    }
 
     if (!smfKnifeConfig && options.smfKnifeConfigText) {
         try {
@@ -111,9 +95,9 @@ export function createMidiMapper(buffer, options = {}) {
     }
 
     if (!mappingEntry && resolvedStandard === MIDI_STANDARDS.XG) {
-        const defaultConfig = getSmfKnifeConfigForStandard(resolvedStandard, detectedModule)
-        if (defaultConfig) {
-            mappingEntry = { type: 'smfknife', config: defaultConfig }
+        mappingEntry = {
+            type: 'factory',
+            factory: () => createXGOver55EventMapper(buffer, { ...options, initialDrumChannels }),
         }
     }
 
@@ -143,12 +127,6 @@ export function createMidiMapper(buffer, options = {}) {
             ...options,
             ignoreEq: true,
             ignoreFx: true,
-            // XG -> SC-55 is a drum-table translation, not a remix. The
-            // source MIDI remains authoritative for CC7/CC11 and velocity.
-            preserveDrumDynamics:
-                options.preserveDrumDynamics ?? resolvedStandard === MIDI_STANDARDS.XG,
-            ignoreEqForXg,
-            ignoreFxForXg,
             initialDrumChannels,
         })
     } else {

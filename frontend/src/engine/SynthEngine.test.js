@@ -148,3 +148,48 @@ describe('SynthEngine playback completion', () => {
     expect(engine._raf).toBe(0)
   })
 })
+
+describe('SynthEngine MIDI playback routing', () => {
+  it('connects identity and preconverted playback directly to the worklet sequencer', () => {
+    const engine = createEngineWithDrums(9)
+    engine._seq = { connectMIDIOutput: vi.fn() }
+
+    engine._setupMidiMapper('direct')
+
+    expect(engine._seq.connectMIDIOutput).toHaveBeenCalledWith(undefined)
+  })
+
+  it('keeps the MIDI output callback for configurations that require real-time mapping', () => {
+    const engine = createEngineWithDrums(9)
+    engine._seq = { connectMIDIOutput: vi.fn() }
+
+    engine._setupMidiMapper('realtime-map')
+
+    const output = engine._seq.connectMIDIOutput.mock.calls[0][0]
+    expect(output).toEqual({ send: expect.any(Function) })
+    output.send(Uint8Array.from([0x99, 36, 64]))
+    expect(engine._synth.sendMessage).toHaveBeenCalled()
+  })
+
+  it('restores activity and polyphony from telemetry across forward and backward seeks', () => {
+    const engine = new SynthEngine()
+    engine._playbackTelemetry = {
+      activity: Array.from({ length: 16 }, (_, channel) => channel === 0
+        ? { times: Float32Array.from([1, 4]), velocities: Uint8Array.from([40, 90]) }
+        : { times: new Float32Array(), velocities: new Uint8Array() }),
+      polyphonyTimes: Float32Array.from([1, 2, 4]),
+      polyphonyCounts: Uint16Array.from([1, 0, 2]),
+      patchChanges: [],
+    }
+
+    engine._applyPlaybackTelemetry(4.5)
+    expect(engine._channelActivityVelocity[0]).toBeCloseTo(90 / 127)
+    expect(engine._channelActivityTime[0]).toBe(4)
+    expect(engine._polyphonyCount).toBe(2)
+
+    engine._applyPlaybackTelemetry(1.5)
+    expect(engine._channelActivityVelocity[0]).toBeCloseTo(40 / 127)
+    expect(engine._channelActivityTime[0]).toBe(1)
+    expect(engine._polyphonyCount).toBe(1)
+  })
+})

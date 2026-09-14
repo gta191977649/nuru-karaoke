@@ -35,6 +35,134 @@ function createSc88Midi() {
 }
 
 describe('XG to SC-55 mapping', () => {
+    it('maps supported XG reverb and chorus types to checksummed GS SysEx', () => {
+        const mapper = createMidiMapper(createXgSystemOnMidi())
+        const cases = [
+            [[0xf0, 0x43, 0x10, 0x4c, 0x02, 0x01, 0x00, 0x02, 0x00, 0xf7],
+                [0xf0, 0x41, 0x10, 0x42, 0x12, 0x40, 0x01, 0x30, 0x00, 0x0f, 0xf7]],
+            [[0xf0, 0x43, 0x10, 0x4c, 0x02, 0x01, 0x00, 0x02, 0x01, 0xf7],
+                [0xf0, 0x41, 0x10, 0x42, 0x12, 0x40, 0x01, 0x30, 0x01, 0x0e, 0xf7]],
+            [[0xf0, 0x43, 0x10, 0x4c, 0x02, 0x01, 0x00, 0x02, 0x02, 0xf7],
+                [0xf0, 0x41, 0x10, 0x42, 0x12, 0x40, 0x01, 0x30, 0x02, 0x0d, 0xf7]],
+            [[0xf0, 0x43, 0x10, 0x4c, 0x02, 0x01, 0x00, 0x01, 0x00, 0xf7],
+                [0xf0, 0x41, 0x10, 0x42, 0x12, 0x40, 0x01, 0x30, 0x03, 0x0c, 0xf7]],
+            [[0xf0, 0x43, 0x10, 0x4c, 0x02, 0x01, 0x00, 0x01, 0x01, 0xf7],
+                [0xf0, 0x41, 0x10, 0x42, 0x12, 0x40, 0x01, 0x30, 0x04, 0x0b, 0xf7]],
+            [[0xf0, 0x43, 0x10, 0x4c, 0x02, 0x01, 0x00, 0x04, 0x00, 0xf7],
+                [0xf0, 0x41, 0x10, 0x42, 0x12, 0x40, 0x01, 0x30, 0x05, 0x0a, 0xf7]],
+            [[0xf0, 0x43, 0x10, 0x4c, 0x02, 0x01, 0x20, 0x41, 0x00, 0xf7],
+                [0xf0, 0x41, 0x10, 0x42, 0x12, 0x40, 0x01, 0x38, 0x00, 0x07, 0xf7]],
+            [[0xf0, 0x43, 0x10, 0x4c, 0x02, 0x01, 0x20, 0x41, 0x01, 0xf7],
+                [0xf0, 0x41, 0x10, 0x42, 0x12, 0x40, 0x01, 0x38, 0x01, 0x06, 0xf7]],
+            [[0xf0, 0x43, 0x10, 0x4c, 0x02, 0x01, 0x20, 0x41, 0x02, 0xf7],
+                [0xf0, 0x41, 0x10, 0x42, 0x12, 0x40, 0x01, 0x38, 0x02, 0x05, 0xf7]],
+            [[0xf0, 0x43, 0x10, 0x4c, 0x02, 0x01, 0x20, 0x41, 0x08, 0xf7],
+                [0xf0, 0x41, 0x10, 0x42, 0x12, 0x40, 0x01, 0x38, 0x03, 0x04, 0xf7]],
+            [[0xf0, 0x43, 0x10, 0x4c, 0x02, 0x01, 0x20, 0x43, 0x00, 0xf7],
+                [0xf0, 0x41, 0x10, 0x42, 0x12, 0x40, 0x01, 0x38, 0x05, 0x02, 0xf7]],
+            [[0xf0, 0x43, 0x10, 0x4c, 0x02, 0x01, 0x20, 0x43, 0x01, 0xf7],
+                [0xf0, 0x41, 0x10, 0x42, 0x12, 0x40, 0x01, 0x38, 0x05, 0x02, 0xf7]],
+        ]
+
+        for (const [source, destination] of cases) {
+            const events = mapper({ type: 'sysex', data: Uint8Array.from(source) })
+            expect(events).toHaveLength(1)
+            expect(Array.from(events[0].data)).toEqual(destination)
+        }
+    })
+
+    it('maps XG reverb time with the SC-55 curve and clamps its boundaries', () => {
+        const mapper = createMidiMapper(createXgSystemOnMidi())
+        const convert = (value) => Array.from(mapper({
+            type: 'sysex',
+            data: Uint8Array.from([0xf0, 0x43, 0x10, 0x4c, 0x02, 0x01, 0x02, value, 0xf7]),
+        })[0].data)
+
+        expect(convert(0)).toEqual([0xf0, 0x41, 0x10, 0x42, 0x12, 0x40, 0x01, 0x34, 0x00, 0x0b, 0xf7])
+        expect(convert(40)).toEqual([0xf0, 0x41, 0x10, 0x42, 0x12, 0x40, 0x01, 0x34, 80, 0x3b, 0xf7])
+        expect(convert(127)).toEqual([0xf0, 0x41, 0x10, 0x42, 0x12, 0x40, 0x01, 0x34, 127, 0x0c, 0xf7])
+    })
+
+    it('passes native-supported XG controls and filters unsupported XG effects', () => {
+        const mapper = createMidiMapper(createXgSystemOnMidi())
+        const nativeMessages = [
+            [0xf0, 0x43, 0x10, 0x4c, 0x00, 0x00, 0x04, 100, 0xf7],
+            [0xf0, 0x43, 0x10, 0x4c, 0x08, 0x00, 0x18, 90, 0xf7],
+            [0xf0, 0x43, 0x10, 0x4c, 0x30, 36, 0x02, 100, 0xf7],
+        ]
+        for (const bytes of nativeMessages) {
+            const event = { type: 'sysex', data: Uint8Array.from(bytes) }
+            expect(mapper(event)).toEqual([event])
+        }
+
+        const unsupported = { type: 'sysex', data: Uint8Array.from([
+            0xf0, 0x43, 0x10, 0x4c, 0x02, 0x01, 0x40, 0x01, 0x00, 0xf7,
+        ]) }
+        const universal = { type: 'sysex', data: Uint8Array.from([
+            0xf0, 0x7e, 0x7f, 0x09, 0x01, 0xf7,
+        ]) }
+        expect(mapper(unsupported)).toEqual([])
+        expect(mapper(universal)).toEqual([universal])
+        expect(mapper.getState()).toMatchObject({
+            xgEffectProfile: 'compatible',
+            filteredXgSysexCount: 1,
+        })
+    })
+
+    it('supports XG effect passthrough and preserves standard channel controls', () => {
+        const mapper = createMidiMapper(createXgSystemOnMidi(), { xgEffectProfile: 'passthrough' })
+        const unsupported = { type: 'sysex', data: Uint8Array.from([
+            0xf0, 0x43, 0x10, 0x4c, 0x02, 0x01, 0x40, 0x01, 0x00, 0xf7,
+        ]) }
+        expect(mapper(unsupported)).toEqual([unsupported])
+
+        for (const controller of [7, 10, 11, 91, 93, 101, 100, 6]) {
+            const event = { type: 'cc', channel: 0, controller, value: 77 }
+            expect(mapper(event)).toEqual([event])
+        }
+        const pitch = { type: 'pitch', channel: 0, value: 9000 }
+        expect(mapper(pitch)).toEqual([pitch])
+        expect(mapper.getState()).toMatchObject({
+            xgEffectProfile: 'passthrough',
+            filteredXgSysexCount: 0,
+        })
+    })
+
+    it('applies the moderate drum balance curve by destination note', () => {
+        const mapper = createMidiMapper(createXgSystemOnMidi())
+        mapper({ type: 'cc', channel: 9, controller: 0, value: 127 })
+        mapper({ type: 'program', channel: 9, value: 0 })
+
+        const expectedByNote = new Map([
+            [36, [44, 73, 103, 118, 127]],
+            [38, [41, 71, 102, 118, 127]],
+            [45, [38, 69, 102, 118, 127]],
+            [46, [36, 68, 101, 118, 127]],
+            [49, [35, 67, 101, 118, 127]],
+            [56, [30, 64, 100, 118, 127]],
+        ])
+        const inputVelocities = [30, 64, 100, 118, 127]
+
+        for (const [note, expectedVelocities] of expectedByNote) {
+            const actual = inputVelocities.map((velocity) => mapper({
+                type: 'note_on', channel: 9, note, velocity,
+            })[0].velocity)
+            expect(actual).toEqual(expectedVelocities)
+            expect(actual).toEqual([...actual].sort((a, b) => a - b))
+        }
+    })
+
+    it('can disable drum balancing without changing mapped notes', () => {
+        const mapper = createMidiMapper(createXgSystemOnMidi(), { drumBalanceProfile: 'off' })
+        mapper({ type: 'cc', channel: 9, controller: 0, value: 127 })
+        mapper({ type: 'program', channel: 9, value: 0 })
+
+        expect(mapper({ type: 'note_on', channel: 9, note: 31, velocity: 64 }))
+            .toEqual([{ type: 'note_on', channel: 9, note: 38, velocity: 64 }])
+        expect(mapper({ type: 'note_off', channel: 9, note: 31, velocity: 0 }))
+            .toEqual([{ type: 'note_off', channel: 9, note: 38, velocity: 0 }])
+    })
+
     it('leaves channel 1 voices untouched while remapping Room Kit snare and bass drum notes', () => {
         const mapper = createMidiMapper(createXgSystemOnMidi())
 
@@ -63,9 +191,9 @@ describe('XG to SC-55 mapping', () => {
         mapper({ type: 'program', channel: 9, value: 8 })
 
         expect(mapper({ type: 'note_on', channel: 9, note: 31, velocity: 96 }))
-            .toEqual([{ type: 'note_on', channel: 9, note: 38, velocity: 96 }])
+            .toEqual([{ type: 'note_on', channel: 9, note: 38, velocity: 99 }])
         expect(mapper({ type: 'note_on', channel: 9, note: 33, velocity: 96 }))
-            .toEqual([{ type: 'note_on', channel: 9, note: 36, velocity: 96 }])
+            .toEqual([{ type: 'note_on', channel: 9, note: 36, velocity: 100 }])
     })
 
     it('waits for the MIDI to redeclare a non-default drum channel after XG System On', () => {
@@ -123,19 +251,19 @@ describe('XG to SC-55 mapping', () => {
         expect(mapper({ type: 'note_on', channel: 9, note: 29, velocity: 96 }))
             .toEqual([{ type: 'note_on', channel: 9, note: 38, velocity: 0 }])
         expect(mapper({ type: 'note_on', channel: 9, note: 40, velocity: 96 }))
-            .toEqual([{ type: 'note_on', channel: 9, note: 38, velocity: 96 }])
+            .toEqual([{ type: 'note_on', channel: 9, note: 38, velocity: 99 }])
 
         mapper({ type: 'program', channel: 9, value: 25 })
         expect(mapper({ type: 'note_on', channel: 9, note: 29, velocity: 96 }))
-            .toEqual([{ type: 'note_on', channel: 9, note: 38, velocity: 96 }])
+            .toEqual([{ type: 'note_on', channel: 9, note: 38, velocity: 99 }])
         expect(mapper({ type: 'note_off', channel: 9, note: 29, velocity: 0 }))
             .toEqual([{ type: 'note_off', channel: 9, note: 38, velocity: 0 }])
         expect(mapper({ type: 'note_on', channel: 9, note: 35, velocity: 96 }))
-            .toEqual([{ type: 'note_on', channel: 9, note: 36, velocity: 96 }])
+            .toEqual([{ type: 'note_on', channel: 9, note: 36, velocity: 100 }])
         expect(mapper({ type: 'note_on', channel: 9, note: 40, velocity: 96 }))
-            .toEqual([{ type: 'note_on', channel: 9, note: 38, velocity: 96 }])
+            .toEqual([{ type: 'note_on', channel: 9, note: 38, velocity: 99 }])
         expect(mapper({ type: 'note_on', channel: 9, note: 38, velocity: 16 }))
-            .toEqual([{ type: 'note_on', channel: 9, note: 38, velocity: 16 }])
+            .toEqual([{ type: 'note_on', channel: 9, note: 38, velocity: 27 }])
         expect(mapper({ type: 'note_on', channel: 9, note: 78, velocity: 96 }))
             .toEqual([{ type: 'note_on', channel: 9, note: 29, velocity: 96 }])
 

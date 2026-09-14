@@ -37,6 +37,13 @@ const initialEngineState = {
   channelActivityVelocity: Array.from({ length: 16 }, () => 0),
   channelActivityTime: Array.from({ length: 16 }, () => -1),
   polyphonyCount: 0,
+  midiMapState: {
+    conversionEngine: null,
+    conversionApplied: false,
+    conversionMs: 0,
+    playbackRouting: 'direct',
+    filteredXgSysexCount: 0,
+  },
   xgDrumMapEnabled: true,
   xgPreferGsPlayback: true,
   smfKnifeConfigName: '',
