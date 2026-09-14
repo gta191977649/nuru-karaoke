@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState, useCallback } from 'react'
-import { Button, Col, Container, Form, Row, Tab, Tabs } from 'react-bootstrap'
+import { Button, Col, Container, Form, Modal, Row, Tab, Tabs } from 'react-bootstrap'
 import { extractReferenceMelodyFromMidiData, getTargetMidiAtTime } from './audio/midi/referenceMelody.js'
 import { sharedPitchEngine, startSharedMic, stopSharedMic } from './audio/pitch/sharedPitchEngine.js'
 import { DEFAULT_CONFIG } from './audioEngine.js'
@@ -20,6 +20,8 @@ import { useSingingTechnique } from '../karaoke/hooks/useSingingTechnique.js'
 import gmLogo from '../assets/gm.svg'
 import gsLogo from '../assets/gs.svg'
 import xgLogo from '../assets/xg.svg'
+import xgOver55Logo from '../assets/xgover55.png'
+import xgOver55Icon from '../assets/xgover55-icon.png'
 import scLogo from '../assets/sc.png'
 
 const DEMO_MIDI_URL = new URL('../library/demo/sc55.mid', import.meta.url).toString()
@@ -37,6 +39,25 @@ const LCD_SEGMENTS = 8
 const LCD_SEGMENT_INDEXES = Array.from({ length: LCD_SEGMENTS }, (_, idx) => idx)
 const LCD_HOLD_SEC = 0.12
 const LCD_DECAY_SEC = 0.65
+const XG_TRANSLATION_MESSAGES = [
+  ['XG 43 10 4C 00 00 7E', 'RESET SC-55 ENGINE'],
+  ['DRUM CH10 NOTE 36 V064', 'NOTE 36 V073 // KICK'],
+  ['DRUM CH10 NOTE 38 V072', 'NOTE 38 V079 // SNARE'],
+  ['XG REVERB HALL 2', 'GS REVERB HALL 2'],
+  ['XG CHORUS TYPE 3', 'GS CHORUS TYPE 3'],
+  ['PART FILTER CUTOFF CH03', 'NATIVE XG PASS'],
+  ['CC91 REVERB SEND CH05', 'PASSTHROUGH'],
+  ['VARIATION FX 02 01 40', 'FILTERED // UNSUPPORTED'],
+  ['BANK 127 PROGRAM 00', 'SC-55 STANDARD KIT'],
+  ['RPN 00/00 BEND RANGE', 'PASSTHROUGH'],
+]
+
+const formatMidiClock = (seconds) => {
+  const totalTenths = Math.max(0, Math.floor((Number(seconds) || 0) * 10))
+  const minutes = Math.floor(totalTenths / 600)
+  const wholeSeconds = Math.floor((totalTenths % 600) / 10)
+  return `${String(minutes).padStart(2, '0')}:${String(wholeSeconds).padStart(2, '0')}.${totalTenths % 10}`
+}
 const MIDI_MARK_ACTIVE = 'rgba(70, 32, 0, 0.75)'
 const MIDI_MARK_INACTIVE = 'rgba(110, 58, 0, 0.18)'
 
@@ -231,10 +252,33 @@ function Synth({ onNavigateHome }) {
       ? 'GM'
       : detectedStandard
   const isXgActive = activeStandard === 'XG'
+  const isXgOver55Active = state.midiMapState?.conversionEngine === 'xg-over-55' &&
+    state.midiMapState?.conversionApplied === true
   const isGsActive = activeStandard === 'GS'
   const isGmActive = activeStandard === 'GM'
   const detectedModule = state.midiMapState?.detectedModule
   const showSoundCanvas = detectedModule === '55' || detectedModule === '88' || detectedModule === '88PRO'
+  const [showXgOver55Info, setShowXgOver55Info] = useState(false)
+  const trackXgOver55Status = showXgOver55Info && isXgOver55Active
+  const latestPartIndex = trackXgOver55Status
+    ? (state.channelActivityTime || []).reduce((latest, time, index, times) =>
+      Number(time) > Number(times[latest] ?? -1) ? index : latest, 0)
+    : 9
+  const latestPartTime = trackXgOver55Status
+    ? Number(state.channelActivityTime?.[latestPartIndex] ?? -1)
+    : -1
+  const hasActivePart = trackXgOver55Status && latestPartTime >= 0
+  const activePartIndex = hasActivePart ? latestPartIndex : 9
+  const activePart = trackXgOver55Status ? (state.midiChannels?.[activePartIndex] || {}) : {}
+  const activePartName = trackXgOver55Status
+    ? (state.channelInstrumentNames?.[activePartIndex] || activePart.name || '—')
+    : '—'
+  const programFromName = activePartName.match(/\((\d+)\)$/)?.[1]
+  const activeProgram = String(programFromName || (Number(activePart.program) || 0) + 1).padStart(3, '0')
+  const transportLabel = trackXgOver55Status
+    ? (state.isPlaying ? 'PLAYING' : state.midiName ? 'PAUSED' : 'STANDBY')
+    : 'OFFLINE'
+  const [xgTranslationLog, setXgTranslationLog] = useState([])
   const midiMarkStyle = (isActive) => ({
     opacity: isActive ? 0.7 : 0.1,
     color: isActive ? MIDI_MARK_ACTIVE : MIDI_MARK_INACTIVE,
@@ -299,6 +343,9 @@ function Synth({ onNavigateHome }) {
   const fullPitchHistoryRef = useRef([])
   const pitchFrameHistoryRef = useRef([])
   const currentTimeRef = useRef(0)
+  const xgTranslationCursorRef = useRef(0)
+  const xgTranslationSequenceRef = useRef(0)
+  const xgTranslationLogRef = useRef(null)
   const transpositionRef = useRef(0)
   const micActiveRef = useRef(false)
   const rawF0HistoryRef = useRef([])
@@ -307,6 +354,43 @@ function Synth({ onNavigateHome }) {
   const detectorOptions = useMemo(() => pitchEngine.listDetectors(), [pitchEngine])
   const pipelineStages = pipelineDebug.stages || {}
   const pipelineMetrics = pipelineDebug.metrics || {}
+
+  const openXgOver55Info = () => {
+    xgTranslationCursorRef.current = 0
+    xgTranslationSequenceRef.current = 1
+    setXgTranslationLog([{
+      id: 0,
+      time: Math.max(0, Number(currentTimeRef.current) || 0),
+      source: 'XG SYSTEM ONLINE',
+      target: isXgOver55Active ? 'SC-55 LINK READY' : 'AWAITING XG INPUT',
+    }])
+    setShowXgOver55Info(true)
+  }
+
+  useEffect(() => {
+    if (!showXgOver55Info || !state.isPlaying || !isXgOver55Active) return undefined
+    const appendTranslation = () => {
+      const message = XG_TRANSLATION_MESSAGES[
+        xgTranslationCursorRef.current % XG_TRANSLATION_MESSAGES.length
+      ]
+      xgTranslationCursorRef.current += 1
+      const id = xgTranslationSequenceRef.current++
+      setXgTranslationLog((current) => [...current.slice(-7), {
+        id,
+        time: Math.max(0, Number(currentTimeRef.current) || 0),
+        source: message[0],
+        target: message[1],
+      }])
+    }
+    appendTranslation()
+    const interval = window.setInterval(appendTranslation, 560)
+    return () => window.clearInterval(interval)
+  }, [showXgOver55Info, state.isPlaying, isXgOver55Active])
+
+  useEffect(() => {
+    const log = xgTranslationLogRef.current
+    if (log) log.scrollTop = log.scrollHeight
+  }, [xgTranslationLog])
 
   /* eslint-disable react-hooks/exhaustive-deps */
   const noteNames = ['C', 'C#', 'D', 'D#', 'E', 'F', 'F#', 'G', 'G#', 'A', 'A#', 'B']
@@ -818,6 +902,11 @@ function Synth({ onNavigateHome }) {
       return clampNumber(lastVelocity * (1 - decay), 0, 1)
     })
   }, [state.channelActivityTime, state.channelActivityVelocity, state.currentTime])
+  const activeVelocity = trackXgOver55Status
+    ? Math.max(0, Math.min(1, Number(lcdLevels[activePartIndex]) || 0))
+    : 0
+  const activeVelocityMidi = Math.round(activeVelocity * 127)
+  const activeVelocitySegments = Math.round(activeVelocity * LCD_SEGMENTS)
 
   const { activeTechniques, techniqueHistory } = useSingingTechnique(sharedPitchEngine, currentTimeRef, micActive)
   const [activeTab, setActiveTab] = useState('pitch-debug')
@@ -980,6 +1069,18 @@ function Synth({ onNavigateHome }) {
               Detected by: {state.midiMapState?.detectedBy || '—'}
             </div>
             <div className="small text-muted">
+              Playback routing: {state.midiMapState?.playbackRouting || '—'}
+            </div>
+            <div className="small text-muted">
+              Conversion: {state.midiMapState?.conversionEngine || 'none'}
+              {state.midiMapState?.conversionApplied
+                ? ` (${Number(state.midiMapState?.conversionMs || 0).toFixed(1)} ms)`
+                : ''}
+            </div>
+            <div className="small text-muted">
+              Filtered XG SysEx: {state.midiMapState?.filteredXgSysexCount || 0}
+            </div>
+            <div className="small text-muted">
               Drum channels: {formatChannelList(state.midiChannels?.map((ch) => ch?.isDrum))}
             </div>
             <div className="small text-muted">
@@ -1026,6 +1127,20 @@ function Synth({ onNavigateHome }) {
                     className="sc-lcd__metaIcon"
                     style={midiMarkStyle(isGmActive)}
                   />
+                  <button
+                    type="button"
+                    className="sc-lcd__metaLogoButton"
+                    style={midiMarkStyle(isXgOver55Active)}
+                    aria-label="About XGOver55"
+                    title="About XGOver55"
+                    onClick={openXgOver55Info}
+                  >
+                    <img
+                      src={xgOver55Icon}
+                      alt="XG over SC-55"
+                      className="sc-lcd__metaIcon sc-lcd__metaIcon--xgover55"
+                    />
+                  </button>
                 </div>
               </div>
               <SoundCanvasLcd
@@ -2073,6 +2188,102 @@ function Synth({ onNavigateHome }) {
           </div>
         </Col>
       </Row>
+
+      <Modal
+        show={showXgOver55Info}
+        onHide={() => setShowXgOver55Info(false)}
+        centered
+        dialogClassName="xgover55-modal"
+        aria-labelledby="xgover55-modal-title"
+      >
+        <Modal.Body className="xgover55-modal__body">
+          <button
+            type="button"
+            className="xgover55-modal__close"
+            aria-label="Close XGOver55 information"
+            onClick={() => setShowXgOver55Info(false)}
+          >
+            ×
+          </button>
+          <div className="xgover55-modal__screen">
+            <div className="xgover55-modal__topline">
+              <span>V1.0</span>
+              <span className="text-end">ENGINE: SC-55<br />INPUT: XG</span>
+            </div>
+            <div className="xgover55-modal__brand">
+              <img src={xgOver55Logo} alt="XGOver55" />
+              <div id="xgover55-modal-title">XGOver55</div>
+            </div>
+            <div className="xgover55-modal__translator">
+              <div className="xgover55-modal__translatorHeader">
+                <span>TRANSLATION STREAM // XG→SC-55</span>
+                <span className={state.isPlaying && isXgOver55Active ? 'is-running' : ''}>
+                  <i aria-hidden="true" />
+                  {state.isPlaying && isXgOver55Active
+                    ? 'TRANSLATING'
+                    : isXgOver55Active ? 'STANDBY' : 'NO XG DATA'}
+                </span>
+              </div>
+              <div
+                ref={xgTranslationLogRef}
+                className="xgover55-modal__commandLog"
+                aria-label="XG to SC-55 translation commands"
+              >
+                {xgTranslationLog.map((entry, index) => (
+                  <div
+                    key={entry.id}
+                    className={`xgover55-modal__command${index === xgTranslationLog.length - 1 ? ' is-latest' : ''}`}
+                  >
+                    <span>{entry.time.toFixed(2).padStart(6, '0')}</span>
+                    <span><b>{entry.source}</b><em>→ {entry.target}</em></span>
+                  </div>
+                ))}
+              </div>
+            </div>
+            {isXgOver55Active ? <div className="xgover55-modal__midiStatus">
+              <div className="xgover55-modal__statusGrid">
+                <div>
+                  <span>ACTIVE PART</span>
+                  <strong>{hasActivePart ? String(activePartIndex + 1).padStart(2, '0') : '--'}</strong>
+                  <small>{activePart.isDrum ? 'DRUM' : 'MELODIC'}</small>
+                </div>
+                <div>
+                  <span>PROGRAM</span>
+                  <strong>{activeProgram}</strong>
+                  <small title={activePartName}>{activePartName}</small>
+                </div>
+                <div>
+                  <span>POLYPHONY</span>
+                  <strong>{String(Math.max(0, Number(state.polyphonyCount) || 0)).padStart(2, '0')}</strong>
+                  <small>{transportLabel}</small>
+                </div>
+              </div>
+              <div className="xgover55-modal__velocity">
+                <span>VELOCITY</span>
+                <div aria-label={`Velocity ${activeVelocityMidi}`}>
+                  {LCD_SEGMENT_INDEXES.map((segment) => (
+                    <i
+                      key={segment}
+                      className={segment < activeVelocitySegments ? 'is-active' : ''}
+                      aria-hidden="true"
+                    />
+                  ))}
+                </div>
+                <output>{String(activeVelocityMidi).padStart(3, '0')}</output>
+              </div>
+              <div className="xgover55-modal__midiClock">
+                <span>MIDI TIME</span>
+                <b>{formatMidiClock(state.currentTime)}</b>
+                <span>COMPATIBLE MODE</span>
+              </div>
+            </div> : <div className="xgover55-modal__monitorDisabled">
+              <strong>LIVE MIDI MONITOR OFFLINE</strong>
+              <span>LOAD AN XG MIDI TO ENABLE TRACKING</span>
+            </div>}
+          </div>
+          <div className="xgover55-modal__credit">developed by Nurupo</div>
+        </Modal.Body>
+      </Modal>
     </Container >
   )
 }

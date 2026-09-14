@@ -1,5 +1,6 @@
 import { Sequencer, WorkletSynthesizer } from 'spessasynth_lib'
 import { BasicMIDI } from 'spessasynth_core'
+import { XGOver55Engine, buildTelemetry } from './plugins/xg-over-55/XGOver55Engine.js'
 import processorUrl from 'spessasynth_lib/dist/spessasynth_processor.min.js?url'
 import defaultSoundFontUrl from '../soundfont/sc55.sf2'
 import { createMidiMapper } from './MidiMapper.js'
@@ -17,6 +18,18 @@ const DEFAULT_CONFIG = {
   enableMIDIStandardMapping: true,
   reverb: 1.2,
   chorus: 1.2,
+}
+
+function withPlaybackMapState(state = {}, playbackRouting = 'direct', overrides = {}) {
+  return {
+    conversionEngine: null,
+    conversionApplied: false,
+    conversionMs: 0,
+    filteredXgSysexCount: 0,
+    ...state,
+    playbackRouting,
+    ...overrides,
+  }
 }
 
 const MIDI_STATUS = {
@@ -293,6 +306,12 @@ class SynthEngine {
     this._smfKnifeForce = false
     this._lastMidiBuffer = null
     this._referenceMidiData = null
+    this._xgOver55Engine = new XGOver55Engine()
+    this._loadGeneration = 0
+    this._playbackTelemetry = null
+    this._playbackRouting = 'direct'
+    this._telemetryPatchCursor = 0
+    this._telemetryLastTime = -1
 
     this._midiMapper = createMidiMapper(null)
     this._midiEvent = createMidiEvent()
@@ -330,12 +349,12 @@ class SynthEngine {
 
     this._midiMapper.setEnabled(DEFAULT_CONFIG.enableMIDIStandardMapping)
     this._midiMapper.onStateChange = (state) => {
-      this._setState({ midiMapState: state })
+      this._setState({ midiMapState: withPlaybackMapState(state, this._playbackRouting) })
       this._bgSyncDrums(state.drumChannels)
     }
     this._setState({
       enableMIDIStandardMapping: DEFAULT_CONFIG.enableMIDIStandardMapping,
-      midiMapState: this._midiMapper.getState(),
+      midiMapState: withPlaybackMapState(this._midiMapper.getState(), this._playbackRouting),
       reverbGain: DEFAULT_CONFIG.reverb,
       chorusGain: DEFAULT_CONFIG.chorus,
       smfKnifeConfigName: '',
@@ -487,6 +506,7 @@ class SynthEngine {
       if (seq) {
         const currentTime = seq.currentHighResolutionTime ?? seq.currentTime ?? 0
         const duration = seq.duration || 0
+        if (this._playbackRouting === 'direct') this._applyPlaybackTelemetry(currentTime)
 
         const uiState = getKaraokeStoreState()
         const t = currentTime - (uiState.lyricOffsetMs || 0) / 1000
@@ -619,10 +639,15 @@ class SynthEngine {
     }
   }
 
-  _setupMidiMapper() {
+  _setupMidiMapper(routing = this._playbackRouting) {
     if (!this._seq || !this._synth || !this._midiMapper) return
     // Sync initial state
     this._bgSyncDrums(this._midiMapper.getState().drumChannels)
+
+    if (routing === 'direct') {
+      this._seq.connectMIDIOutput(undefined)
+      return
+    }
 
     this._seq.connectMIDIOutput({
       send: (data) => {
@@ -657,13 +682,13 @@ class SynthEngine {
       this._midiMapper.reset()
     }
     this._midiMapper.onStateChange = (state) => {
-      this._setState({ midiMapState: state })
+      this._setState({ midiMapState: withPlaybackMapState(state, this._playbackRouting) })
       console.log(state)
       this._bgSyncDrums(state.drumChannels)
     }
     const newState = this._midiMapper.getState()
     this._setState({
-      midiMapState: newState,
+      midiMapState: withPlaybackMapState(newState, this._playbackRouting),
       smfKnifeConfigName: newState?.globalMode === 'smfknife' ? newState.configName : '',
       smfKnifeSource: newState?.mappingSource || '',
       smfKnifeDestination: newState?.mappingDestination || '',
@@ -911,7 +936,17 @@ class SynthEngine {
   }
 
   async loadMIDI({ buffer, midiName, midiUrl = '' }) {
+    const loadGeneration = ++this._loadGeneration
     await this.ensureInitialized()
+    if (loadGeneration !== this._loadGeneration) return null
+    this._setState({
+      midiMapState: {
+        ...(getKaraokeStoreState().midiMapState || {}),
+        conversionEngine: null,
+        conversionApplied: false,
+        conversionMs: 0,
+      },
+    })
     this.panic()
     this._autoGainController?.setInitialGainDb(0)
     this._autoPlayOnNextSong = true
@@ -934,7 +969,60 @@ class SynthEngine {
     }
 
     this._rebuildMidiMapper(buffer)
-    this._setupMidiMapper()
+    const baseMapState = this._midiMapper.getState()
+    const mappingEnabled = getKaraokeStoreState().enableMIDIStandardMapping ?? DEFAULT_CONFIG.enableMIDIStandardMapping
+    const shouldConvertXg = mappingEnabled && !this._smfKnifeConfigText && this._xgOver55Engine.canHandle(buffer)
+    let playbackBuffer = buffer
+    let conversionApplied = false
+    let conversionMs = 0
+    let conversionState = null
+    let telemetry = null
+
+    if (shouldConvertXg) {
+      this._setState({ status: `Converting XG for SC-55: ${midiName}` })
+      try {
+        const workerBuffer = buffer instanceof ArrayBuffer
+          ? buffer.slice(0)
+          : buffer.buffer.slice(buffer.byteOffset, buffer.byteOffset + buffer.byteLength)
+        const result = await this._xgOver55Engine.convert(workerBuffer, { fileName: midiName })
+        if (loadGeneration !== this._loadGeneration) return null
+        if (result?.conversionApplied && result.buffer instanceof ArrayBuffer) {
+          playbackBuffer = result.buffer
+          conversionApplied = true
+          conversionMs = Number(result.conversionMs) || 0
+          conversionState = result.state || null
+          telemetry = result.telemetry || null
+        }
+      } catch (error) {
+        console.warn('[SynthEngine] XGOver55 conversion failed; playing original MIDI', error)
+      }
+    }
+
+    const isIdentity = baseMapState?.configName === 'None (Identity)'
+    const isXg = baseMapState?.detectedStandard === 'XG'
+    this._playbackRouting = (isIdentity || (isXg && !this._smfKnifeConfigText))
+      ? 'direct'
+      : 'realtime-map'
+    if (!telemetry && this._playbackRouting === 'direct' && this._referenceMidiData) {
+      telemetry = buildTelemetry(this._referenceMidiData)
+    }
+    this._playbackTelemetry = telemetry
+    this._telemetryPatchCursor = 0
+    this._telemetryLastTime = -1
+    this._setupMidiMapper(this._playbackRouting)
+
+    const midiMapState = withPlaybackMapState({
+      ...baseMapState,
+      ...(conversionState || {}),
+      detectedStandard: baseMapState?.detectedStandard,
+      detectedVariant: baseMapState?.detectedVariant,
+      detectedModule: baseMapState?.detectedModule,
+    }, this._playbackRouting, {
+      conversionEngine: conversionApplied ? 'xg-over-55' : null,
+      conversionApplied,
+      conversionMs,
+    })
+    this._setState({ midiMapState })
 
     this._resetChannelActivity()
     this._resetPolyphony()
@@ -942,7 +1030,7 @@ class SynthEngine {
 
     this._seq.pause()
     this._synth.stopAll(true)
-    this._seq.loadNewSongList([{ binary: buffer, fileName: midiName }])
+    this._seq.loadNewSongList([{ binary: playbackBuffer, fileName: midiName }])
     this._seq.currentTime = 0
     const initialDuration = this._seq?.duration || 0
     this._setState({
@@ -1143,6 +1231,59 @@ class SynthEngine {
     }
   }
 
+  _applyPlaybackTelemetry(time) {
+    const telemetry = this._playbackTelemetry
+    if (!telemetry) return
+    const upperBound = (values, target) => {
+      let low = 0
+      let high = values.length
+      while (low < high) {
+        const middle = (low + high) >> 1
+        if (values[middle] <= target) low = middle + 1
+        else high = middle
+      }
+      return low
+    }
+
+    telemetry.activity.forEach((activity, channel) => {
+      const index = upperBound(activity.times, time) - 1
+      this._channelActivityTime[channel] = index >= 0 ? activity.times[index] : -1
+      this._channelActivityVelocity[channel] = index >= 0 ? activity.velocities[index] / 127 : 0
+    })
+    const polyphonyIndex = upperBound(telemetry.polyphonyTimes, time) - 1
+    this._polyphonyCount = polyphonyIndex >= 0 ? telemetry.polyphonyCounts[polyphonyIndex] : 0
+    this._activityDirty = true
+    this._polyphonyDirty = true
+
+    if (time < this._telemetryLastTime) {
+      this._telemetryPatchCursor = 0
+      this._channelPrograms.forEach((patch) => {
+        patch.program = 0
+        patch.bankMSB = 0
+        patch.bankLSB = 0
+      })
+    }
+    while (this._telemetryPatchCursor < telemetry.patchChanges.length &&
+      telemetry.patchChanges[this._telemetryPatchCursor].time <= time) {
+      const change = telemetry.patchChanges[this._telemetryPatchCursor]
+      this._channelPrograms[change.channel] = {
+        program: change.program,
+        bankMSB: change.bankMSB,
+        bankLSB: change.bankLSB,
+      }
+      this._telemetryPatchCursor += 1
+      this._instrumentDirty = true
+    }
+    if (this._instrumentDirty && this._synth) {
+      this._channelInstrumentNames = this._channelPrograms.map((patch, channel) =>
+        resolvePatchName(this._synth.presetList, {
+          ...patch,
+          isGMGSDrum: channel === 9 || Boolean(this._midiMapper?.getState?.()?.drumChannels?.[channel]),
+        }, channel))
+    }
+    this._telemetryLastTime = time
+  }
+
   async stopAndAdvance(options = {}) {
     await this.ensureInitialized()
     if (!this._synth || !this._seq) return
@@ -1273,6 +1414,18 @@ class SynthEngine {
     const next = Boolean(enabled)
     this._midiMapper?.setEnabled(next)
     this._setState({ enableMIDIStandardMapping: next })
+    if (this._lastMidiBuffer && this._midiMapper?.getState?.()?.detectedStandard === 'XG') {
+      const { midiName, midiUrl } = getKaraokeStoreState()
+      this.loadMIDI({ buffer: this._lastMidiBuffer, midiName, midiUrl }).catch((error) => {
+        console.warn('[SynthEngine] Failed to reload MIDI mapping mode', error)
+      })
+    }
+  }
+
+  dispose() {
+    this._loadGeneration += 1
+    this._xgOver55Engine.dispose()
+    this._stopClock()
   }
 
   shiftTransposition(deltaSemitones) {

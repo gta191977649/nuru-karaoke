@@ -234,7 +234,7 @@ export function parseSmfKnifeConfig(text, options = {}) {
             continue
         }
         if (section === 'EXCLUSIVE') {
-            if (!line.startsWith('(')) continue
+            if (!pendingExclusive && !line.startsWith('(')) continue
             const parsed = parseSysexLine(line)
             if (!pendingExclusive) {
                 pendingExclusive = parsed
@@ -533,8 +533,13 @@ export function createSmfKnifeConverter(config, options = {}) {
 
     const drumBankRemap = options.enableDrumBankRemap === true
     const preserveDrumDynamics = options.preserveDrumDynamics === true
-    const ignoreEq = options.ignoreEq === true || (options.ignoreEqForXg === true && config.sourceHint === 'XG')
-    const ignoreFx = options.ignoreFx === true || (options.ignoreFxForXg === true && config.sourceHint === 'XG')
+    const mapDrumVelocity = typeof options.mapDrumVelocity === 'function' ? options.mapDrumVelocity : null
+    const filterSysex = typeof options.filterSysex === 'function' ? options.filterSysex : null
+    const detectDrumPartSysex = typeof options.detectDrumPartSysex === 'function'
+        ? options.detectDrumPartSysex
+        : null
+    const ignoreEq = options.ignoreEq === true
+    const ignoreFx = options.ignoreFx === true
     const initialDrumChannels = options.initialDrumChannels?.length === 16
         ? Uint8Array.from(options.initialDrumChannels, (v) => (v ? 1 : 0))
         : null
@@ -583,19 +588,11 @@ export function createSmfKnifeConverter(config, options = {}) {
                 if (process.onStateChange) process.onStateChange(process.getState())
             }
 
-            // Yamaha XG Drum Setup (Multi Part / Part Mode)
-            if (event.data.length >= 9 &&
-                event.data[0] === 0xF0 &&
-                event.data[1] === 0x43 &&
-                event.data[2] === 0x10 &&
-                event.data[3] === 0x4C &&
-                event.data[4] === 0x08 &&
-                event.data[6] === 0x07) {
-                const part = event.data[5]
-                const mode = event.data[7]
-                if (part >= 0x00 && part <= 0x0F) {
-                    const ch = part
-                    const isDrum = mode !== 0x00
+            const detectedDrumPart = detectDrumPartSysex?.(event.data)
+            if (detectedDrumPart) {
+                const ch = detectedDrumPart.channel
+                const isDrum = Boolean(detectedDrumPart.isDrum)
+                if (ch >= 0 && ch <= 15) {
                     state.drumPartMode[ch] = isDrum ? 1 : 0
                     state.drumChannels[ch] = isDrum ? 1 : 0
                     if (!isDrum) {
@@ -603,9 +600,8 @@ export function createSmfKnifeConverter(config, options = {}) {
                         state.noteMapCache[ch].fill(-1)
                     }
                     if (isDrum && ch !== 9) {
-                        console.log('[XG Drum]', {
+                        console.log(detectedDrumPart.label || '[Drum Part]', {
                             channel: ch + 1,
-                            mode,
                             sysex: formatSysexHex(event.data),
                         })
                     }
@@ -656,6 +652,7 @@ export function createSmfKnifeConverter(config, options = {}) {
                     return [createSysexEvent(data)]
                 }
             }
+            if (filterSysex && !filterSysex(event.data)) return []
             return [event]
         }
 
@@ -833,7 +830,9 @@ export function createSmfKnifeConverter(config, options = {}) {
                             }
                             if (Number.isFinite(mapping.destProgram)) events.push(createProgramEvent(ch, mapping.destProgram))
                             event.note = clamp7bit(mappedNote)
-                            event.velocity = clamp7bit(velocity)
+                            event.velocity = mapDrumVelocity
+                                ? mapDrumVelocity(velocity, event.note, state, ch)
+                                : clamp7bit(velocity)
                             events.push(event)
                             return events
                         }
@@ -847,6 +846,10 @@ export function createSmfKnifeConverter(config, options = {}) {
 
             if (!isNoteOff && config.velocity) {
                 velocity = applyValueMap(velocity, config.velocity)
+            }
+
+            if (isDrum && !isNoteOff && mapDrumVelocity) {
+                velocity = mapDrumVelocity(velocity, note, state, ch)
             }
 
             event.note = clamp7bit(note)
