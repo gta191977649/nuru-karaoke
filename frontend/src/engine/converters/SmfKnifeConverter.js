@@ -538,6 +538,9 @@ export function createSmfKnifeConverter(config, options = {}) {
     const detectDrumPartSysex = typeof options.detectDrumPartSysex === 'function'
         ? options.detectDrumPartSysex
         : null
+    const resolveDrumKitSource = typeof options.resolveDrumKitSource === 'function'
+        ? options.resolveDrumKitSource
+        : null
     const ignoreEq = options.ignoreEq === true
     const ignoreFx = options.ignoreFx === true
     const initialDrumChannels = options.initialDrumChannels?.length === 16
@@ -742,7 +745,19 @@ export function createSmfKnifeConverter(config, options = {}) {
             }
 
             if (state.drumChannels[ch]) {
-                const kit = findDrumKit(config, state.bankMSB[ch], state.bankLSB[ch], srcProgram)
+                const resolvedSource = resolveDrumKitSource?.(
+                    state.bankMSB[ch],
+                    state.bankLSB[ch],
+                    srcProgram,
+                    state,
+                    ch,
+                )
+                const kit = findDrumKit(
+                    config,
+                    resolvedSource?.bankMSB ?? state.bankMSB[ch],
+                    resolvedSource?.bankLSB ?? state.bankLSB[ch],
+                    resolvedSource?.program ?? srcProgram,
+                )
                 state.noteMapCache[ch].fill(-1)
                 if (kit) {
                     state.activeDrumKits[ch] = kit
