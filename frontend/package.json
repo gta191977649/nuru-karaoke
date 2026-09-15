@@ -8,6 +8,8 @@
     "build": "vite build",
     "lint": "eslint .",
     "test": "vitest",
+    "midi-db:update": "node scripts/update-midi-db.mjs",
+    "midi-db:check": "node scripts/update-midi-db.mjs --check",
     "preview": "vite preview"
   },
   "dependencies": {

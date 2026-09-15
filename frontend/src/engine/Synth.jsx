@@ -39,19 +39,6 @@ const LCD_SEGMENTS = 8
 const LCD_SEGMENT_INDEXES = Array.from({ length: LCD_SEGMENTS }, (_, idx) => idx)
 const LCD_HOLD_SEC = 0.12
 const LCD_DECAY_SEC = 0.65
-const XG_TRANSLATION_MESSAGES = [
-  ['XG 43 10 4C 00 00 7E', 'RESET SC-55 ENGINE'],
-  ['DRUM CH10 NOTE 36 V064', 'NOTE 36 V073 // KICK'],
-  ['DRUM CH10 NOTE 38 V072', 'NOTE 38 V079 // SNARE'],
-  ['XG REVERB HALL 2', 'GS REVERB HALL 2'],
-  ['XG CHORUS TYPE 3', 'GS CHORUS TYPE 3'],
-  ['PART FILTER CUTOFF CH03', 'NATIVE XG PASS'],
-  ['CC91 REVERB SEND CH05', 'PASSTHROUGH'],
-  ['VARIATION FX 02 01 40', 'FILTERED // UNSUPPORTED'],
-  ['BANK 127 PROGRAM 00', 'SC-55 STANDARD KIT'],
-  ['RPN 00/00 BEND RANGE', 'PASSTHROUGH'],
-]
-
 const formatMidiClock = (seconds) => {
   const totalTenths = Math.max(0, Math.floor((Number(seconds) || 0) * 10))
   const minutes = Math.floor(totalTenths / 600)
@@ -356,36 +343,51 @@ function Synth({ onNavigateHome }) {
   const pipelineMetrics = pipelineDebug.metrics || {}
 
   const openXgOver55Info = () => {
-    xgTranslationCursorRef.current = 0
-    xgTranslationSequenceRef.current = 1
-    setXgTranslationLog([{
+    const now = Math.max(0, Number(currentTimeRef.current) || 0)
+    const timeline = isXgOver55Active ? (state.midiMapState?.translationTimeline || []) : []
+    const cursor = timeline.findIndex((entry) => entry.time > now)
+    xgTranslationCursorRef.current = cursor < 0 ? timeline.length : cursor
+    xgTranslationSequenceRef.current = xgTranslationCursorRef.current + 1
+    const visibleStart = Math.max(0, xgTranslationCursorRef.current - 8)
+    const visible = timeline.slice(visibleStart, xgTranslationCursorRef.current)
+      .map((entry, index) => ({ ...entry, id: `${visibleStart + index}-${entry.time}` }))
+    setXgTranslationLog(visible.length ? visible : [{
       id: 0,
-      time: Math.max(0, Number(currentTimeRef.current) || 0),
-      source: 'XG SYSTEM ONLINE',
-      target: isXgOver55Active ? 'SC-55 LINK READY' : 'AWAITING XG INPUT',
+      time: now,
+      source: isXgOver55Active ? 'XG DATA READY' : 'XG ENGINE OFFLINE',
+      target: isXgOver55Active ? 'SC-55 LINK STANDBY' : 'AWAITING XG INPUT',
     }])
     setShowXgOver55Info(true)
   }
 
   useEffect(() => {
     if (!showXgOver55Info || !state.isPlaying || !isXgOver55Active) return undefined
+    const timeline = state.midiMapState?.translationTimeline || []
     const appendTranslation = () => {
-      const message = XG_TRANSLATION_MESSAGES[
-        xgTranslationCursorRef.current % XG_TRANSLATION_MESSAGES.length
-      ]
-      xgTranslationCursorRef.current += 1
-      const id = xgTranslationSequenceRef.current++
-      setXgTranslationLog((current) => [...current.slice(-7), {
-        id,
-        time: Math.max(0, Number(currentTimeRef.current) || 0),
-        source: message[0],
-        target: message[1],
-      }])
+      const now = Math.max(0, Number(currentTimeRef.current) || 0)
+      let cursor = xgTranslationCursorRef.current
+      if (cursor > 0 && timeline[cursor - 1]?.time > now) {
+        const nextCursor = timeline.findIndex((entry) => entry.time > now)
+        cursor = nextCursor < 0 ? timeline.length : nextCursor
+        xgTranslationCursorRef.current = cursor
+        setXgTranslationLog(timeline.slice(Math.max(0, cursor - 8), cursor).map((entry, index) => ({
+          ...entry,
+          id: `seek-${cursor - 8 + index}-${entry.time}`,
+        })))
+        return
+      }
+      const due = []
+      while (cursor < timeline.length && timeline[cursor].time <= now) {
+        due.push({ ...timeline[cursor], id: xgTranslationSequenceRef.current++ })
+        cursor += 1
+      }
+      xgTranslationCursorRef.current = cursor
+      if (due.length) setXgTranslationLog((current) => [...current, ...due].slice(-8))
     }
     appendTranslation()
-    const interval = window.setInterval(appendTranslation, 560)
+    const interval = window.setInterval(appendTranslation, 160)
     return () => window.clearInterval(interval)
-  }, [showXgOver55Info, state.isPlaying, isXgOver55Active])
+  }, [showXgOver55Info, state.isPlaying, state.midiMapState?.translationTimeline, isXgOver55Active])
 
   useEffect(() => {
     const log = xgTranslationLogRef.current
@@ -1079,6 +1081,22 @@ function Synth({ onNavigateHome }) {
             </div>
             <div className="small text-muted">
               Filtered XG SysEx: {state.midiMapState?.filteredXgSysexCount || 0}
+            </div>
+            <div className="small text-muted">
+              XG SysEx native / converted / unknown:{' '}
+              {state.midiMapState?.nativeXgSysexCount || 0} /{' '}
+              {state.midiMapState?.convertedXgSysexCount || 0} /{' '}
+              {state.midiMapState?.unknownXgSysexCount || 0}
+            </div>
+            <div className="small text-muted">
+              Voice exact / fallback: {state.midiMapState?.voiceExactCount || 0} /{' '}
+              {state.midiMapState?.voiceFallbackCount || 0}
+            </div>
+            <div className="small text-muted">
+              Drum aliases: {state.midiMapState?.drumAliasCount || 0}
+            </div>
+            <div className="small text-muted">
+              midi-db: {state.midiMapState?.midiDbRevision?.slice(0, 12) || '—'}
             </div>
             <div className="small text-muted">
               Drum channels: {formatChannelList(state.midiChannels?.map((ch) => ch?.isDrum))}
@@ -2207,7 +2225,7 @@ function Synth({ onNavigateHome }) {
           </button>
           <div className="xgover55-modal__screen">
             <div className="xgover55-modal__topline">
-              <span>V1.0</span>
+              <span>V{state.midiMapState?.mappingVersion || 2}.0</span>
               <span className="text-end">ENGINE: SC-55<br />INPUT: XG</span>
             </div>
             <div className="xgover55-modal__brand">

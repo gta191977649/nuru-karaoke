@@ -36,7 +36,8 @@ function getSmfKnifeConfigForStandard(standard, gsModule) {
 /**
  * Creates a mapper function.
  * @param {ArrayBuffer|null} buffer - MIDI file buffer for auto-detection.
- * @param {Object} options - Manual overrides (e.g. forceStandard).
+ * @param {Object} options - Manual overrides. XG supports xgVoiceProfile
+ * ('conservative'|'passthrough'), xgEffectProfile and drumBalanceProfile.
  */
 export function createMidiMapper(buffer, options = {}) {
     let mappingEntry = null

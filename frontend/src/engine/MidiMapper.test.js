@@ -179,6 +179,8 @@ describe('XG to SC-55 mapping', () => {
             { type: 'cc', channel: 0, controller: 32, value: 0 },
         ])
         expect(mapper({ type: 'program', channel: 0, value: 0 })).toEqual([
+            { type: 'cc', channel: 0, controller: 0, value: 0 },
+            { type: 'cc', channel: 0, controller: 32, value: 0 },
             { type: 'program', channel: 0, value: 0 },
         ])
         expect(mapper({ type: 'cc', channel: 0, controller: 7, value: 100 })).toEqual([
