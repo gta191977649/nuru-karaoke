@@ -3,9 +3,10 @@ import { Sequencer, WorkletSynthesizer } from 'spessasynth_lib'
 import processorUrl from 'spessasynth_lib/dist/spessasynth_processor.min.js?url'
 import defaultSoundFontUrl from '../soundfont/sc55.sf2'
 import { findActiveLyricIndex, parseLrc } from '../engine/lrc.js'
-import { setSynthChannelMuted } from '../engine/synthChannelMute.js'
+import { setSynthMidiChannelGroupMuted } from '../engine/synthChannelMute.js'
 import { resetSynthControllers } from '../engine/synthControllerReset.js'
 import { getSynthMasterParameter, setSynthMasterParameter } from '../engine/synthMasterParameters.js'
+import { SYNTH_EFFECTS_CONFIG } from '../config.js'
 import './DebugSynth.css'
 
 const DEFAULT_SOUNDFONT_DISPLAY_NAME = 'soundfont/sc55.sf2'
@@ -92,8 +93,8 @@ function DebugSynth() {
   const [duration, setDuration] = useState(0)
   const [isSeeking, setIsSeeking] = useState(false)
   const [seekTime, setSeekTime] = useState(0)
-  const [reverbGain, setReverbGain] = useState(0.6)
-  const [chorusGain, setChorusGain] = useState(0.6)
+  const [reverbGain, setReverbGain] = useState(SYNTH_EFFECTS_CONFIG.reverbGain)
+  const [chorusGain, setChorusGain] = useState(SYNTH_EFFECTS_CONFIG.chorusGain)
   const [enabledChannels, setEnabledChannels] = useState(() => Array.from({ length: 16 }, () => true))
   const [channelPatches, setChannelPatches] = useState(() => Array.from({ length: 16 }, () => null))
   const [channelInstrumentNames, setChannelInstrumentNames] = useState(() =>
@@ -123,15 +124,25 @@ function DebugSynth() {
     synthRef.current = synth
 
     try {
-      setReverbGain(Number(getSynthMasterParameter(synth, 'reverbGain')) || 0)
-      setChorusGain(Number(getSynthMasterParameter(synth, 'chorusGain')) || 0)
+      setSynthMasterParameter(synth, 'reverbGain', SYNTH_EFFECTS_CONFIG.reverbGain)
+      setSynthMasterParameter(synth, 'chorusGain', SYNTH_EFFECTS_CONFIG.chorusGain)
+      setReverbGain(
+        Number(getSynthMasterParameter(synth, 'reverbGain')) || SYNTH_EFFECTS_CONFIG.reverbGain,
+      )
+      setChorusGain(
+        Number(getSynthMasterParameter(synth, 'chorusGain')) || SYNTH_EFFECTS_CONFIG.chorusGain,
+      )
     } catch {
       // ignore
     }
 
-    enabledChannelsRef.current.forEach((isEnabled, index) => {
-      setSynthChannelMuted(synth, index, !isEnabled)
-    })
+    const applyChannelMuteState = () => {
+      enabledChannelsRef.current.forEach((isEnabled, index) => {
+        setSynthMidiChannelGroupMuted(synth, index, !isEnabled)
+      })
+    }
+    applyChannelMuteState()
+    synth.eventHandler?.addEvent?.('channelAdded', 'debug-channel-mute', applyChannelMuteState)
   }, [])
 
   const ensureSequencer = useCallback(async () => {
@@ -172,7 +183,7 @@ function DebugSynth() {
     enabledChannelsRef.current[channelIndex] = isEnabled
     const synth = synthRef.current
     if (!synth) return
-    setSynthChannelMuted(synth, channelIndex, !isEnabled)
+    setSynthMidiChannelGroupMuted(synth, channelIndex, !isEnabled)
   }, [])
 
   const resetSynth = useCallback(async () => {
@@ -192,7 +203,7 @@ function DebugSynth() {
         setEffectGain('reverb', reverbGain)
         setEffectGain('chorus', chorusGain)
         enabledChannelsRef.current.forEach((isEnabled, index) => {
-          setSynthChannelMuted(synth, index, !isEnabled)
+          setSynthMidiChannelGroupMuted(synth, index, !isEnabled)
         })
       }
       setStatus('Sent GM reset to synth.')
@@ -258,6 +269,9 @@ function DebugSynth() {
 
         stop()
         seq.loadNewSongList([{ binary: buffer, fileName: file.name }])
+        enabledChannelsRef.current.forEach((isEnabled, index) => {
+          setSynthMidiChannelGroupMuted(synth, index, !isEnabled)
+        })
         setDuration(seq.duration || 0)
         setCurrentTime(0)
 

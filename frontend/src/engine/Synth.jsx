@@ -1096,6 +1096,28 @@ function Synth({ onNavigateHome }) {
               Drum aliases: {state.midiMapState?.drumAliasCount || 0}
             </div>
             <div className="small text-muted">
+              GS tones exact / variation fallback / legacy fallback:{' '}
+              {state.midiMapState?.gsExactToneCount || 0} /{' '}
+              {state.midiMapState?.gsVariationFallbackCount || 0} /{' '}
+              {state.midiMapState?.gsLegacyMapFallbackCount || 0}
+            </div>
+            <div className="small text-muted">
+              GS drum misclassifications prevented:{' '}
+              {state.midiMapState?.gsDrumMisclassificationPreventedCount || 0}
+            </div>
+            <div className="small text-muted">
+              88Over55 tones exact / curated / fallback:{' '}
+              {state.midiMapState?.toneExactCount || 0} /{' '}
+              {state.midiMapState?.toneCuratedCount || 0} /{' '}
+              {state.midiMapState?.toneFallbackCount || 0}
+            </div>
+            <div className="small text-muted">
+              88Over55 parts / user tones / user drums:{' '}
+              {state.midiMapState?.partCount || 16} /{' '}
+              {state.midiMapState?.userToneResolvedCount || 0} /{' '}
+              {state.midiMapState?.userDrumMappedCount || 0}
+            </div>
+            <div className="small text-muted">
               midi-db: {state.midiMapState?.midiDbRevision?.slice(0, 12) || '—'}
             </div>
             <div className="small text-muted">

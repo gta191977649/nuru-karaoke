@@ -546,6 +546,15 @@ export function createSmfKnifeConverter(config, options = {}) {
     const initialDrumChannels = options.initialDrumChannels?.length === 16
         ? Uint8Array.from(options.initialDrumChannels, (v) => (v ? 1 : 0))
         : null
+    const sourceStandard = String(options.sourceStandard || config.sourceHint || '').toUpperCase()
+    const bankSelectsDrums = (bankMSB) => {
+        if (sourceStandard === 'GS') return false
+        if (sourceStandard === 'XG') return bankMSB === 126 || bankMSB === 127
+        if (sourceStandard === 'GM2') return bankMSB === 120
+        // Preserve historical behavior for custom configurations without a
+        // declared source standard.
+        return bankMSB === 120 || bankMSB === 126 || bankMSB === 127
+    }
 
     const state = {
         enabled: true,
@@ -710,8 +719,9 @@ export function createSmfKnifeConverter(config, options = {}) {
 
             if (cc === 0) {
                 state.bankMSB[ch] = event.value
-                const bankSelectsDrums = state.bankMSB[ch] === 120 || state.bankMSB[ch] === 126 || state.bankMSB[ch] === 127
-                const isDrum = bankSelectsDrums || state.drumPartMode[ch] === 1 || ch === 9
+                const inferredDrum = bankSelectsDrums(state.bankMSB[ch])
+                const isDrum = state.drumPartMode[ch] === 1 || ch === 9 ||
+                    (state.drumPartMode[ch] < 0 && inferredDrum)
                 if (state.drumChannels[ch] !== (isDrum ? 1 : 0)) {
                     state.drumChannels[ch] = isDrum ? 1 : 0
                     if (!isDrum) {
@@ -732,8 +742,9 @@ export function createSmfKnifeConverter(config, options = {}) {
             const srcProgram = event.value
             state.program[ch] = srcProgram
 
-            const bankSelectsDrums = state.bankMSB[ch] === 120 || state.bankMSB[ch] === 126 || state.bankMSB[ch] === 127
-            const isDrum = bankSelectsDrums || state.drumPartMode[ch] === 1 || ch === 9
+            const inferredDrum = bankSelectsDrums(state.bankMSB[ch])
+            const isDrum = state.drumPartMode[ch] === 1 || ch === 9 ||
+                (state.drumPartMode[ch] < 0 && inferredDrum)
             if (state.drumChannels[ch] !== (isDrum ? 1 : 0)) {
                 state.drumChannels[ch] = isDrum ? 1 : 0
                 if (process.onStateChange) process.onStateChange(process.getState())

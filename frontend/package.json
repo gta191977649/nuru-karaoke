@@ -10,6 +10,8 @@
     "test": "vitest",
     "midi-db:update": "node scripts/update-midi-db.mjs",
     "midi-db:check": "node scripts/update-midi-db.mjs --check",
+    "sc55-presets:update": "node scripts/update-sc55-presets.mjs",
+    "sc55-presets:check": "node scripts/update-sc55-presets.mjs --check",
     "preview": "vite preview"
   },
   "dependencies": {

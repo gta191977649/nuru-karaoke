@@ -12,4 +12,11 @@ const UI_CONFIG = {
   songBrowserPageSize: 8,
 }
 
-export { PLAYER_CONFIG, UI_CONFIG }
+// Synth master-effect defaults. Keep these in one place so the initial UI,
+// store state, main SynthEngine and standalone debug synth all agree.
+const SYNTH_EFFECTS_CONFIG = Object.freeze({
+  reverbGain: 1,
+  chorusGain: 1,
+})
+
+export { PLAYER_CONFIG, SYNTH_EFFECTS_CONFIG, UI_CONFIG }
