@@ -1,4 +1,5 @@
 import { create } from 'zustand'
+import { SYNTH_EFFECTS_CONFIG } from '../config.js'
 
 const initialEngineState = {
   ready: false,
@@ -12,8 +13,8 @@ const initialEngineState = {
   playbackFinished: false,
   currentTime: 0,
   duration: 0,
-  reverbGain: 1.5,
-  chorusGain: 1.2,
+  reverbGain: SYNTH_EFFECTS_CONFIG.reverbGain,
+  chorusGain: SYNTH_EFFECTS_CONFIG.chorusGain,
   autoGainEnabled: true,
   autoGainDb: 0,
   autoGainInputDb: -100,
@@ -49,6 +50,19 @@ const initialEngineState = {
     convertedXgSysexCount: 0,
     filteredXgSysexCount: 0,
     unknownXgSysexCount: 0,
+    gsExactToneCount: 0,
+    gsVariationFallbackCount: 0,
+    gsLegacyMapFallbackCount: 0,
+    gsDrumMisclassificationPreventedCount: 0,
+    toneExactCount: 0,
+    toneCuratedCount: 0,
+    toneFallbackCount: 0,
+    userToneResolvedCount: 0,
+    userDrumMappedCount: 0,
+    nativeGsSysexCount: 0,
+    filteredGsSysexCount: 0,
+    unknownGsSysexCount: 0,
+    partCount: 16,
   },
   xgDrumMapEnabled: true,
   xgPreferGsPlayback: true,

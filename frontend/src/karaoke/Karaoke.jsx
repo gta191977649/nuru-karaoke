@@ -48,8 +48,11 @@ function Karaoke({ onStop, onResultsNext, resultsExitError, resetKey, transition
       ) : view === 'message' ? (
         <MessagePage />
       ) : (
+        // A playback session already changes once for every song load. Using
+        // resetKey here as well remounted the freshly started next song after
+        // its intro had been marked as shown, losing the local title overlay.
         <SingingPage
-          key={`${playbackSessionId}-${resetKey}`}
+          key={playbackSessionId}
           onFinish={handleFinish}
           showInterludePrompt={displayMode !== 'parked'}
         />

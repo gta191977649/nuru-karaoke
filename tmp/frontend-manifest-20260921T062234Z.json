@@ -1,0 +1,274 @@
+{
+  "files": [
+    {
+      "name": "index.html",
+      "sha256": "2d6c6c927eddcee5e4f9939ecd46a175e5785435dbd0af60eb7dc8ce50c1c4e2",
+      "size": 943
+    },
+    {
+      "name": "vite.svg",
+      "sha256": "4a748afd443918bb16591c834c401dae33e87861ab5dbad0811c3a3b4a9214fb",
+      "size": 1497
+    },
+    {
+      "name": "assets/104461_960x540-MdHsVkR4.mp4",
+      "sha256": "76749482a81ff19fe1048b1f174f2de87ee6b1f77d183f612aad924c94d82a44",
+      "size": 28545768
+    },
+    {
+      "name": "assets/189610_960x540-Bwnbkef1.mp4",
+      "sha256": "423e7de5eaf502e968cf675f4dd61c632a6147c67a520c2b6ab80bac6089849e",
+      "size": 12787886
+    },
+    {
+      "name": "assets/201045_960x540-CnK56O0o.mp4",
+      "sha256": "990b28929612c5fc72c2778c09843b9ec7a0436458616ed9c6e21d98cc3fae80",
+      "size": 3996423
+    },
+    {
+      "name": "assets/33675_960x540-Cz3jL-IY.mp4",
+      "sha256": "7ffffb219213e0155dbdcf9513aaaf77413428e991ee0672b90c5808a24132f6",
+      "size": 4938764
+    },
+    {
+      "name": "assets/38676_960x540-4q3ZqLHq.mov",
+      "sha256": "aedac3a72cf2ec312fa983c9bad3a3dd9dfa3d1ff209407abd526956f2318142",
+      "size": 6988287
+    },
+    {
+      "name": "assets/444_960x540-Bk1LLe7i.mp4",
+      "sha256": "6c11172ebb32eebf0e110742bda1e110fb249082dc6f0d465653903a92356f3e",
+      "size": 10529129
+    },
+    {
+      "name": "assets/45588_960x540-BZSbciRT.mp4",
+      "sha256": "e2f22b40d2303b56ab3483dac60c951ab06d38fa320ee1ba2655e257e34e700e",
+      "size": 2150125
+    },
+    {
+      "name": "assets/audio-CLYnIGwG.js",
+      "sha256": "4291c0bfd38cf90c11a8e4523a2d5a147659ce5fffae4c59e7c282313a809f97",
+      "size": 188236
+    },
+    {
+      "name": "assets/bg2-DGSgT9C8.jpg",
+      "sha256": "3e9eaa69031337673b21c0cd62a643322c52b9ed35b9cab7603dd211f3064a88",
+      "size": 300435
+    },
+    {
+      "name": "assets/BIZUDPMincho-Bold-BRSLBvd6.ttf",
+      "sha256": "99618e39b881597efc03d58706bd194757c968c1bf7a7017a893efead6b1b260",
+      "size": 7109432
+    },
+    {
+      "name": "assets/fail-CXtc_xkS.mp3",
+      "sha256": "eb9050897ae89bd5d098de9aa010e469665b95e2ed775e8354bca0f4e1572b26",
+      "size": 35734
+    },
+    {
+      "name": "assets/gs-CvX8pS-a.svg",
+      "sha256": "d68b756bfc1f9fc9da48b9b6b4af176e483ef0029e75adb32fe64e911dee5bf8",
+      "size": 17200
+    },
+    {
+      "name": "assets/gsOver55.worker-DxE8Suti.js",
+      "sha256": "afe4fa41ad7780e76bcc74272d8dff8a9c129705b05d791a54132408eb7129cb",
+      "size": 209250
+    },
+    {
+      "name": "assets/index-C1-XxdJo.css",
+      "sha256": "679815e001536dae013aae9efb996f2249b871245a26888912e764b7365bd36e",
+      "size": 106769
+    },
+    {
+      "name": "assets/index-DmNeFwuB.js",
+      "sha256": "de956a5d738af8076fca95cffa2b98f14c169d8e02c49ca854d17cce40a80bea",
+      "size": 516043
+    },
+    {
+      "name": "assets/logo_title-i1eLCpJi.png",
+      "sha256": "34be2f74e043c568545a418e3c2b7ce10a598f2d5e914217dc02558195934b25",
+      "size": 18010
+    },
+    {
+      "name": "assets/logo-Biz8u1Mk.png",
+      "sha256": "208e2269c6ffff690e84a1c2acc7a5d979c88a670cf49ab9b9205330730e8963",
+      "size": 11947
+    },
+    {
+      "name": "assets/mic-latency-beep-CRA5tWuL.wav",
+      "sha256": "4c8de1ff305cdc0b67f3733ca18b051f895050be928930d72211cab2c815ca67",
+      "size": 10006
+    },
+    {
+      "name": "assets/pitchWorklet-HHaiPYFo.js",
+      "sha256": "b8e631b62d1f004d732271f43fcba7327a57a3171d5fccc66287bf5d4cb3b9dd",
+      "size": 214620
+    },
+    {
+      "name": "assets/pixi-BUiRAE2b.js",
+      "sha256": "fd87190a1affee870d3ebb238685cca4f7034f240560a3d5a7c4f4e408ba286f",
+      "size": 499239
+    },
+    {
+      "name": "assets/result-CJr2bwSu.mp3",
+      "sha256": "a7e652a94eabd939b41e1ca7590ac959b455504e8205f0b887378ae2a60a1066",
+      "size": 481070
+    },
+    {
+      "name": "assets/sc-4yYAHMs7.png",
+      "sha256": "b512f5c8557ca9affe6c6f8966640de77994f02e28d4ad40d8e7ec59ad549374",
+      "size": 18451
+    },
+    {
+      "name": "assets/sc55-C8Cgxxnd.mid",
+      "sha256": "4f34302ab4aaa959e693a2a77ad06ce5642404573bc1de347b7156fc635842aa",
+      "size": 29317
+    },
+    {
+      "name": "assets/sc55-D6Qso6ML.sf2",
+      "sha256": "2f68d824f456e3367fe24105d590ee77b7e28faa9f622723b478fa90647d8a1a",
+      "size": 10375822
+    },
+    {
+      "name": "assets/sc88Over55.worker-Cb_4tZEv.js",
+      "sha256": "03f612177757d77dd1f5969fd4c3884b25f79f2a4650417e0f4eb0fcd5aa6d42",
+      "size": 263977
+    },
+    {
+      "name": "assets/select-CRwIxpKg.mp3",
+      "sha256": "2056d6bd77a6df81b6d962446d2eee5562e618241f551d5eff9ab27f7e1cdd6f",
+      "size": 26330
+    },
+    {
+      "name": "assets/spessasynth_processor.min-Do8nRWPC.js",
+      "sha256": "109ad445931e5c6e17739a994b2694d325577a6cb6fd2b56b39385edfc9e1fb5",
+      "size": 402596
+    },
+    {
+      "name": "assets/spessasynth-BfOoh1Zd.js",
+      "sha256": "344ded1574d10d0964bd0d59dace986bc5a97f59b8a4dc941d279953945d8b3b",
+      "size": 17564
+    },
+    {
+      "name": "assets/success-51BZlxIa.mp3",
+      "sha256": "8203cd8308efc40b71746bd3a087bde1acb8ab1c723ded683ae02b3899638155",
+      "size": 52035
+    },
+    {
+      "name": "assets/technique.worker-blRvQ5hd.js",
+      "sha256": "7cf99ddb5ceb4abd47fdde0a8f0f41ccc91f6fcf69828847ce62e290d7357d82",
+      "size": 5561
+    },
+    {
+      "name": "assets/tfjs-DETtW6ey.js",
+      "sha256": "bcfb51b2de45a65dcfe7dcda7511fcadc8d208b5b68757f9a418519bde267255",
+      "size": 865378
+    },
+    {
+      "name": "assets/VCR_OSD_MONO-Ceif2qmb.ttf",
+      "sha256": "01918d86cb163a715dcb97165b997256734dfcc9f550beeb7c142fa4a064cf1c",
+      "size": 75864
+    },
+    {
+      "name": "assets/vendor-CKmgErX1.js",
+      "sha256": "3030f4969a56c29521ba30a6b198b3fae9d58eab6c1c892336570544c564d9a6",
+      "size": 487413
+    },
+    {
+      "name": "assets/vendor-DBkz-poX.css",
+      "sha256": "a4d1460f4ebc981652526d0051a63643cacf0b26741fdd4a7f66eba8acbd7cf4",
+      "size": 230850
+    },
+    {
+      "name": "assets/xg-BT7SdrUj.svg",
+      "sha256": "d4f2f693d6cb66243ef7e33335b8c869afd6f356239b3e4fe05f165b615d631b",
+      "size": 18527
+    },
+    {
+      "name": "assets/xgover55-D1k4lupN.png",
+      "sha256": "550d68af7ed8a8bc5172a0d2333f9b5734a8d49ea6b7c2b1b84e9cd52f45b302",
+      "size": 44622
+    },
+    {
+      "name": "assets/xgover55-icon-BN_mOban.png",
+      "sha256": "cfd0a13968cbba9fa663f707ce5b2c9253ad8a6e961d4a110dac7bb6265eace1",
+      "size": 5823
+    },
+    {
+      "name": "assets/xgOver55.worker-hCfzEU0q.js",
+      "sha256": "2dc52d7e6d1bca82d7f031a293074c970c246837454d0ed4c6eceafd22af9d38",
+      "size": 304453
+    },
+    {
+      "name": "crepe/group1-shard1of1",
+      "sha256": "d6be0f544dc2b95d469ec66845904795ef1bd0ced572d69e9ae053a920e420fc",
+      "size": 370080
+    },
+    {
+      "name": "crepe/group10-shard1of1",
+      "sha256": "265b02c2777f1a21d07b7675be370a9cbb1de458e26c35cb1aa61b8f234d2559",
+      "size": 131200
+    },
+    {
+      "name": "crepe/group11-shard1of1",
+      "sha256": "62ac80dfa85deb608ebc63ace5a9205ebbc53c6e1b94dc304e7c54a181015654",
+      "size": 512
+    },
+    {
+      "name": "crepe/group12-shard1of1",
+      "sha256": "c3ea32df8f2d0a888ab5f2da59d498238cc762fb95e81fc767f58700bd1a8c47",
+      "size": 524544
+    },
+    {
+      "name": "crepe/group13-shard1of1",
+      "sha256": "4ad0215ed19fd7235bc56460d436c86765562d0159f54385766b44d30dc071a0",
+      "size": 1024
+    },
+    {
+      "name": "crepe/group2-shard1of1",
+      "sha256": "e92d46f432c4d8dd72c9b345a1f2949967ff278cabb2b187ad727ae81b8f0f2f",
+      "size": 262656
+    },
+    {
+      "name": "crepe/group3-shard1of1",
+      "sha256": "9550cb10c547cd8f4dd01d3f23792ce7260ee42eec912c05a860f9224a72e717",
+      "size": 2048
+    },
+    {
+      "name": "crepe/group4-shard1of1",
+      "sha256": "6749b89c49a0e4a8a072a624e203e0a8288f557f44a5981f9ea259afd9338322",
+      "size": 524352
+    },
+    {
+      "name": "crepe/group5-shard1of1",
+      "sha256": "2e0ad5db5661975a06990482f34aadfd2d2564cadda84b0d5f3641b92b003cc5",
+      "size": 256
+    },
+    {
+      "name": "crepe/group6-shard1of1",
+      "sha256": "76fc8f2f48a17ef827f8b70da5c2e137064fd75f9e8c5deeeb905cb2d514e92c",
+      "size": 65600
+    },
+    {
+      "name": "crepe/group7-shard1of1",
+      "sha256": "3f11e74bc0336d40b53f106a6316c5a7c50546994a07542185e2d9f29b3e43de",
+      "size": 256
+    },
+    {
+      "name": "crepe/group8-shard1of1",
+      "sha256": "fc9c5f00aba6184f025273d437ef57140beb8cd269a1c17b88a582c0fddb8cad",
+      "size": 65600
+    },
+    {
+      "name": "crepe/group9-shard1of1",
+      "sha256": "46231837e6c374519cc4d787676eb5ee8863881faa1f406c85e39d9b9285ca3d",
+      "size": 256
+    },
+    {
+      "name": "crepe/model.json",
+      "sha256": "91015e8891c8cf9ded26277f1bb487de26357938ee653e3f9d410676d9ed0e32",
+      "size": 15653
+    }
+  ]
+}

@@ -4,6 +4,7 @@
 export const MIDI_DB_REVISION = "4f1b262fede3e999519e7e334bb25b779b506379"
 export const MIDI_DB_GENERATED_AT = "2026-09-09T15:18:47Z"
 export const MIDI_DB_SOURCE_HASHES = Object.freeze({
+  "bank/gs.tsv": "008cc0f2f271d1e37b92db3f14d6fedd0523def3a5f2fdf15036b22c343a0f6c",
   "bank/xg.tsv": "370b819c978db1c8fdbbadc530b9950e4b0b7e597eadd6f5b14c20be7d4486b2",
   "mane/syx/yamaha/xg.tsv": "8a94e76ccfd1a831017968199b87803f1d05dcbf6973d2e9b7fe10a1f05eb52f",
   "mane/syx/yamaha/xg/drumSet/note.tsv": "db5772ce6f7f1accc230805c3b47ec450677dff9e42f70e0f71f4bafa495e0f0",

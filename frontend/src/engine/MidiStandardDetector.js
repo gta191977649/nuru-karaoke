@@ -245,14 +245,14 @@ function scanMidiForSysex(buffer) {
                     const cc = view.getUint8(offset); offset++
                     const val = view.getUint8(offset); offset++
 
-                    // Track CC0 (Bank MSB) and CC32 (Bank LSB / sometimes used for map selection on some SC setups)
+                    // Track CC0 (variation bank) and CC32 (GS tone map).
                     if (cc === 0x00) {
                         result.lastCC0ByChan[channel] = val
                     } else if (cc === 0x20) {
-                        // Weak heuristic:
-                        // if CC0==0 and CC32 is 2/3/4, that often *means* SC-88 / SC-88Pro / SC-8850 map selection in some workflows.
-                        const msb = result.lastCC0ByChan[channel]
-                        if (msb === 0x00 && (val === 2 || val === 3 || val === 4)) {
+                        // A non-zero variation bank is valid together with Map 2/3/4.
+                        // This evidence is only interpreted after the file is independently
+                        // confirmed as GS, so ordinary GM bank LSB values cannot select a module.
+                        if (val === 2 || val === 3 || val === 4) {
                             result.sawMapSelectLike = true
                             result.mapSelectValues.add(val)
                         }
@@ -299,12 +299,13 @@ function scanMidiForSysex(buffer) {
     return result
 }
 
-export function detectDrumChannels(buffer) {
+export function detectDrumChannels(buffer, options = {}) {
     const drumChannels = new Uint8Array(16)
     drumChannels[9] = 1
     if (!buffer) return drumChannels
 
     try {
+        const standard = options.standard || detectMidiStandard(buffer).standard
         const view = new DataView(buffer)
         let offset = 0
         if (view.getUint32(offset) !== 0x4d546864) return drumChannels
@@ -314,7 +315,7 @@ export function detectDrumChannels(buffer) {
         offset += 6
         offset += Math.max(0, headerLen - 6)
 
-        const lastCC0ByChan = new Uint8Array(16)
+        const partModeByChan = new Int8Array(16).fill(-1)
 
         const readVarInt = () => {
             let value = 0
@@ -377,6 +378,7 @@ export function detectDrumChannels(buffer) {
                         if (part >= 0x00 && part <= 0x0F) {
                             const ch = part
                             const isDrum = mode !== 0x00
+                            partModeByChan[ch] = isDrum ? 1 : 0
                             drumChannels[ch] = isDrum ? 1 : 0
                             if (isDrum && ch !== 9) {
                                 console.log('[XG Drum]', {
@@ -400,6 +402,7 @@ export function detectDrumChannels(buffer) {
                             const ch = mapGsPartToChannel(addr1, addr2)
                             if (ch >= 0 && ch <= 15) {
                                 const isDrum = value !== 0
+                                partModeByChan[ch] = isDrum ? 1 : 0
                                 drumChannels[ch] = isDrum ? 1 : 0
                                 if (isDrum && ch !== 9) {
                                     console.log('[GS Drum2]', {
@@ -420,8 +423,16 @@ export function detectDrumChannels(buffer) {
                     const cc = view.getUint8(offset); offset++
                     const val = view.getUint8(offset); offset++
                     if (cc === 0x00) {
-                        lastCC0ByChan[channel] = val
-                        if (val === 120 || val === 126 || val === 127) drumChannels[channel] = 1
+                        // Bank-select drum semantics are standard-specific. In GS,
+                        // 126/127 are the CM-32P/MT-32 melodic maps, not drum banks.
+                        // Explicit Part Mode always wins over this weaker inference.
+                        if (partModeByChan[channel] < 0 && channel !== 9) {
+                            if (standard === MIDI_STANDARDS.XG) {
+                                drumChannels[channel] = val === 126 || val === 127 ? 1 : 0
+                            } else if (standard === MIDI_STANDARDS.GM2) {
+                                drumChannels[channel] = val === 120 ? 1 : 0
+                            }
+                        }
                     }
                     continue
                 }
@@ -437,7 +448,7 @@ export function detectDrumChannels(buffer) {
                 }
             }
         }
-    } catch (e) {
+    } catch {
         return drumChannels
     }
 
@@ -470,7 +481,9 @@ export function detectMidiStandard(buffer) {
         }
 
         if (standard === MIDI_STANDARDS.GS) {
-            if (scan.mapSelectValues.has(3)) {
+            if (scan.mapSelectValues.has(4)) {
+                gsModule = '8850'
+            } else if (scan.mapSelectValues.has(3) || scan.sawEFXBlock) {
                 gsModule = '88PRO'
             } else if (scan.mapSelectValues.has(2)) {
                 gsModule = '88'

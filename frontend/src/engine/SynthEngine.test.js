@@ -67,6 +67,36 @@ describe('results queue advancement', () => {
   })
 })
 
+describe('queue playback audio lifecycle', () => {
+  afterEach(() => setKaraokeStoreState({
+    queue: [],
+    queueIndex: -1,
+    history: [],
+    enabledChannels: Array.from({ length: 16 }, () => true),
+  }))
+
+  it('resumes audio again after loading, immediately before autoplay', async () => {
+    setKaraokeStoreState({
+      queue: [{ url: 'next.mid' }],
+      queueIndex: 0,
+      enabledChannels: Array.from({ length: 16 }, () => true),
+    })
+    const engine = new SynthEngine()
+    const calls = []
+    engine.ensureInitialized = vi.fn().mockResolvedValue()
+    engine.resumeAudio = vi.fn(async () => { calls.push('resume') })
+    engine.loadMidiFromUrl = vi.fn(async () => { calls.push('load') })
+    engine.setTransposition = vi.fn()
+    engine.seek = vi.fn()
+    engine.play = vi.fn(() => { calls.push('play') })
+    engine._synth = { midiChannels: [] }
+
+    await engine.playQueueFrom(0)
+
+    expect(calls).toEqual(['resume', 'load', 'resume', 'play'])
+  })
+})
+
 function createEngineWithCurrentDrumApi(...channels) {
   const engine = createEngineWithDrums(...channels)
   const setDrums = Array.from({ length: 16 }, () => vi.fn())

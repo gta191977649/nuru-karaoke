@@ -8,6 +8,8 @@
 import { detectMidiStandard, detectDrumChannels, MIDI_STANDARDS } from './MidiStandardDetector.js'
 import { createSmfKnifeConverter, parseSmfKnifeConfig } from './converters/SmfKnifeConverter.js'
 import { createXGOver55EventMapper } from './plugins/xg-over-55/XGOver55Engine.js'
+import { createGSOver55EventMapper } from './plugins/gs-over-55/GSOver55Engine.js'
+import { createSC88Over55EventMapper } from './plugins/sc88-over-55/SC88Over55Engine.js'
 import sc88Sc55CfgText from './smf/88ish/SC88SC55.CFG?raw'
 const STANDARD_MAPPINGS = {
     GS_88: { type: 'smfknife', name: 'SC88SC55.CFG', text: sc88Sc55CfgText },
@@ -59,7 +61,7 @@ export function createMidiMapper(buffer, options = {}) {
         detectedModule = detection.gsModule || null
         console.log(`[MidiMapper] Detected: ${detectedStandard} (${detectedVariant || 'Std'})`, detectionReasons, { convertSC88 })
         if (!initialDrumChannels) {
-            initialDrumChannels = detectDrumChannels(buffer)
+            initialDrumChannels = detectDrumChannels(buffer, { standard: detectedStandard })
         }
     }
 
@@ -75,7 +77,10 @@ export function createMidiMapper(buffer, options = {}) {
         }
     }
 
-    if (!smfKnifeConfig) {
+    const useDefaultSc88Engine = !smfKnifeConfig && !options.smfKnifeConfigText &&
+        resolvedStandard === MIDI_STANDARDS.GS && (detectedModule === '88' || detectedModule === '88PRO')
+
+    if (!smfKnifeConfig && !useDefaultSc88Engine) {
         smfKnifeConfig = getSmfKnifeConfigForStandard(resolvedStandard, detectedModule)
     }
 
@@ -99,6 +104,20 @@ export function createMidiMapper(buffer, options = {}) {
         mappingEntry = {
             type: 'factory',
             factory: () => createXGOver55EventMapper(buffer, { ...options, initialDrumChannels }),
+        }
+    }
+
+    if (!mappingEntry && useDefaultSc88Engine) {
+        mappingEntry = {
+            type: 'factory',
+            factory: () => createSC88Over55EventMapper({ ...options, sourceModule: detectedModule }),
+        }
+    }
+
+    if (!mappingEntry && resolvedStandard === MIDI_STANDARDS.GS && !(detectedModule === '88' || detectedModule === '88PRO')) {
+        mappingEntry = {
+            type: 'factory',
+            factory: () => createGSOver55EventMapper(buffer, { ...options, initialDrumChannels }),
         }
     }
 
@@ -126,6 +145,7 @@ export function createMidiMapper(buffer, options = {}) {
     } else if (mappingEntry.type === 'smfknife') {
         mapper = createSmfKnifeConverter(mappingEntry.config, {
             ...options,
+            sourceStandard: resolvedStandard,
             ignoreEq: true,
             ignoreFx: true,
             initialDrumChannels,

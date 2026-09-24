@@ -1,12 +1,14 @@
 import { Sequencer, WorkletSynthesizer } from 'spessasynth_lib'
 import { BasicMIDI } from 'spessasynth_core'
 import { XGOver55Engine, buildTelemetry } from './plugins/xg-over-55/XGOver55Engine.js'
+import { GSOver55Engine } from './plugins/gs-over-55/GSOver55Engine.js'
+import { SC88Over55Engine } from './plugins/sc88-over-55/SC88Over55Engine.js'
 import processorUrl from 'spessasynth_lib/dist/spessasynth_processor.min.js?url'
 import defaultSoundFontUrl from '../soundfont/sc55.sf2'
 import { createMidiMapper } from './MidiMapper.js'
 import { findActiveLyricIndex, parseLrc } from './lrc.js'
 import { getKaraokeAudioEngine } from './audioEngine.js'
-import { PLAYER_CONFIG } from '../config.js'
+import { PLAYER_CONFIG, SYNTH_EFFECTS_CONFIG } from '../config.js'
 import { getKaraokeStoreState, setKaraokeStoreState } from '../state/karaokeStore.js'
 import { AutoGainController } from './autoGainController.js'
 import { estimateMidiInitialGainDb } from './midiGainEstimator.js'
@@ -16,8 +18,8 @@ import { getSynthMasterParameter, setSynthMasterParameter } from './synthMasterP
 
 const DEFAULT_CONFIG = {
   enableMIDIStandardMapping: true,
-  reverb: 1.2,
-  chorus: 1.2,
+  reverb: SYNTH_EFFECTS_CONFIG.reverbGain,
+  chorus: SYNTH_EFFECTS_CONFIG.chorusGain,
 }
 
 function withPlaybackMapState(state = {}, playbackRouting = 'direct', overrides = {}) {
@@ -32,6 +34,18 @@ function withPlaybackMapState(state = {}, playbackRouting = 'direct', overrides 
     convertedXgSysexCount: 0,
     filteredXgSysexCount: 0,
     unknownXgSysexCount: 0,
+    gsExactToneCount: 0,
+    gsVariationFallbackCount: 0,
+    gsLegacyMapFallbackCount: 0,
+    gsDrumMisclassificationPreventedCount: 0,
+    toneExactCount: 0,
+    toneCuratedCount: 0,
+    toneFallbackCount: 0,
+    userToneResolvedCount: 0,
+    userDrumMappedCount: 0,
+    nativeGsSysexCount: 0,
+    filteredGsSysexCount: 0,
+    unknownGsSysexCount: 0,
     ...state,
     playbackRouting,
     ...overrides,
@@ -313,6 +327,8 @@ class SynthEngine {
     this._lastMidiBuffer = null
     this._referenceMidiData = null
     this._xgOver55Engine = new XGOver55Engine()
+    this._gsOver55Engine = new GSOver55Engine()
+    this._sc88Over55Engine = new SC88Over55Engine()
     this._loadGeneration = 0
     this._playbackTelemetry = null
     this._playbackRouting = 'direct'
@@ -978,35 +994,53 @@ class SynthEngine {
     const baseMapState = this._midiMapper.getState()
     const mappingEnabled = getKaraokeStoreState().enableMIDIStandardMapping ?? DEFAULT_CONFIG.enableMIDIStandardMapping
     const shouldConvertXg = mappingEnabled && !this._smfKnifeConfigText && this._xgOver55Engine.canHandle(buffer)
+    const shouldConvertGs = mappingEnabled && !this._smfKnifeConfigText &&
+      baseMapState?.detectedStandard === 'GS' &&
+      !(baseMapState?.detectedModule === '88' || baseMapState?.detectedModule === '88PRO') &&
+      this._gsOver55Engine.canHandle(buffer)
+    const shouldConvertSc88 = mappingEnabled && !this._smfKnifeConfigText &&
+      this._sc88Over55Engine.canHandle(buffer)
     let playbackBuffer = buffer
     let conversionApplied = false
+    let conversionEngine = null
     let conversionMs = 0
     let conversionState = null
     let telemetry = null
 
-    if (shouldConvertXg) {
-      this._setState({ status: `Converting XG for SC-55: ${midiName}` })
+    if (shouldConvertXg || shouldConvertGs || shouldConvertSc88) {
+      const engine = shouldConvertXg
+        ? this._xgOver55Engine
+        : shouldConvertSc88 ? this._sc88Over55Engine : this._gsOver55Engine
+      const sourceLabel = shouldConvertXg ? 'XG' : shouldConvertSc88 ? 'SC-88' : 'GS'
+      this._setState({ status: `Converting ${sourceLabel} for SC-55: ${midiName}` })
       try {
         const workerBuffer = buffer instanceof ArrayBuffer
           ? buffer.slice(0)
           : buffer.buffer.slice(buffer.byteOffset, buffer.byteOffset + buffer.byteLength)
-        const result = await this._xgOver55Engine.convert(workerBuffer, { fileName: midiName })
+        const result = await engine.convert(workerBuffer, { fileName: midiName })
         if (loadGeneration !== this._loadGeneration) return null
         if (result?.conversionApplied && result.buffer instanceof ArrayBuffer) {
           playbackBuffer = result.buffer
           conversionApplied = true
+          conversionEngine = shouldConvertXg ? 'xg-over-55' : shouldConvertSc88 ? 'sc88-over-55' : 'gs-over-55'
           conversionMs = Number(result.conversionMs) || 0
           conversionState = result.state || null
           telemetry = result.telemetry || null
         }
       } catch (error) {
-        console.warn('[SynthEngine] XGOver55 conversion failed; playing original MIDI', error)
+        console.warn(`[SynthEngine] ${sourceLabel}Over55 conversion failed; playing original MIDI`, error)
       }
     }
 
     const isIdentity = baseMapState?.configName === 'None (Identity)'
     const isXg = baseMapState?.detectedStandard === 'XG'
-    this._playbackRouting = (isIdentity || (isXg && !this._smfKnifeConfigText))
+    const isPlainGs = baseMapState?.detectedStandard === 'GS' &&
+      !(baseMapState?.detectedModule === '88' || baseMapState?.detectedModule === '88PRO')
+    const isSc88 = baseMapState?.detectedStandard === 'GS' &&
+      (baseMapState?.detectedModule === '88' || baseMapState?.detectedModule === '88PRO')
+    this._playbackRouting = (conversionApplied || isIdentity ||
+      (isXg && !this._smfKnifeConfigText) || (isPlainGs && !this._smfKnifeConfigText) ||
+      (isSc88 && !this._smfKnifeConfigText))
       ? 'direct'
       : 'realtime-map'
     if (!telemetry && this._playbackRouting === 'direct' && this._referenceMidiData) {
@@ -1024,7 +1058,7 @@ class SynthEngine {
       detectedVariant: baseMapState?.detectedVariant,
       detectedModule: baseMapState?.detectedModule,
     }, this._playbackRouting, {
-      conversionEngine: conversionApplied ? 'xg-over-55' : null,
+      conversionEngine: conversionApplied ? conversionEngine : null,
       conversionApplied,
       conversionMs,
     })
@@ -1175,6 +1209,11 @@ class SynthEngine {
     }
     if (Number.isFinite(song.lrc_offset)) this.setLyricOffsetMs(song.lrc_offset)
     this.seek(0)
+    // Loading/converting the MIDI and fetching lyrics can leave the shared
+    // AudioContext idle long enough for a browser to suspend it. This is most
+    // visible on the results-page timeout because there is no fresh user
+    // gesture to wake audio. Resume again at the actual playback boundary.
+    await this.resumeAudio()
     this.play()
 
   }
@@ -1420,7 +1459,7 @@ class SynthEngine {
     const next = Boolean(enabled)
     this._midiMapper?.setEnabled(next)
     this._setState({ enableMIDIStandardMapping: next })
-    if (this._lastMidiBuffer && this._midiMapper?.getState?.()?.detectedStandard === 'XG') {
+    if (this._lastMidiBuffer && ['XG', 'GS'].includes(this._midiMapper?.getState?.()?.detectedStandard)) {
       const { midiName, midiUrl } = getKaraokeStoreState()
       this.loadMIDI({ buffer: this._lastMidiBuffer, midiName, midiUrl }).catch((error) => {
         console.warn('[SynthEngine] Failed to reload MIDI mapping mode', error)
@@ -1431,6 +1470,8 @@ class SynthEngine {
   dispose() {
     this._loadGeneration += 1
     this._xgOver55Engine.dispose()
+    this._gsOver55Engine.dispose()
+    this._sc88Over55Engine.dispose()
     this._stopClock()
   }
 

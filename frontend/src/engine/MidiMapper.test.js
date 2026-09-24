@@ -293,7 +293,7 @@ describe('XG to SC-55 mapping', () => {
 })
 
 describe('SC-88 to SC-55 mapping', () => {
-    it('forces every mapped drum kit to center pan', () => {
+    it('preserves drum pan while selecting real SC-55 drum presets', () => {
         const mapper = createMidiMapper(createSc88Midi())
         const drumProgramsByBank = new Map([
             [2, [0, 1, 8, 16, 24, 25, 26, 32, 40, 48, 49, 50, 56, 57, 64, 65]],
@@ -305,12 +305,13 @@ describe('SC-88 to SC-55 mapping', () => {
             mapper({ type: 'cc', channel: 9, controller: 32, value: bankLsb })
 
             for (const program of programs) {
-                mapper({ type: 'cc', channel: 9, controller: 10, value: 0 })
-                expect(mapper({ type: 'program', channel: 9, value: program })).toEqual(
-                    expect.arrayContaining([
-                        expect.objectContaining({ type: 'cc', channel: 9, controller: 10, value: 64 }),
-                    ]),
-                )
+                const pan = { type: 'cc', channel: 9, controller: 10, value: 0 }
+                expect(mapper(pan)).toEqual([pan])
+                expect(mapper({ type: 'program', channel: 9, value: program })).toEqual([
+                    { type: 'cc', channel: 9, controller: 0, value: 0 },
+                    { type: 'cc', channel: 9, controller: 32, value: 1 },
+                    expect.objectContaining({ type: 'program', channel: 9 }),
+                ])
             }
         }
     })
@@ -321,15 +322,21 @@ describe('SC-88 to SC-55 mapping', () => {
         expect(mapper.getState()).toMatchObject({
             detectedStandard: 'GS',
             detectedModule: '88',
-            configName: 'SC88SC55.CFG',
-            mappingDestination: 'Roland SC-55',
+            configName: '88Over55',
+            conversionEngine: 'sc88-over-55',
+            partCount: 32,
         })
-        expect(mapper.getState().drumChannels[10]).toBe(1)
+        // Realtime/debug mappers apply Part Mode when the sequencer reaches its SysEx.
+        expect(mapper.getState().drumChannels[10]).toBe(0)
 
         mapper({ type: 'cc', channel: 0, controller: 0, value: 0 })
         mapper({ type: 'cc', channel: 0, controller: 32, value: 2 })
         expect(mapper({ type: 'program', channel: 0, value: 33 }))
-            .toEqual([{ type: 'program', channel: 0, value: 33 }])
+            .toEqual([
+                { type: 'cc', channel: 0, controller: 0, value: 0 },
+                { type: 'cc', channel: 0, controller: 32, value: 1 },
+                { type: 'program', channel: 0, value: 33 },
+            ])
 
         mapper({ type: 'cc', channel: 12, controller: 0, value: 0 })
         mapper({ type: 'cc', channel: 12, controller: 32, value: 2 })
@@ -343,19 +350,20 @@ describe('SC-88 to SC-55 mapping', () => {
             type: 'sysex',
             data: Uint8Array.from([0xf0, 0x41, 0x10, 0x42, 0x12, 0x40, 0x1a, 0x15, 0x02, 0x0f, 0xf7]),
         })
+        expect(mapper.getState().drumChannels[10]).toBe(1)
 
         mapper({ type: 'cc', channel: 9, controller: 0, value: 0 })
         mapper({ type: 'cc', channel: 9, controller: 32, value: 2 })
-        expect(mapper({ type: 'program', channel: 9, value: 50 })[0])
+        expect(mapper({ type: 'program', channel: 9, value: 50 }).at(-1))
             .toEqual(expect.objectContaining({ type: 'program', channel: 9, value: 0 }))
         expect(mapper({ type: 'note_on', channel: 9, note: 45, velocity: 100 }))
-            .toEqual([{ type: 'note_on', channel: 9, note: 35, velocity: 95 }])
+            .toEqual([{ type: 'note_on', channel: 9, note: 35, velocity: 103 }])
         expect(mapper({ type: 'note_on', channel: 9, note: 66, velocity: 100 }))
-            .toEqual([{ type: 'note_on', channel: 9, note: 38, velocity: 100 }])
+            .toEqual([{ type: 'note_on', channel: 9, note: 38, velocity: 102 }])
 
         mapper({ type: 'cc', channel: 10, controller: 0, value: 0 })
         mapper({ type: 'cc', channel: 10, controller: 32, value: 2 })
-        expect(mapper({ type: 'program', channel: 10, value: 1 })[0])
+        expect(mapper({ type: 'program', channel: 10, value: 1 }).at(-1))
             .toEqual(expect.objectContaining({ type: 'program', channel: 10, value: 0 }))
     })
 })
