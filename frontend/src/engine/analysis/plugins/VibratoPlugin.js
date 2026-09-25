@@ -1,122 +1,157 @@
 import { TechniquePlugin, techniqueRegistry } from '../TechniqueRegistry.js'
 
-class VibratoPlugin extends TechniquePlugin {
-    constructor() {
-        super('vibrato', 'Vibrato')
-        this.isActive = false // For UI debug
-        this.minDuration = 0.35 // Seconds of vibrato to trigger an event
-        this.state = {
-            startTime: null,
-            isVibrating: false
+// Based on allkaraoke's alternating pitch-direction changes and interval test.
+export const VIBRATO_CONFIG = Object.freeze({
+    windowSec: 0.95,
+    reversalCents: 10,
+    turnCount: 5,
+    intervalRatio: 1.75,
+    minRateHz: 3,
+    maxRateHz: 8,
+    rateToleranceHz: 0.2,
+    minExtentCents: 15,
+    maxExtentCents: 150,
+    maxFrameGapSec: 0.08,
+    mergeGapSec: 0.18,
+    analyzeStepSec: 0.04,
+})
+
+export function measureVibrato(points, config = VIBRATO_CONFIG) {
+    if (points.length < 10) return null
+    // A short local average removes frame-to-frame F0 jitter without flattening
+    // the slower 3-8 Hz pitch modulation that defines vibrato.
+    const smooth = points.map((point, i) => {
+        let sum = 0
+        let count = 0
+        for (let j = Math.max(0, i - 8); j < Math.min(points.length, i + 9); j++) {
+            if (Math.abs(points[j].t - point.t) > 0.025) continue
+            sum += points[j].v
+            count++
         }
+        return { t: point.t, v: sum / count }
+    })
+    const turns = []
+    let extreme = smooth[0]
+    let direction = 0
+    for (let i = 1; i < smooth.length; i++) {
+        const point = smooth[i]
+        if (!direction) {
+            if (Math.abs(point.v - extreme.v) >= config.reversalCents) {
+                direction = Math.sign(point.v - extreme.v)
+                extreme = point
+            } else if (Math.abs(point.v - smooth[0].v) < config.reversalCents) {
+                extreme = point.v < extreme.v ? point : extreme
+            }
+        } else if ((point.v - extreme.v) * direction >= 0) {
+            extreme = point
+        } else if (Math.abs(point.v - extreme.v) >= config.reversalCents) {
+            turns.push(extreme)
+            direction *= -1
+            extreme = point
+        }
+    }
+    if (turns.length < config.turnCount) return null
+    for (let end = turns.length; end >= config.turnCount; end--) {
+        const selected = turns.slice(end - config.turnCount, end)
+        const intervals = selected.slice(1).map((turn, i) => turn.t - selected[i].t)
+        const average = intervals.reduce((sum, interval) => sum + interval, 0) / intervals.length
+        if (average <= 0 || points.at(-1).t - selected.at(-1).t > Math.min(0.2, average * 1.25)) continue
+        const shortest = Math.min(...intervals)
+        const longest = Math.max(...intervals)
+        if (longest >= average * config.intervalRatio ||
+            shortest <= average / config.intervalRatio ||
+            longest >= shortest * config.intervalRatio) continue
+        const rateHz = 1 / (2 * average)
+        // Discrete pitch frames can shift a boundary rate slightly (3 Hz to 2.97 Hz).
+        if (rateHz < config.minRateHz - config.rateToleranceHz ||
+            rateHz > config.maxRateHz + config.rateToleranceHz) continue
+        const extentCents = selected.slice(1).reduce(
+            (sum, turn, i) => sum + Math.abs(turn.v - selected[i].v), 0,
+        ) / (2 * intervals.length)
+        if (extentCents < config.minExtentCents || extentCents > config.maxExtentCents) continue
+        const contour = smooth.filter(point => point.t >= selected[0].t && point.t <= selected.at(-1).t)
+        const pitches = contour.map(point => point.v).sort((a, b) => a - b)
+        const middle = Math.floor(pitches.length / 2)
+        const centerCents = pitches.length % 2
+            ? pitches[middle]
+            : (pitches[middle - 1] + pitches[middle]) / 2
+        const regularity = shortest / longest
+        return { start: selected[0].t, end: selected.at(-1).t, rateHz, extentCents, centerMidi: centerCents / 100, fit: regularity }
+    }
+    return null
+}
+
+export class VibratoPlugin extends TechniquePlugin {
+    constructor(config = VIBRATO_CONFIG) {
+        super('vibrato', 'Vibrato')
+        this.config = config
+        this.reset()
     }
 
     analyze(time, f0Cents, historyBuffer) {
-        if (!Number.isFinite(f0Cents) || historyBuffer.length < 10) {
-            this._resetState()
-            return null
+        if (!Number.isFinite(f0Cents)) {
+            if (this.lastValidTime != null && time - this.lastValidTime <= this.config.maxFrameGapSec) return null
+            return this.flush()
         }
-
-        // 1. Get recent window (~0.5s is enough for modulation detection of 5Hz = 200ms period)
-        const windowSec = 0.5
-        const now = historyBuffer[historyBuffer.length - 1].t
-        const windowStart = now - windowSec
-
-        // Extract recent valid pitch data
+        if (this.lastValidTime != null && time - this.lastValidTime > this.config.maxFrameGapSec) {
+            const event = this.flush()
+            this.lastValidTime = time
+            if (event) return event
+        }
+        this.lastValidTime = time
+        if (time - this.lastAnalysis < this.config.analyzeStepSec) return null
+        this.lastAnalysis = time
         const points = []
+        let nextValidTime = time
         for (let i = historyBuffer.length - 1; i >= 0; i--) {
-            const p = historyBuffer[i]
-            if (p.t < windowStart) break
-            if (Number.isFinite(p.v)) points.push(p)
-            // Break if gap is too large? simplified for now
+            const point = historyBuffer[i]
+            if (point.t < time - this.config.windowSec) break
+            if (!Number.isFinite(point.v)) continue
+            if (nextValidTime - point.t > this.config.maxFrameGapSec + 1e-9) break
+            points.push(point)
+            nextValidTime = point.t
         }
         points.reverse()
-
-        if (points.length < 5) {
-            this._resetState()
-            return null
-        }
-
-        // 2. Simple Zero-Crossing Rate / Modulation check adapted for stream
-        // Detrend (remove linear trend)
-        const values = points.map(p => p.v)
-        const times = points.map(p => p.t)
-
-        // Linear regression (y = mx + c) to detrend
-        const n = values.length
-        let sumX = 0, sumY = 0, sumXY = 0, sumXX = 0
-        for (let i = 0; i < n; i++) {
-            sumX += times[i]
-            sumY += values[i]
-            sumXY += times[i] * values[i]
-            sumXX += times[i] * times[i]
-        }
-        const slope = (n * sumXY - sumX * sumY) / (n * sumXX - sumX * sumX)
-        const intercept = (sumY - slope * sumX) / n
-        const detrended = values.map((v, i) => v - (slope * times[i] + intercept))
-
-        // Check modulation: Sign changes (Zero crossings)
-        let crossings = 0
-        for (let i = 1; i < n; i++) {
-            if (Math.sign(detrended[i]) !== Math.sign(detrended[i - 1]) && Math.sign(detrended[i]) !== 0) {
-                crossings++
-            }
-        }
-
-        // Estimate frequency: crossings / 2 / duration
-        const duration = times[n - 1] - times[0]
-        if (duration < 0.2) return null // Need at least 200ms to detect 5Hz
-
-        const rate = crossings / 2 / duration
-
-        // Check extent (amplitude of modulation)
-        // RMS of detrended signal
-        let sumSq = 0
-        for (const v of detrended) sumSq += v * v
-        const rms = Math.sqrt(sumSq / n)
-        // Approx peak amplitude is rms * sqrt(2) for sine, so extent is ~ peak
-        const extent = rms * 1.414
-
-        // Criteria from paper/reference:
-        // Rate: 5Hz - 8Hz (relaxed to 4-9Hz for real-world)
-        // Extent: > 30 cents
-
-        const isVibrato = (rate > 5 && rate < 8) && (extent > 30)
-
-        if (isVibrato) {
+        const measurement = measureVibrato(points, this.config)
+        if (measurement) {
+            if (!this.segment) this.segment = { start: measurement.start, end: time }
+            this.segment.end = time
             this.isActive = true
-            if (!this.state.isVibrating) {
-                this.state.isVibrating = true
-                this.state.startTime = times[0]
-            }
-        } else {
-            this.isActive = false
-            if (this.state.isVibrating) {
-                // Vibrato ended. Was it long enough to count?
-                const vibDuration = now - this.state.startTime
-                this.state.isVibrating = false
-                this.state.startTime = null
-
-                if (vibDuration >= this.minDuration) {
-                    return { type: 'vibrato', duration: vibDuration }
+            if (!this.emitted) {
+                this.emitted = true
+                return {
+                    type: 'vibrato',
+                    start: measurement.start,
+                    end: measurement.end,
+                    t: (measurement.start + measurement.end) / 2,
+                    duration: measurement.end - measurement.start,
+                    rateHz: measurement.rateHz,
+                    extentCents: measurement.extentCents,
+                    centerMidi: measurement.centerMidi,
+                    confidence: measurement.fit,
                 }
             }
+            return null
         }
-
+        if (this.segment && time - this.segment.end > this.config.mergeGapSec) return this.flush()
         return null
     }
 
-    _resetState() {
+    flush() {
+        this.segment = null
         this.isActive = false
-        if (this.state.isVibrating) {
-            // logic for ending? assumes gap means end
-            this.state.isVibrating = false
-            this.state.startTime = null
-        }
+        this.lastAnalysis = -Infinity
+        this.lastValidTime = null
+        this.emitted = false
+        return null
     }
 
     reset() {
-        this._resetState()
+        this.segment = null
+        this.isActive = false
+        this.lastAnalysis = -Infinity
+        this.lastValidTime = null
+        this.emitted = false
     }
 }
 

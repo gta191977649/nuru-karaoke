@@ -225,6 +225,7 @@ export class SimpleScoreCalculator {
     this._samples = []
     this._nextNoteIndex = 0
     this._noteResults = []
+    this._archivedConfirmedSegments = []
     this._lastSampleTime = null
     this._visualTimeSec = 0
     this._lastFinalizeCount = 0
@@ -594,7 +595,10 @@ export class SimpleScoreCalculator {
       this.correctWeightedBeats += result.creditBeats * weight
       this.finalizedWeightedBeats += result.totalBeats * weight
       this._noteResults.push(result)
-      if (this._noteResults.length > 40) this._noteResults.shift()
+      if (this._noteResults.length > 40) {
+        const archivedResult = this._noteResults.shift()
+        this._archivedConfirmedSegments.push(...this._confirmedSegmentsForResult(archivedResult))
+      }
       this._nextNoteIndex += 1
       this._lastFinalizeCount += 1
     }
@@ -702,6 +706,7 @@ export class SimpleScoreCalculator {
       : (this._lastSampleTime || 0)
     this._visualTimeSec = end
     this._finalizeReadyNotes(end, true)
+    this._liveResult = null
     return this.getScore()
   }
 
@@ -824,6 +829,10 @@ export class SimpleScoreCalculator {
       decisionWindowSec: activeResult?.decisionWindowSec ?? null,
       confirmedThroughSec,
     }
+  }
+
+  getAllConfirmedSegments() {
+    return [...this._archivedConfirmedSegments, ...this.getVisualState().confirmedSegments]
   }
 
   getFinalizeInfo() {

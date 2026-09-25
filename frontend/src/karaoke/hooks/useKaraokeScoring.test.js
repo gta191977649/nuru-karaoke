@@ -39,7 +39,7 @@ describe('useKaraokeScoring event integration', () => {
     const transpositionRef = { current: 0 }
     const onScoreChange = vi.fn()
 
-    const { finalizeScore } = useKaraokeScoring({
+    const { finalizeScore, scoringVisualRef } = useKaraokeScoring({
       pitchEngine,
       reference,
       currentTimeRef,
@@ -55,6 +55,7 @@ describe('useKaraokeScoring event integration', () => {
     }
 
     expect(finalizeScore(2)).toBeCloseTo(100, 6)
+    expect(scoringVisualRef.current.allConfirmedSegments).toHaveLength(1)
     expect(onScoreChange).toHaveBeenLastCalledWith(
       expect.closeTo(100, 6),
       expect.objectContaining({ ready: true, final: true }),

@@ -209,3 +209,67 @@ export function hasStableTechniqueLanding(stableSegments, eventTimeSec, options 
   const minStableSec = Number(options.minStableSec) || TECHNIQUE_MIN_STABLE_LANDING_SEC
   return getStableLandingDuration(stableSegments, eventTimeSec, windowSec) >= minStableSec - 1e-9
 }
+
+export function getTechniqueNote(event, notes) {
+  const time = Number(event?.t)
+  if (!Number.isFinite(time)) return null
+  return (notes || []).find(note => time >= Number(note.t0Sec) && time <= Number(note.t1Sec)) || null
+}
+
+export function getVibratoCandidateNote(events, notes, songTimeSec, active) {
+  if (!active || !Number.isFinite(songTimeSec)) return null
+  const latest = Array.isArray(events) ? events.findLast(event => event?.type === 'vibrato') : null
+  const note = getTechniqueNote(latest, notes)
+  if (!note || songTimeSec < Number(note.t0Sec) || songTimeSec >= Number(note.t1Sec)) return null
+  return note
+}
+
+export function getTechniqueEventKey(event, note) {
+  return `${event.type}:${note.t0Sec}:${note.t1Sec}:${note.midi}`
+}
+
+export function hasConfirmedNoteHit(note, confirmedSegments) {
+  if (!note) return false
+  const noteStart = Number(note.t0Sec)
+  const noteEnd = Number(note.t1Sec)
+  if (!Number.isFinite(noteStart) || !Number.isFinite(noteEnd) || noteEnd <= noteStart) return false
+  return (confirmedSegments || []).some(segment => (
+    Math.min(noteEnd, Number(segment?.t1Sec)) >
+    Math.max(noteStart, Number(segment?.t0Sec))
+  ))
+}
+
+export function isTechniqueEventValid(event, note, stableSegments) {
+  if (!note) return false
+  if (event.type === 'vibrato') {
+    return hasConfirmedNoteHit(note, stableSegments)
+  }
+  if (event.type === 'glissdown') {
+    const slideStart = Number.isFinite(event.start) ? event.start : Number(event.t)
+    return getStableLandingDuration(
+      stableSegments,
+      slideStart - TECHNIQUE_LANDING_WINDOW_SEC,
+      TECHNIQUE_LANDING_WINDOW_SEC,
+    ) >= TECHNIQUE_MIN_STABLE_LANDING_SEC
+  }
+  return hasStableTechniqueLanding(stableSegments, event.t)
+}
+
+export function countValidatedTechniqueEvents(events, notes, confirmedSegments) {
+  const counts = { glissup: 0, glissdown: 0, kobushi: 0, vibrato: 0 }
+  const accepted = new Set()
+  for (const event of events || []) {
+    if (!(event.type in counts)) continue
+    const note = getTechniqueNote(event, notes)
+    if (!note) continue
+    const key = getTechniqueEventKey(event, note)
+    if (accepted.has(key)) continue
+    const segments = (confirmedSegments || []).filter(segment => (
+      segment.t1Sec > note.t0Sec && segment.t0Sec < note.t1Sec
+    ))
+    if (!isTechniqueEventValid(event, note, segments)) continue
+    accepted.add(key)
+    counts[event.type] += 1
+  }
+  return counts
+}

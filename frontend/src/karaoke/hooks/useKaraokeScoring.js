@@ -159,7 +159,10 @@ export function useKaraokeScoring({
         const fallbackTime = Number(currentTimeRef.current)
         const resolvedEnd = Number.isFinite(Number(endTimeSec)) ? Number(endTimeSec) : fallbackTime
         const score = calculatorRef.current.finalize(resolvedEnd)
-        scoringVisualRef.current = calculatorRef.current.getVisualState()
+        scoringVisualRef.current = {
+            ...calculatorRef.current.getVisualState(),
+            allConfirmedSegments: calculatorRef.current.getAllConfirmedSegments(),
+        }
         lastScoreRef.current = score
         if (typeof onScoreChange === 'function') {
             onScoreChange(score, {

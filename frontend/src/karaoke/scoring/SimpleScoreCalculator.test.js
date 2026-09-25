@@ -63,6 +63,17 @@ function makeCalculator(notes, options = {}) {
 }
 
 describe('allkaraoke pitch-class matching', () => {
+  it('keeps confirmed hit history for full-song technique counting after visual results roll off', () => {
+    const notes = Array.from({ length: 45 }, (_, index) =>
+      makeNote(index * 0.2, index * 0.2 + 0.18, 60))
+    const calculator = makeCalculator(notes)
+    runSamples(calculator, 0, 9.2, () => 60)
+    calculator.finalize(9.2)
+
+    expect(calculator.getVisualState().recentNotes).toHaveLength(40)
+    expect(calculator.getAllConfirmedSegments()).toHaveLength(45)
+  })
+
   it('publishes the new competitive algorithm version', () => {
     expect(SCORING_ALGORITHM_VERSION).toBe('pitch-v11-log-duration-tolerance')
   })

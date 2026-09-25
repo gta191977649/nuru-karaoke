@@ -4,7 +4,7 @@ import { BloomFilter } from 'pixi-filters'
 import { getTargetNoteAtTick, mergeAdjacentNotesByPitch } from '../engine/audio/midi/referenceMelody.js'
 import { DEFAULT_CONFIG } from '../engine/audioEngine.js'
 import { UI_CONFIG } from '../config.js'
-import { DEFAULT_PARTICLE_CONFIG, createParticleSystem, createComboSystem } from './particles/particleSystem.js'
+import { DEFAULT_PARTICLE_CONFIG, COMBO_TRAVEL_SEC, createParticleSystem, createComboSystem } from './particles/particleSystem.js'
 import Spectrogram from './Spectrogram.jsx'
 import WaveformPixi from './WaveformPixi.jsx'
 import { getSharedDebugAnalyser } from '../engine/audio/pitch/sharedPitchEngine.js'
@@ -13,7 +13,10 @@ import {
   getLivePitchTrailSegments,
   getNearestNoteMidiAtTime,
   getStableHitTargetMidi,
-  hasStableTechniqueLanding,
+  getTechniqueEventKey,
+  getTechniqueNote,
+  getVibratoCandidateNote,
+  isTechniqueEventValid,
   getTechniqueResolutionTime,
   mergeConfirmedSpans,
   smoothLiveMarkerPosition,
@@ -363,6 +366,7 @@ function MelodyGuideCanvas({
   glissandoDownCount = 0,
   vibratoCount = 0,
   techniqueEventsRef,
+  vibratoCandidateActive = false,
   currentSection = 1,
   totalSections = 6,
   className,
@@ -385,6 +389,8 @@ function MelodyGuideCanvas({
   const kobushiRef = useRef(null)
   const fallRef = useRef(null)
   const vibratoRef = useRef(null)
+  const comboHitTimersRef = useRef(new Set())
+  const comboHitAnimationsRef = useRef(new Map())
 
   /* Internal state for validated counts */
   const [validCounts, setValidCounts] = useState({
@@ -407,6 +413,8 @@ function MelodyGuideCanvas({
     user: null,
     userGlowContainer: null,
     userGlow: null,
+    vibratoWaves: null,
+    vibratoWaveState: null,
     particleSystem: null,
     comboSystem: null,
     playhead: null,
@@ -447,24 +455,42 @@ function MelodyGuideCanvas({
     kobushiCount,
     glissandoDownCount,
     vibratoCount,
+    vibratoCandidateActive,
     showSolfeges,
     debug
   })
 
   useEffect(() => {
     pixiRef.current.confirmedNoteIds = new Set()
+    pixiRef.current.vibratoWaveState = null
+    pixiRef.current.vibratoWaves?.clear()
   }, [reference])
 
+  useEffect(() => () => {
+    for (const timer of comboHitTimersRef.current) clearTimeout(timer)
+    comboHitTimersRef.current.clear()
+    for (const animation of comboHitAnimationsRef.current.values()) animation.cancel()
+    comboHitAnimationsRef.current.clear()
+  }, [])
+
   const triggerComboHit = (ref, color) => {
-    if (!ref.current) return
-    ref.current.animate([
-      { transform: 'scale(1)', filter: 'brightness(1)', backgroundColor: 'transparent' },
-      { transform: 'scale(1.3)', filter: 'brightness(2)', backgroundColor: color, offset: 0.1 },
-      { transform: 'scale(1)', filter: 'brightness(1)', backgroundColor: 'transparent' }
+    const element = ref.current
+    if (typeof element?.animate !== 'function') return
+    comboHitAnimationsRef.current.get(element)?.cancel()
+    const restingShadow = getComputedStyle(element).boxShadow
+    const animation = element.animate([
+      { boxShadow: restingShadow, outlineWidth: '0px', offset: 0 },
+      { boxShadow: `0 0 8px ${color}, 0 0 20px ${color}, inset 0 0 5px ${color}`, outlineWidth: '2px', offset: 0.18 },
+      { boxShadow: `0 0 5px ${color}, 0 0 12px ${color}`, outlineWidth: '1px', offset: 0.55 },
+      { boxShadow: restingShadow, outlineWidth: '0px', offset: 1 },
     ], {
-      duration: 800,
-      easing: 'ease-out'
+      duration: 650,
+      easing: 'ease-out',
     })
+    comboHitAnimationsRef.current.set(element, animation)
+    animation.onfinish = () => {
+      if (comboHitAnimationsRef.current.get(element) === animation) comboHitAnimationsRef.current.delete(element)
+    }
   }
 
   useEffect(() => {
@@ -489,6 +515,7 @@ function MelodyGuideCanvas({
       glissandoDownCount,
       vibratoCount,
       techniqueEventsRef,
+      vibratoCandidateActive,
       showSolfeges,
       debug
     }
@@ -513,6 +540,7 @@ function MelodyGuideCanvas({
     glissandoDownCount,
     vibratoCount,
     techniqueEventsRef,
+    vibratoCandidateActive,
     onTechniqueCountsChange,
     showSolfeges,
     debug
@@ -673,6 +701,7 @@ function MelodyGuideCanvas({
       const user = new Graphics()
       const userGlowContainer = new Container()
       const userGlow = new Graphics()
+      const vibratoWaves = new Graphics()
       const trail = new Graphics() // F0 Trail
       const techniqueIcons = new Container() // Technique Icons
       const solfegeLabels = new Container()
@@ -704,7 +733,7 @@ function MelodyGuideCanvas({
           threshold: 0.2,
         }),
       ]
-      app.stage.addChild(bg, grid, notes, miss, solfegeLabels, user, userGlowContainer, playhead, techniqueIcons, debugTrace)
+      app.stage.addChild(bg, grid, notes, miss, solfegeLabels, user, userGlowContainer, vibratoWaves, playhead, techniqueIcons, debugTrace)
 
       pixiRef.current = {
         app,
@@ -715,6 +744,8 @@ function MelodyGuideCanvas({
         user,
         userGlowContainer,
         userGlow,
+        vibratoWaves,
+        vibratoWaveState: null,
         trail,
         techniqueIcons,
         techniqueSpritePool,
@@ -767,7 +798,9 @@ function MelodyGuideCanvas({
             const songTime = event.t
             if (snap.reference) {
               const tick = snap.reference?.getTickAtTime ? snap.reference.getTickAtTime(songTime) : songTime
-              let targetNote = getTargetNoteAtTick(snap.reference, tick, { maxGapTick: 0, edgeToleranceTick: 0 })
+              let targetNote = event.type === 'vibrato'
+                ? getTechniqueNote(event, snap.reference.notes)
+                : getTargetNoteAtTick(snap.reference, tick, { maxGapTick: 0, edgeToleranceTick: 0 })
               if (!targetNote && (event.type === 'glissup' || event.type === 'glissdown')) {
                 targetNote = (snap.reference.notes || []).find((note) => (
                   Number(note.t0Sec) >= songTime &&
@@ -777,15 +810,22 @@ function MelodyGuideCanvas({
 
               if (targetNote) {
                 const noteId = targetNote.t0Sec
-                if (state.processedNotesRef && state.processedNotesRef.has(noteId)) {
+                const eventKey = getTechniqueEventKey(event, targetNote)
+                if (state.processedNotesRef && state.processedNotesRef.has(eventKey)) {
                   continue
                 }
                 event.isValid = false
                 event.isPending = true
                 event._noteId = noteId
+                event._eventKey = eventKey
+                event._targetNote = targetNote
                 event._scoringNoteId = `${targetNote.t0Sec}:${targetNote.t1Sec}:${targetNote.midi}`
                 event._noteEndSec = Number(targetNote.t1Sec)
                 event._type = event.type
+              } else {
+                console.log('[SingingTechnique] rejected', {
+                  type: event.type, t: event.t, reason: 'no-target-note',
+                })
               }
             }
           }
@@ -915,6 +955,55 @@ function MelodyGuideCanvas({
         drawMelodyNotes(COLORS.melodyFill, ALPHAS.melodyFill, true)
         drawMelodyNotes(COLORS.melodyOutFill, ALPHAS.melodyOutFill, false)
 
+        const candidateNote = getVibratoCandidateNote(
+          snap.techniqueEventsRef?.current,
+          notesData,
+          songTimeSec,
+          snap.vibratoCandidateActive,
+        )
+        const wave = state.vibratoWaves
+        wave?.clear()
+        if (wave) {
+          const nowMs = performance.now()
+          let visual = state.vibratoWaveState
+          // Switching notes starts a fresh fade; losing the candidate fades the last note out.
+          if (candidateNote && visual?.note !== candidateNote) {
+            visual = { note: candidateNote, opacity: 0, lastFrameMs: nowMs }
+          }
+          if (visual) {
+            const elapsedSec = Math.max(0, (nowMs - visual.lastFrameMs) / 1000)
+            visual.lastFrameMs = nowMs
+            visual.opacity = Math.max(0, Math.min(1,
+              visual.opacity + (candidateNote === visual.note ? 1 : -1) * elapsedSec / 0.5,
+            ))
+          }
+          state.vibratoWaveState = visual?.opacity > 0 || candidateNote ? visual : null
+        }
+        const visibleWave = state.vibratoWaveState
+        if (visibleWave?.opacity > 0 && wave) {
+          const waveNote = visibleWave.note
+          const { y, inRange } = midiToY(Number(waveNote.midi) + transposition)
+          const noteLeft = playheadX + (waveNote.t0Sec - songTimeSec) * pixelsPerSec
+          const noteRight = playheadX + (waveNote.t1Sec - songTimeSec) * pixelsPerSec
+          const left = Math.max(0, noteLeft)
+          const right = Math.min(w, noteRight)
+          if (inRange && right - left >= 8) {
+            const phase = songTimeSec * 4
+            const amplitude = barH / 2 + 2
+            wave.setStrokeStyle({ width: 2, color: 0xffffff, alpha: 0.8 * visibleWave.opacity })
+            for (const direction of [1, -1]) {
+              wave.beginPath()
+              for (let x = left; x < right; x += 4) {
+                const waveY = y + direction * amplitude * Math.sin(x / 20 + phase)
+                if (x === left) wave.moveTo(x, waveY)
+                else wave.lineTo(x, waveY)
+              }
+              wave.lineTo(right, y + direction * amplitude * Math.sin(right / 20 + phase))
+              wave.stroke()
+            }
+          }
+        }
+
         if (state.solfegeLabels) {
           const labelPool = state.solfegeLabelPool || []
           let labelCount = 0
@@ -1042,57 +1131,79 @@ function MelodyGuideCanvas({
             })
           }
         }
-        // A slide only becomes a technique after it lands stably on target.
+        // Only confirmed target-note technique events update the counter and combo.
         if (state.techniqueEventsRef?.current) {
-          const startX = activeApp.screen.width * 0.7
-          const startY = Number.isFinite(state.playheadDotY) ? state.playheadDotY : h / 2
-          const targetY = h - 30
           for (const evt of state.techniqueEventsRef.current) {
             if (!evt.isPending) continue
+            if (evt._eventKey && state.processedNotesRef?.has(evt._eventKey)) {
+              evt.isPending = false
+              evt.isValid = false
+              continue
+            }
             const eventTimeSec = Number(evt.t)
             if (!Number.isFinite(eventTimeSec)) {
               evt.isPending = false
               continue
             }
-            const eventSegments = evt._scoringNoteId
-              ? stableHitSegments.filter((segment) => segment.noteId === evt._scoringNoteId)
+            const eventSegments = evt._targetNote
+              ? stableHitSegments.filter((segment) => (
+                segment.t1Sec > evt._targetNote.t0Sec &&
+                segment.t0Sec < evt._targetNote.t1Sec
+              ))
               : []
             const scoringNoteResult = evt._scoringNoteId
               ? visualResults.find((result) => result.noteId === evt._scoringNoteId)
               : null
+            if (evt.type === 'vibrato' && !scoringNoteResult) continue
             if (scoringNoteResult?.pendingConfirmation) continue
-            const landed = hasStableTechniqueLanding(eventSegments, eventTimeSec)
+            const landed = isTechniqueEventValid(evt, evt._targetNote, eventSegments)
             const resolveAfter = getTechniqueResolutionTime(
               eventTimeSec,
               evt._noteEndSec,
               scoringNoteResult?.visualDelaySec,
             )
-            if (!landed && Number.isFinite(resolveAfter) && songTimeSec < resolveAfter) continue
+            if (evt.type !== 'vibrato' && !landed && Number.isFinite(resolveAfter) && songTimeSec < resolveAfter) {
+              continue
+            }
             if (landed) {
               evt.isValid = true
-              if (state.processedNotesRef && evt._noteId != null) {
-                state.processedNotesRef.add(evt._noteId)
+              console.log('[SingingTechnique] validated', {
+                type: evt.type,
+                t: evt.t,
+                noteId: evt._scoringNoteId,
+              })
+              if (state.processedNotesRef && evt._eventKey) {
+                state.processedNotesRef.add(evt._eventKey)
               }
               const type = evt._type || evt.type
               setValidCounts(prev => ({
                 ...prev,
                 [type]: (prev[type] || 0) + 1
               }))
-              if (type === 'glissup') {
-                state.comboSystem.spawnCombo(startX, startY, 60, targetY, TECHNIQUE_CONFIG.glissup.color)
-                setTimeout(() => triggerComboHit(shakuriRef, toCssColor(TECHNIQUE_CONFIG.glissup.color)), 600)
-              } else if (type === 'kobushi') {
-                state.comboSystem.spawnCombo(startX, startY, 170, targetY, TECHNIQUE_CONFIG.kobushi.color)
-                setTimeout(() => triggerComboHit(kobushiRef, toCssColor(TECHNIQUE_CONFIG.kobushi.color)), 600)
-              } else if (type === 'glissdown') {
-                state.comboSystem.spawnCombo(startX, startY, 280, targetY, TECHNIQUE_CONFIG.glissdown.color)
-                setTimeout(() => triggerComboHit(fallRef, toCssColor(TECHNIQUE_CONFIG.glissdown.color)), 600)
-              } else if (type === 'vibrato') {
-                state.comboSystem.spawnCombo(startX, startY, 390, targetY, TECHNIQUE_CONFIG.vibrato.color)
-                setTimeout(() => triggerComboHit(vibratoRef, toCssColor(TECHNIQUE_CONFIG.vibrato.color)), 600)
+              const config = TECHNIQUE_CONFIG[type]
+              const targetRef = { glissup: shakuriRef, kobushi: kobushiRef, glissdown: fallRef, vibrato: vibratoRef }[type]
+              const targetX = { glissup: 60, kobushi: 170, glissdown: 280, vibrato: 390 }[type]
+              if (config && targetRef && state.comboSystem) {
+                const startX = activeApp.screen.width * 0.7
+                const startY = Number.isFinite(state.playheadDotY) ? state.playheadDotY : h / 2
+                state.comboSystem.spawnCombo(startX, startY, targetX, h - 30, config.color)
+                const timer = setTimeout(() => {
+                  comboHitTimersRef.current.delete(timer)
+                  triggerComboHit(targetRef, toCssColor(config.color))
+                }, COMBO_TRAVEL_SEC * 1000)
+                comboHitTimersRef.current.add(timer)
+                console.log('[SingingTechnique] combo', { type, t: evt.t })
               }
             } else {
               evt.isValid = false
+              console.log('[SingingTechnique] rejected', {
+                type: evt.type,
+                t: evt.t,
+                noteId: evt._scoringNoteId,
+                reason: evt.type === 'vibrato'
+                  ? 'no-confirmed-pitch-hit'
+                  : 'no-stable-target-hit',
+              })
             }
             evt.isPending = false
           }
@@ -1530,6 +1641,8 @@ function MelodyGuideCanvas({
         user: null,
         userGlowContainer: null,
         userGlow: null,
+        vibratoWaves: null,
+        vibratoWaveState: null,
         particleSystem: null,
         comboSystem: null,
         playhead: null,
@@ -1896,11 +2009,16 @@ const CountBox = forwardRef(({ label, count, borderColor, icon, labelColor }, re
       style={{
         ...OVERLAY_STYLE.countBox.box,
         border: `2px solid ${borderColor}`,
-        boxShadow: `0 0 5px ${borderColor}40, inset 0 1px 0 rgba(255,255,255,0.2)`,
+        boxShadow: 'inset 0 1px 0 rgba(255,255,255,0.2)',
+        outline: `0 solid ${borderColor}`,
+        outlineOffset: 2,
+        transition: 'box-shadow 120ms',
       }}
     >
       <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-        <span style={{ ...OVERLAY_STYLE.countBox.label, color: labelColor || '#eee' }}>{label}</span>
+        <span style={{ ...OVERLAY_STYLE.countBox.label, color: labelColor || '#eee' }}>
+          {label}
+        </span>
         <span style={{ color: borderColor, display: 'flex', alignItems: 'center' }}>{icon}</span>
       </div>
       <div style={OVERLAY_STYLE.countBox.count}>{count}</div>

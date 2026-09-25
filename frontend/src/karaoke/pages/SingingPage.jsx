@@ -17,6 +17,7 @@ import { useKaraokeReference } from '../hooks/useKaraokeReference.js'
 import { useKaraokePitchHistory } from '../hooks/useKaraokePitchHistory.js'
 import { useKaraokeSongIntro } from '../hooks/useKaraokeSongIntro.js'
 import { useSingingTechnique } from '../hooks/useSingingTechnique.js'
+import { countValidatedTechniqueEvents } from '../scoring/scoringVisualUtils.js'
 import { useKaraokeScoring } from '../hooks/useKaraokeScoring.js'
 import RealtimeScoreCounter from '../../components/RealtimeScoreCounter.jsx'
 import { usePlayerScoreStore } from '../../state/playerScoreStore.js'
@@ -260,11 +261,18 @@ function SingingPage({ onFinish, showInterludePrompt = true }) {
     })
 
     // Technique Detection
-    const { techniqueEventsRef, resetCounts } = useSingingTechnique(
+    const {
+        techniqueEventsRef,
+        activeTechniques,
+        resetCounts,
+        flush: flushTechniques,
+    } = useSingingTechnique(
         pitchEngine,
         currentTimeRef,
         micActive,
         microphoneLatencySec,
+        reference,
+        micRmsGate,
     )
 
     // Scoring
@@ -281,7 +289,7 @@ function SingingPage({ onFinish, showInterludePrompt = true }) {
         microphoneLatencySec,
     })
 
-    // Technique Counts (Validated)
+    // Display and saved results share the same confirmed, per-note count.
     const techniqueCountsRef = useRef({ glissup: 0, kobushi: 0, glissdown: 0, vibrato: 0 })
     const handleTechniqueCountsChange = useCallback((counts) => {
         techniqueCountsRef.current = counts
@@ -420,16 +428,26 @@ function SingingPage({ onFinish, showInterludePrompt = true }) {
             hasFinishedRef.current = true
             if (onFinish) {
                 const finalScore = finalizeScore(state.duration)
-                const finalTechniques = { ...techniqueCountsRef.current }
-                const history = Array.isArray(fullHistoryRef.current) ? fullHistoryRef.current : []
-                const f0Curve = buildF0CurveByBeat({
-                    history,
-                    reference,
-                    rmsGate: micRmsGate,
+                const finalConfirmedSegments = scoringVisualRef.current?.allConfirmedSegments
+                    || scoringVisualRef.current?.confirmedSegments || []
+                void flushTechniques().then(() => {
+                    const finalTechniques = countValidatedTechniqueEvents(
+                        techniqueEventsRef.current,
+                        reference?.notes || [],
+                        finalConfirmedSegments,
+                    )
+                    techniqueCountsRef.current = finalTechniques
+                    setTechniqueCounts(finalTechniques)
+                    const history = Array.isArray(fullHistoryRef.current) ? fullHistoryRef.current : []
+                    const f0Curve = buildF0CurveByBeat({
+                        history,
+                        reference,
+                        rmsGate: micRmsGate,
+                    })
+                    setResults({ score: finalScore, techniques: finalTechniques, songInfo, f0Curve })
+                    setF0Curve(f0Curve)
+                    onFinish({ score: finalScore, techniques: finalTechniques, songInfo, f0Curve })
                 })
-                setResults({ score: finalScore, techniques: finalTechniques, songInfo, f0Curve })
-                setF0Curve(f0Curve)
-                onFinish({ score: finalScore, techniques: finalTechniques, songInfo, f0Curve })
             }
         }
     }, [
@@ -445,6 +463,10 @@ function SingingPage({ onFinish, showInterludePrompt = true }) {
         reference,
         fullHistoryRef,
         micRmsGate,
+        flushTechniques,
+        techniqueEventsRef,
+        scoringVisualRef,
+        setTechniqueCounts,
     ])
 
     const titleVisualLength = Array.from(String(songInfo.title ?? '')).reduce(
@@ -509,6 +531,7 @@ function SingingPage({ onFinish, showInterludePrompt = true }) {
                                 width={800}
                                 height={220}
                                 techniqueEventsRef={techniqueEventsRef}
+                                vibratoCandidateActive={micActive && Boolean(activeTechniques.vibrato)}
                                 onTechniqueCountsChange={handleTechniqueCountsChange}
                                 totalSections={6}
                                 currentSection={state.duration > 0

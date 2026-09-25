@@ -1,5 +1,7 @@
 import { Particle, ParticleContainer, Texture } from 'pixi.js'
 
+export const COMBO_TRAVEL_SEC = 0.6
+
 const DEFAULT_PARTICLE_CONFIG = {
   emissionRate: 200,
   maxParticles: 650,
@@ -274,7 +276,7 @@ const createComboSystem = () => {
       targetX, targetY,
       color,
       progress: 0,
-      duration: 0.6 // Seconds to reach target
+      duration: COMBO_TRAVEL_SEC // Seconds to reach target
     })
   }
 
