@@ -30,8 +30,20 @@ function resolveMicAlignedSongTime({
   return Math.max(0, alignedTime)
 }
 
+function resolveTechniqueFrameTime({ songTime, frameTime, previousClock, hasReference }) {
+  if (!hasReference) return Number.isFinite(frameTime) ? frameTime : null
+  if (!Number.isFinite(songTime)) return null
+  if (previousClock && Number.isFinite(frameTime) &&
+      frameTime > previousClock.frameTime &&
+      songTime >= previousClock.songTime - 0.15) {
+    return Math.max(songTime, previousClock.alignedTime + frameTime - previousClock.frameTime)
+  }
+  return songTime
+}
+
 export {
   MAX_MICROPHONE_LATENCY_SEC,
   clampMicrophoneLatencySec,
   resolveMicAlignedSongTime,
+  resolveTechniqueFrameTime,
 }

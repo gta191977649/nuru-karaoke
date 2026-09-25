@@ -1,120 +1,115 @@
 import { TechniquePlugin, techniqueRegistry } from '../TechniqueRegistry.js'
 
-class GlissandoPlugin extends TechniquePlugin {
+const MIN_SLIDE_CENTS = 200
+const MAX_FRAME_GAP_SEC = 0.08
+
+function recentVoicedPoints(history, time) {
+    const points = []
+    let nextTime = time
+    for (let i = history.length - 1; i >= 0; i--) {
+        const point = history[i]
+        if (point.t < time - 0.4) break
+        if (!Number.isFinite(point.v) || nextTime - point.t > MAX_FRAME_GAP_SEC) break
+        points.push(point)
+        nextTime = point.t
+    }
+    return points.reverse()
+}
+
+function findSlide(points, direction) {
+    const end = points.at(-1)
+    if (!end) return null
+    for (const start of points) {
+        const duration = end.t - start.t
+        if (duration < 0.12 || duration > 0.4) continue
+        const portion = points.filter(point => point.t >= start.t)
+        let forward = 0
+        let backward = 0
+        let movingFrames = 0
+        let largestStep = 0
+        for (let i = 1; i < portion.length; i++) {
+            const step = (portion[i].v - portion[i - 1].v) * direction
+            if (step > 0) forward += step
+            else backward -= step
+            if (step > 3) movingFrames++
+            largestStep = Math.max(largestStep, Math.abs(step))
+        }
+        const displacement = (end.v - start.v) * direction
+        if (displacement >= MIN_SLIDE_CENTS && backward <= 40 &&
+            displacement / Math.max(1, forward + backward) >= 0.8 &&
+            movingFrames >= 8 && largestStep <= 80) {
+            return { start: start.t, end: end.t, extentCents: displacement }
+        }
+    }
+    return null
+}
+
+export class GlissandoPlugin extends TechniquePlugin {
     constructor() {
         super('glissando', 'Glissando')
-        this.isActive = false
-        this.state = {
-            direction: null, // 'up' or 'down'
-            startX: null,
-            startY: null,
-            potential: false
-        }
-        this.lastEventTime = 0
+        this.reset()
     }
 
-    analyze(time, f0Cents, historyBuffer) {
-        if (!Number.isFinite(f0Cents) || historyBuffer.length < 5) {
-            this.isActive = false
-            this.state = { direction: null, potential: false }
+    analyze(time, f0Cents, historyBuffer, _activeTechniques, note) {
+        const noteStart = Number(note?.startSec)
+        const noteEnd = Number(note?.endSec)
+        if (!Number.isFinite(noteStart) || !Number.isFinite(noteEnd) ||
+            noteEnd - noteStart < 0.3 || time > noteEnd + 0.03) {
+            this.state = null
             return null
         }
-
-        // Glissando / Scoop / Fall:
-        // Monotonic pitch change over a duration.
-        // "Shakuri" (GlissUp): Approach note from below.
-        // "Fall" (GlissDown): Leave note downwards.
-
-        // Detection strategy:
-        // Look at short term slope (last 150-200ms)
-        // If slope is consistently high positive -> Gliss Up candidate
-        // If slope is consistently high negative -> Gliss Down candidate
-        // If we detect a stable region AFTER a Gliss Up -> Trigger Shakuri
-        // If we detect a silence/end AFTER a Gliss Down -> Trigger Fall
-
-        const lookback = 0.2 // 200ms slope
-        const now = historyBuffer[historyBuffer.length - 1].t
-        const startWindow = now - lookback
-
-        // Get points in window
-        let pStart = null
-        const pEnd = historyBuffer[historyBuffer.length - 1]
-
-        for (let i = historyBuffer.length - 2; i >= 0; i--) {
-            if (historyBuffer[i].t < startWindow) {
-                pStart = historyBuffer[i]
-                break
+        if (!Number.isFinite(f0Cents)) return this.flush()
+        if (this.emitted) return null
+        const points = recentVoicedPoints(historyBuffer, time)
+        if (this.state?.direction === 'up') {
+            const settled = points.filter(point => point.t >= time - 0.08)
+            if (settled.length >= 5 && settled.at(-1).t - settled[0].t >= 0.07 &&
+                Math.max(...settled.map(point => point.v)) - Math.min(...settled.map(point => point.v)) <= 35 &&
+                time - this.state.end >= 0.08 && time <= noteStart + 0.55) {
+                return this.emit('glissup', time)
+            }
+        } else if (this.state?.direction === 'down') {
+            if (time >= noteEnd - 0.04 && noteEnd - this.state.end <= 0.15) {
+                return this.emit('glissdown', time)
             }
         }
+        if (this.state) return null
 
-        if (!pStart) return null
-
-        const dt = pEnd.t - pStart.t
-        const dv = pEnd.v - pStart.v // Cents change
-        if (dt < 0.1) return null;
-
-        const slope = dv / dt // Cents per second
-        // Threshold: e.g. 500 cents/sec (half octave per sec) is pretty fast gliss
-        // Shakuri usually ~ 2-3 semitones (200-300 cents) over ~0.2s => 1000 cents/sec
-
-        const threshold = 600
-
-        if (slope > threshold) {
-            // Gliss Up
-            this.isActive = true
-            this.state.direction = 'up'
-            this.state.potential = true
-            this.state.startTime = now
+        const up = findSlide(points, 1)
+        if (up && up.start <= noteStart + Math.min(0.18, (noteEnd - noteStart) * 0.25)) {
+            this.state = { direction: 'up', ...up, noteEnd }
+            return null
         }
-        else if (slope < -threshold) {
-            // Gliss Down
-            this.isActive = true
-            this.state.direction = 'down'
-            this.state.potential = true
-            this.state.startTime = now
+        const down = findSlide(points, -1)
+        if (down && time >= noteEnd - 0.3) {
+            this.state = { direction: 'down', ...down, noteEnd }
         }
-        else {
-            // Slope is stable(ish)
-            // If we were potentially glissing, check if we "landed"
-
-            if (this.state.potential && this.state.direction) {
-
-
-                // Debounce: Only count if it hasn't been triggered very recently (0.5s)
-                if (now - this.lastEventTime > 0.5) {
-                    if (this.state.direction === 'up') {
-                        // Landed after going up = Shakuri
-                        this.lastEventTime = now
-                        const evt = { type: 'glissup' }
-                        this._resetState()
-                        return evt
-                    } else if (this.state.direction === 'down') {
-                        // For Fall, usually we end in silence or drop significantly. 
-                        // If we stabilized, it might just be a pitch correction.
-                        // But let's count it for now if magnitude was sufficient.
-                        // Ideally Fall ends in silence/unvoiced.
-
-                        this.lastEventTime = now
-                        const evt = { type: 'glissdown' }
-                        this._resetState()
-                        return evt
-                    }
-                }
-            }
-            this._resetState()
-        }
-
         return null
     }
 
-    _resetState() {
-        this.isActive = false
-        this.state = { direction: null, potential: false, startTime: 0 }
+    emit(type, time) {
+        const event = {
+            type, t: time, start: this.state.start,
+            end: time, extentCents: this.state.extentCents,
+        }
+        this.state = null
+        this.emitted = true
+        return event
+    }
+
+    flush() {
+        if (this.state?.direction === 'down' &&
+            this.state.noteEnd - this.state.end <= 0.15 && !this.emitted) {
+            return this.emit('glissdown', this.state.end)
+        }
+        this.state = null
+        return null
     }
 
     reset() {
-        this._resetState()
-        this.lastEventTime = 0
+        this.state = null
+        this.emitted = false
+        this.isActive = false
     }
 }
 

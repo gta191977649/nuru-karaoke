@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest'
+import { SimpleScoreCalculator } from './SimpleScoreCalculator.js'
 import {
   getConfirmedSegmentFillEnd,
   getLivePitchTrailSegments,
@@ -9,7 +10,94 @@ import {
   hasStableTechniqueLanding,
   mergeConfirmedSpans,
   smoothLiveMarkerPosition,
+  countValidatedTechniqueEvents,
+  getTechniqueNote,
+  getVibratoCandidateNote,
+  hasConfirmedNoteHit,
+  isTechniqueEventValid,
 } from './scoringVisualUtils.js'
+
+describe('validated technique counts', () => {
+  const notes = [
+    { t0Sec: 1, t1Sec: 2, midi: 60 },
+    { t0Sec: 2, t1Sec: 3, midi: 62 },
+  ]
+  const confirmed = [
+    { t0Sec: 1.1, t1Sec: 1.9, noteId: 'merged-note' },
+    { t0Sec: 2.1, t1Sec: 2.9, noteId: 'second-note' },
+  ]
+
+  it('counts one vibrato per note when any part of that note has a yellow hit', () => {
+    const events = [
+      { type: 'vibrato', start: 1.4, end: 1.8, t: 1.6, centerMidi: 72 },
+      { type: 'vibrato', start: 1.5, end: 1.9, t: 1.7, centerMidi: 48 },
+      { type: 'vibrato', start: 2.3, end: 2.7, t: 2.5, centerMidi: 74 },
+    ]
+    const distantHits = [
+      { t0Sec: 1.1, t1Sec: 1.2 },
+      { t0Sec: 2.8, t1Sec: 2.9 },
+    ]
+    expect(countValidatedTechniqueEvents(events, notes, distantHits).vibrato).toBe(2)
+    expect(countValidatedTechniqueEvents(events, notes, []).vibrato).toBe(0)
+  })
+
+  it('does not borrow a yellow hit from an adjacent note at the boundary', () => {
+    const event = { type: 'vibrato', start: 2.05, end: 2.4, t: 2.2 }
+    const note = getTechniqueNote(event, notes)
+    expect(note).toBe(notes[1])
+    expect(hasConfirmedNoteHit(note, [{ t0Sec: 1.8, t1Sec: 2 }])).toBe(false)
+    expect(countValidatedTechniqueEvents([event], notes, [{ t0Sec: 1.8, t1Sec: 2 }]).vibrato).toBe(0)
+  })
+
+  it('uses the scorer yellow-hit policy for octave-equivalent transposed singing', () => {
+    const note = { t0Sec: 0, t1Sec: 1, t0Beat: 0, t1Beat: 2, midi: 60, type: 'normal' }
+    const calculator = new SimpleScoreCalculator()
+    calculator.reset([note], { reference: { notes: [note], getBeatAtTime: time => time * 2 } })
+    for (let frame = 0; frame <= 120; frame++) {
+      const timeSec = frame / 100
+      const midi = timeSec < 1 ? 74 : null // Target 60 + 2 semitones, sung one octave higher.
+      calculator.process({
+        timeSec,
+        transposition: 2,
+        userPitch: { midi, rawMidi: midi, rms: midi == null ? 0 : 0.1, rawConfidence: midi == null ? 0 : 1 },
+      })
+    }
+    const yellowHits = calculator.getVisualState().confirmedSegments
+    expect(yellowHits.length).toBeGreaterThan(0)
+    expect(countValidatedTechniqueEvents([
+      { type: 'vibrato', start: 0.3, end: 0.7, t: 0.5, centerMidi: 74 },
+    ], [note], yellowHits).vibrato).toBe(1)
+  })
+
+  it('keeps slide validation tied to its stable landing', () => {
+    expect(isTechniqueEventValid(
+      { type: 'glissup', t: 1.6 }, notes[0], confirmed,
+    )).toBe(true)
+    expect(isTechniqueEventValid(
+      { type: 'glissdown', t: 2.8 }, notes[1], confirmed,
+    )).toBe(true)
+    expect(isTechniqueEventValid(
+      { type: 'glissdown', t: 2.1 }, notes[1], confirmed,
+    )).toBe(false)
+  })
+})
+
+describe('vibrato candidate note effect', () => {
+  const notes = [
+    { t0Sec: 1, t1Sec: 2, midi: 60 },
+    { t0Sec: 2, t1Sec: 3, midi: 62 },
+  ]
+
+  it('follows only the latest active vibrato candidate within its note', () => {
+    const first = { type: 'vibrato', t: 1.4 }
+    const second = { type: 'vibrato', t: 2.3 }
+    expect(getVibratoCandidateNote([first], notes, 1.6, true)).toBe(notes[0])
+    expect(getVibratoCandidateNote([first], notes, 1.6, false)).toBeNull()
+    expect(getVibratoCandidateNote([first], notes, 2, true)).toBeNull()
+    expect(getVibratoCandidateNote([first, { type: 'kobushi', t: 1.8 }, second], notes, 2.5, true)).toBe(notes[1])
+    expect(getVibratoCandidateNote([], notes, 2.5, true)).toBeNull()
+  })
+})
 
 describe('nearest note visual anchor', () => {
   const notes = [

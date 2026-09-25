@@ -1,5 +1,39 @@
 import { describe, expect, it } from 'vitest'
-import { getAdaptiveSolfegeInterval, getSolfegeLabelNotes } from './MelodyGuideCanvas.jsx'
+import React from 'react'
+import { renderToStaticMarkup } from 'react-dom/server'
+import MelodyGuideCanvas, { getAdaptiveSolfegeInterval, getSolfegeLabelNotes } from './MelodyGuideCanvas.jsx'
+
+describe('technique feedback', () => {
+  it('keeps candidate activity out of technique labels and box styling', () => {
+    const baseline = renderToStaticMarkup(React.createElement(MelodyGuideCanvas))
+    const candidate = renderToStaticMarkup(React.createElement(MelodyGuideCanvas, {
+      activeTechniques: { vibrato: true },
+      recentDetections: { kobushi: true },
+      vibratoCandidateActive: true,
+    }))
+
+    expect(candidate).toBe(baseline)
+    expect(candidate).not.toContain('●')
+    expect(candidate).toMatch(/ビブラート[\s\S]*?>0<\/div>/)
+    expect(candidate).toMatch(/こぶし[\s\S]*?>0<\/div>/)
+  })
+
+  it('keeps the dark background for all technique boxes', () => {
+    const html = renderToStaticMarkup(React.createElement(MelodyGuideCanvas, {
+      activeTechniques: { glissup: true, kobushi: true, glissdown: true, vibrato: true },
+    }))
+
+    const boxStyles = [...html.matchAll(/<div style="([^"]+)"/g)]
+      .map((match) => match[1])
+      .filter((style) => /border:2px solid #[0-9a-f]{6}/.test(style))
+    expect(boxStyles).toHaveLength(4)
+    for (const color of ['#ff13f0', '#00fff0', '#ffbf00', '#2cff05']) {
+      const style = boxStyles.find((value) => value.includes(`border:2px solid ${color}`))
+      expect(style).toContain('background:linear-gradient(180deg')
+      expect(style).not.toContain(`background:${color}`)
+    }
+  })
+})
 
 describe('getSolfegeLabelNotes', () => {
   it('labels consecutive notes with the same pitch only once', () => {
