@@ -1,6 +1,7 @@
 import { createDefaultPitchRegistry } from './registry.js'
 import { DEFAULT_CONFIG, getKaraokeAudioEngine } from '../../audioEngine.js'
 import { requestMicrophoneStream } from '../microphoneDevice.js'
+import { MicrophoneMonitor } from './microphoneMonitor.js'
 import pitchWorkletUrl from './worklet/pitchWorklet.js?worker&url'
 
 class PitchEngine {
@@ -22,6 +23,8 @@ class PitchEngine {
     this._source = null
     this._workletNode = null
     this._monitorGain = null
+    this._monitor = null
+    this._monitorSettings = { enabled: false, muted: false, volume: 0.35, reverb: 0.3 }
     this._workletReady = null
     this._debugAnalyser = null
     this._debugHpf = null
@@ -39,6 +42,18 @@ class PitchEngine {
 
   getAudioContext() {
     return this._audioContext || (this._getAudioContext ? this._getAudioContext() : null)
+  }
+
+  isMicActive() {
+    return Boolean(this._stream)
+  }
+
+  setMonitorSettings(settings) {
+    this._monitorSettings = { ...this._monitorSettings, ...settings }
+    if (this._source && this._monitorSettings.enabled && !this._monitor) {
+      this._monitor = new MicrophoneMonitor(this._ensureAudioContext(), this._source)
+    }
+    this._monitor?.update(this._monitorSettings)
   }
 
   configureDetector(cfg) {
@@ -220,6 +235,7 @@ class PitchEngine {
       this._source = source
       this._workletNode = workletNode
       this._monitorGain = monitorGain
+      this.setMonitorSettings(this._monitorSettings)
 
       this.configureDetector(this._config)
       this.setDetector(this._algoId)
@@ -317,6 +333,7 @@ class PitchEngine {
     if (!this._stream) return
 
     this._workletNode?.disconnect()
+    this._monitor?.disconnect()
     this._source?.disconnect()
     this._monitorGain?.disconnect()
 
@@ -339,6 +356,7 @@ class PitchEngine {
     this._workletNode = null
     this._source = null
     this._monitorGain = null
+    this._monitor = null
 
     this._stream.getTracks().forEach((track) => track.stop())
     this._stream = null

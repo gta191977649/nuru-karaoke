@@ -14,6 +14,11 @@ import {
 import microphoneLatencyBeepUrl from '../assets/sfx/mic-latency-beep.wav'
 import { requestMicrophoneStream } from '../engine/audio/microphoneDevice.js'
 import {
+  disableSharedMicrophoneMonitor,
+  enableSharedMicrophoneMonitor,
+  muteSharedMicrophoneMonitorForCalibration,
+} from '../engine/audio/pitch/sharedMicrophoneMonitor.js'
+import {
   normalizeMicrophoneDeviceKey,
   useSettingsStore,
 } from '../state/settingsStore.js'
@@ -25,6 +30,11 @@ function SettingsPage({ onBack, initialTab = 'playback' }) {
     (state) => state.karaokeBackgroundVideoEnabled,
   )
   const microphoneDeviceId = useSettingsStore((state) => state.microphoneDeviceId)
+  const monitorEnabled = useSettingsStore((state) => state.microphoneMonitorEnabled)
+  const monitorVolume = useSettingsStore((state) => state.microphoneMonitorVolume)
+  const monitorReverb = useSettingsStore((state) => state.microphoneMonitorReverb)
+  const setMonitorVolume = useSettingsStore((state) => state.setMicrophoneMonitorVolume)
+  const setMonitorReverb = useSettingsStore((state) => state.setMicrophoneMonitorReverb)
   const microphoneLatencyByDevice = useSettingsStore(
     (state) => state.microphoneLatencyByDevice,
   )
@@ -46,6 +56,9 @@ function SettingsPage({ onBack, initialTab = 'playback' }) {
   const [microphones, setMicrophones] = useState([])
   const [isLoadingMicrophones, setIsLoadingMicrophones] = useState(false)
   const [microphoneMessage, setMicrophoneMessage] = useState('')
+  const [monitorBusy, setMonitorBusy] = useState(false)
+  const [monitorError, setMonitorError] = useState('')
+  const [micInputRms, setMicInputRms] = useState(0)
   const [calibrationStatus, setCalibrationStatus] = useState('ready')
   const [calibrationExpanded, setCalibrationExpanded] = useState(false)
   const [calibrationDeviceId, setCalibrationDeviceId] = useState('')
@@ -128,6 +141,26 @@ function SettingsPage({ onBack, initialTab = 'playback' }) {
 
   useEffect(() => () => calibrationAbortRef.current?.abort(), [])
 
+  useEffect(() => {
+    if (activeTab !== 'microphone' || !monitorEnabled) return undefined
+    let lastUpdate = 0
+    let lastFrame = 0
+    const unsubscribe = sharedPitchEngine.onPitch((result) => {
+      const now = performance.now()
+      lastFrame = now
+      if (now - lastUpdate < 50) return
+      lastUpdate = now
+      setMicInputRms(Math.max(0, Number(result?.rms) || 0))
+    })
+    const idleTimer = window.setInterval(() => {
+      if (performance.now() - lastFrame > 300) setMicInputRms(0)
+    }, 150)
+    return () => {
+      unsubscribe()
+      window.clearInterval(idleTimer)
+    }
+  }, [activeTab, monitorEnabled])
+
   const handleMicrophoneChange = async (event) => {
     const nextDeviceId = event.currentTarget.value
     setMicrophoneDeviceId(nextDeviceId)
@@ -145,6 +178,23 @@ function SettingsPage({ onBack, initialTab = 'playback' }) {
     }
   }
 
+  const handleMonitorChange = async (event) => {
+    setMonitorError('')
+    if (!event.currentTarget.checked) {
+      setMicInputRms(0)
+      disableSharedMicrophoneMonitor()
+      return
+    }
+    setMonitorBusy(true)
+    try {
+      await enableSharedMicrophoneMonitor()
+    } catch (error) {
+      setMonitorError(error?.message || 'マイクモニターを開始できませんでした。')
+    } finally {
+      setMonitorBusy(false)
+    }
+  }
+
   const startCalibration = async () => {
     calibrationAbortRef.current?.abort()
     const controller = new AbortController()
@@ -154,9 +204,11 @@ function SettingsPage({ onBack, initialTab = 'playback' }) {
     setCalibrationError('')
     setCalibrationProgress({ completed: 0, total: 5, inputLevel: 0 })
     let micStarted = false
+    const restoreMonitor = muteSharedMicrophoneMonitorForCalibration()
     try {
       const resolvedDeviceId = await startSharedMic()
       micStarted = true
+      await new Promise((resolve) => setTimeout(resolve, 100))
       const result = await runMicrophoneLatencyCalibration({
         pitchEngine: sharedPitchEngine,
         beepUrl: microphoneLatencyBeepUrl,
@@ -185,6 +237,7 @@ function SettingsPage({ onBack, initialTab = 'playback' }) {
       }
     } finally {
       if (micStarted) stopSharedMic()
+      restoreMonitor()
       if (calibrationAbortRef.current === controller) calibrationAbortRef.current = null
     }
   }
@@ -207,6 +260,14 @@ function SettingsPage({ onBack, initialTab = 'playback' }) {
         minute: '2-digit',
       }).format(new Date(measuredAtTime))
     : ''
+
+  const micLevelDb = monitorEnabled && micInputRms > 0
+    ? Math.max(-60, Math.min(0, 20 * Math.log10(micInputRms)))
+    : -60
+  const micLevelPercent = Math.round((micLevelDb + 60) / 60 * 100)
+  const micLevelLabel = monitorEnabled && micInputRms > 0
+    ? `${micLevelDb.toFixed(0)} dBFS`
+    : monitorEnabled ? '−∞ dBFS' : 'OFF'
 
   return (
     <div className="settingsPage">
@@ -352,6 +413,49 @@ function SettingsPage({ onBack, initialTab = 'playback' }) {
                     <Spinner className="settingsSelectWrap__spinner" animation="border" size="sm" />
                   ) : null}
                 </div>
+            </div>
+            <div className="settingsList__item settingsList__item--monitor">
+              <div className="settingsList__icon settingsList__icon--microphone" aria-hidden="true"><span /></div>
+              <div className="settingsList__body">
+                <div className="settingsList__label">マイクモニター</div>
+                <div className="settingsList__description">
+                  マイクの声をスピーカーへリアルタイムで再生します。ページを移動しても継続します。
+                </div>
+                <div className="settingsList__help">ハウリングを防ぐため、ヘッドホンの使用をおすすめします。</div>
+                {monitorError ? <div className="settingsList__message" role="alert">{monitorError}</div> : null}
+              </div>
+              <div className="settingsList__control">
+                <span className={`settingsList__state ${monitorEnabled ? 'is-on' : 'is-off'}`}>
+                  {monitorEnabled ? 'ON' : 'OFF'}
+                </span>
+                <Form.Check
+                  type="switch"
+                  id="settings-microphone-monitor"
+                  checked={monitorEnabled}
+                  disabled={monitorBusy || isCalibrating}
+                  onChange={handleMonitorChange}
+                  aria-label="マイクモニターを切り替える"
+                />
+              </div>
+              <div className="settingsMonitor__sliders">
+                <label htmlFor="settings-monitor-volume">モニター音量: {monitorVolume}%</label>
+                <Form.Range id="settings-monitor-volume" min={0} max={100} step={1} value={monitorVolume}
+                  style={{ '--range-progress': `${monitorVolume}%` }}
+                  onChange={(event) => setMonitorVolume(event.currentTarget.value)} />
+                <label htmlFor="settings-monitor-reverb">リバーブ: {monitorReverb}%</label>
+                <Form.Range id="settings-monitor-reverb" min={0} max={100} step={1} value={monitorReverb}
+                  style={{ '--range-progress': `${monitorReverb}%` }}
+                  onChange={(event) => setMonitorReverb(event.currentTarget.value)} />
+                <div className="settingsMonitor__levelHeading">
+                  <span>マイク入力レベル</span>
+                  <output>{micLevelLabel}</output>
+                </div>
+                <div className="settingsMonitor__level" role="meter" aria-label="マイク入力レベル"
+                  aria-valuemin={0} aria-valuemax={100} aria-valuenow={micLevelPercent}
+                  aria-valuetext={micLevelLabel}>
+                  <span style={{ width: `${micLevelPercent}%` }} />
+                </div>
+              </div>
             </div>
             <div className="settingsList__item settingsList__item--latency">
               <div className="settingsList__icon settingsList__icon--latency" aria-hidden="true">ms</div>

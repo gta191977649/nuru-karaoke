@@ -46,3 +46,16 @@ describe('microphone latency settings', () => {
     expect(normalizeLatencyRecord({ latencyMs: Number.NaN })).toBeNull()
   })
 })
+
+describe('microphone monitor settings', () => {
+  it('clamps the saved controls and leaves monitoring off by default', () => {
+    const state = useSettingsStore.getState()
+    expect(state.microphoneMonitorEnabled).toBe(false)
+    state.setMicrophoneMonitorVolume(130)
+    state.setMicrophoneMonitorReverb(-10)
+    expect(useSettingsStore.getState()).toMatchObject({
+      microphoneMonitorVolume: 100,
+      microphoneMonitorReverb: 0,
+    })
+  })
+})

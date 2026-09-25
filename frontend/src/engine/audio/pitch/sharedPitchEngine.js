@@ -5,6 +5,8 @@ import { getSettingsStoreState } from '../../../state/settingsStore.js'
 const sharedPitchEngine = new PitchEngine({ getAudioContext: () => getKaraokeAudioEngine().getAudioContext() })
 let activeUsers = 0
 let sharedDebugAnalyser = null
+let startupPromise = null
+let switchPromise = null
 
 const ensureSharedDebugAnalyser = (options = {}) => {
   const analyser = sharedPitchEngine.ensureDebugAnalyser({
@@ -32,30 +34,56 @@ const clearUnavailableSavedDevice = (requestedDeviceId, resolvedDeviceId) => {
 const startSharedMic = async () => {
   activeUsers += 1
   console.log('[mic] start request', { activeUsers })
-  if (activeUsers === 1) {
+  if (switchPromise) {
     try {
+      await switchPromise
+    } catch (error) {
+      activeUsers = Math.max(0, activeUsers - 1)
+      throw error
+    }
+  }
+  if (!startupPromise && !sharedPitchEngine.isMicActive()) {
+    startupPromise = (async () => {
       console.log('[mic] starting stream')
       const requestedDeviceId = getSettingsStoreState().microphoneDeviceId
       const resolvedDeviceId = await sharedPitchEngine.startMic({ deviceId: requestedDeviceId })
       clearUnavailableSavedDevice(requestedDeviceId, resolvedDeviceId)
       ensureSharedDebugAnalyser()
       console.log('[mic] stream active')
-    } catch (error) {
-      activeUsers = Math.max(0, activeUsers - 1)
+    })().catch((error) => {
+      activeUsers = 0
       throw error
+    })
+    try {
+      await startupPromise
+    } finally {
+      startupPromise = null
+      if (activeUsers === 0) sharedPitchEngine.stopMic()
     }
+  } else if (startupPromise) {
+    await startupPromise
   }
   return sharedPitchEngine.getActiveInputDeviceId()
 }
 
 const switchSharedMicDevice = async (deviceId) => {
   if (activeUsers <= 0) return false
-  sharedPitchEngine.stopMic()
-  sharedDebugAnalyser = null
-  const resolvedDeviceId = await sharedPitchEngine.startMic({ deviceId })
-  const usedFallback = clearUnavailableSavedDevice(deviceId, resolvedDeviceId)
-  ensureSharedDebugAnalyser()
-  return !usedFallback
+  if (switchPromise) await switchPromise
+  if (startupPromise) await startupPromise
+  switchPromise = (async () => {
+    sharedPitchEngine.stopMic()
+    sharedDebugAnalyser = null
+    const resolvedDeviceId = await sharedPitchEngine.startMic({ deviceId })
+    const usedFallback = clearUnavailableSavedDevice(deviceId, resolvedDeviceId)
+    ensureSharedDebugAnalyser()
+    return !usedFallback
+  })()
+  try {
+    return await switchPromise
+  } finally {
+    switchPromise = null
+    if (activeUsers === 0) sharedPitchEngine.stopMic()
+  }
 }
 
 const getActiveSharedMicDeviceId = () => sharedPitchEngine.getActiveInputDeviceId()
@@ -66,7 +94,7 @@ const stopSharedMic = () => {
   console.log('[mic] stop request', { activeUsers })
   if (activeUsers === 0) {
     console.log('[mic] stopping stream')
-    sharedPitchEngine.stopMic()
+    if (!startupPromise && !switchPromise) sharedPitchEngine.stopMic()
     sharedDebugAnalyser = null
     console.log('[mic] stream stopped')
   }
