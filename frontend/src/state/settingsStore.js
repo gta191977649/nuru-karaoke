@@ -2,6 +2,10 @@ import { create } from 'zustand'
 import { persist } from 'zustand/middleware'
 
 const DEFAULT_MICROPHONE_KEY = 'default'
+const clampMonitorLevel = (value, fallback) => {
+  const number = Number(value)
+  return Number.isFinite(number) ? Math.max(0, Math.min(100, Math.round(number))) : fallback
+}
 
 const normalizeMicrophoneDeviceKey = (deviceId) =>
   String(deviceId || '').trim() || DEFAULT_MICROPHONE_KEY
@@ -25,6 +29,15 @@ const useSettingsStore = create(
       karaokeBackgroundVideoEnabled: false,
       microphoneDeviceId: '',
       microphoneLatencyByDevice: {},
+      microphoneMonitorEnabled: false,
+      microphoneMonitorVolume: 35,
+      microphoneMonitorReverb: 30,
+      setMicrophoneMonitorEnabled: (enabled) =>
+        set({ microphoneMonitorEnabled: Boolean(enabled) }),
+      setMicrophoneMonitorVolume: (volume) =>
+        set({ microphoneMonitorVolume: clampMonitorLevel(volume, 35) }),
+      setMicrophoneMonitorReverb: (reverb) =>
+        set({ microphoneMonitorReverb: clampMonitorLevel(reverb, 30) }),
       setGuideMelodyEnabled: (guideMelodyEnabled) =>
         set({ guideMelodyEnabled: Boolean(guideMelodyEnabled) }),
       setAutoGainEnabled: (autoGainEnabled) =>
@@ -64,6 +77,8 @@ const useSettingsStore = create(
         karaokeBackgroundVideoEnabled: state.karaokeBackgroundVideoEnabled,
         microphoneDeviceId: state.microphoneDeviceId,
         microphoneLatencyByDevice: state.microphoneLatencyByDevice,
+        microphoneMonitorVolume: state.microphoneMonitorVolume,
+        microphoneMonitorReverb: state.microphoneMonitorReverb,
       }),
     },
   ),

@@ -2909,6 +2909,94 @@
   cursor: default;
 }
 
+.settingsList__item--monitor {
+  align-items: start;
+}
+
+.settingsMonitor__sliders {
+  display: grid;
+  gap: 0.35rem;
+  grid-column: 2 / -1;
+  width: 100%;
+}
+
+.settingsMonitor__sliders label {
+  color: #333;
+  font-size: 0.86rem;
+  font-weight: 800;
+}
+
+.settingsMonitor__sliders .form-range {
+  margin: 0 0 0.35rem;
+}
+
+.settingsMonitor__sliders .form-range::-webkit-slider-runnable-track {
+  background: linear-gradient(to right, #c31420 0 var(--range-progress), #d7dce0 var(--range-progress) 100%);
+  border: 1px solid rgba(0, 0, 0, 0.16);
+  border-radius: 999px;
+  height: 0.55rem;
+}
+
+.settingsMonitor__sliders .form-range::-moz-range-track {
+  background: linear-gradient(to right, #c31420 0 var(--range-progress), #d7dce0 var(--range-progress) 100%);
+  border: 1px solid rgba(0, 0, 0, 0.16);
+  border-radius: 999px;
+  height: 0.55rem;
+}
+
+.settingsMonitor__sliders .form-range::-webkit-slider-thumb {
+  background: linear-gradient(#ee3541, #aa0914);
+  border: 2px solid #fff;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.35);
+  height: 1.25rem;
+  margin-top: -0.4rem;
+  width: 1.25rem;
+}
+
+.settingsMonitor__sliders .form-range::-moz-range-thumb {
+  background: linear-gradient(#ee3541, #aa0914);
+  border: 2px solid #fff;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.35);
+  height: 1.25rem;
+  width: 1.25rem;
+}
+
+.settingsMonitor__sliders .form-range:focus::-webkit-slider-thumb {
+  box-shadow: 0 0 0 0.25rem rgba(195, 20, 32, 0.22);
+}
+
+.settingsMonitor__sliders .form-range:focus::-moz-range-thumb {
+  box-shadow: 0 0 0 0.25rem rgba(195, 20, 32, 0.22);
+}
+
+.settingsMonitor__levelHeading {
+  align-items: center;
+  display: flex;
+  justify-content: space-between;
+}
+
+.settingsMonitor__levelHeading output {
+  color: #a50813;
+  font-size: 0.8rem;
+  font-variant-numeric: tabular-nums;
+  font-weight: 800;
+}
+
+.settingsMonitor__level {
+  background: #d7dce0;
+  border: 1px solid rgba(0, 0, 0, 0.16);
+  border-radius: 999px;
+  height: 0.7rem;
+  overflow: hidden;
+}
+
+.settingsMonitor__level span {
+  background: linear-gradient(90deg, #a50813, #ee3541);
+  display: block;
+  height: 100%;
+  transition: width 80ms linear;
+}
+
 .settingsList__icon--latency {
   background: linear-gradient(#ec3541, #a50813);
   font-size: 0.92rem;
@@ -3304,6 +3392,10 @@
 
   .settingsList__item--latency {
     grid-template-columns: auto minmax(0, 1fr);
+  }
+
+  .settingsMonitor__sliders {
+    grid-column: 1 / -1;
   }
 
   .settingsLatency__openButton {
