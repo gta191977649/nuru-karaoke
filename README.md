@@ -2,51 +2,51 @@
 
 **Japanese Style Online Karaoke System**
 
-Raku Sound 是一个日式风格的在线卡拉 OK 系统，将点歌、MIDI 伴奏、同步歌词和实时演唱评分带到浏览器中。项目以日式卡拉 OK 的操作与演唱界面为灵感，结合音高导引、演唱技巧反馈和动态背景，让你在电脑上也能享受唱歌与练习的乐趣。
+Raku Sound brings Japanese-style karaoke to your browser, combining song selection, MIDI accompaniment, synchronized lyrics, and real-time singing scores. Inspired by Japanese karaoke interfaces, it features a visual melody guide, singing technique feedback, and animated backgrounds for singing and practice at home.
 
-## 界面预览
+## Screenshots
 
-### 点歌首页
+### Song Selection
 
-按歌手、曲名、关键词和选曲编号查找歌曲，管理歌曲预约，并调整播放速度、音调和音量。
+Find songs by artist, title, keyword, or song number, manage your song queue, and adjust tempo, key, and volume.
 
-![Raku Sound 点歌首页](docs/karaoke2.png)
+![Raku Sound song selection screen](docs/karaoke2.png)
 
-### 演唱与实时评分
+### Singing and Real-Time Scoring
 
-同步歌词与注音、旋律音高导引、当前得分，以及しゃくり、こぶし、フォール和ビブラート等演唱技巧反馈。
+Follow synchronized lyrics with pronunciation guides and a scrolling melody guide, view your current score, and track techniques such as shakuri, kobushi, falls, and vibrato.
 
-![Raku Sound 演唱与实时评分界面](docs/karaoke.png)
+![Raku Sound singing and real-time scoring screen](docs/karaoke.png)
 
-## 主要功能
+## Features
 
-- **日式点歌体验**：歌曲与歌手搜索、分类筛选、歌曲预约和播放控制。
-- **浏览器 MIDI 伴奏**：使用 SpessaSynth 与 SoundFont 合成音源，配合 MIDI 标准识别及音色映射。
-- **同步歌词**：解析 LRC 歌词，支持注音显示与演唱进度高亮。
-- **实时音高与评分**：通过麦克风检测音高，与参考旋律对照，并在演唱结束后展示结果。
-- **演唱技巧分析**：识别颤音、こぶし、上滑音和下滑音，提供可视化反馈。
-- **个性化设置**：音调与速度调整、麦克风选择与延迟校准，以及音源和音频效果设置。
-- **账号与成绩**：用户注册与登录、收藏歌曲、成绩记录和歌曲排行榜。
-- **曲库管理**：Django 后台管理歌曲、歌手、标签，以及 MIDI 和歌词文件。
+- **Japanese-style song selection**: Search songs and artists, filter the library, queue songs, and control playback.
+- **Browser-based MIDI accompaniment**: Play MIDI through SpessaSynth and SoundFont synthesis, with MIDI standard detection and instrument mapping.
+- **Synchronized lyrics**: LRC parsing with pronunciation annotations and playback highlighting.
+- **Live pitch tracking and scoring**: Detect microphone pitch, compare it with the reference melody, and display results after singing.
+- **Singing technique analysis**: Visual feedback for vibrato, kobushi, upward slides, and downward slides.
+- **Audio customization**: Key and tempo controls, microphone selection, latency calibration, and synthesizer and audio effect settings.
+- **Accounts and scores**: Registration, login, favorite songs, score history, and per-song leaderboards.
+- **Song library management**: A Django administration interface for songs, artists, tags, MIDI files, and lyrics.
 
-## 技术栈
+## Technology
 
-| 部分 | 技术 |
+| Area | Technologies |
 | --- | --- |
-| 前端 | React、Vite、Zustand、Bootstrap |
-| 图形与演唱界面 | PixiJS、Canvas |
-| 伴奏与音频 | SpessaSynth、SoundFont、Web Audio API |
-| 音高与演唱分析 | Pitchy、Aubio、TensorFlow.js 等音高检测方案 |
-| 后端 | Django、Django REST Framework、JWT |
-| 数据存储 | SQLite（默认） |
+| Frontend | React, Vite, Zustand, Bootstrap |
+| Graphics and singing interface | PixiJS, Canvas |
+| Accompaniment and audio | SpessaSynth, SoundFont, Web Audio API |
+| Pitch and singing analysis | Pitchy, Aubio, TensorFlow.js, and other pitch detection options |
+| Backend | Django, Django REST Framework, JWT |
+| Database | SQLite by default |
 
-## 本地运行
+## Running Locally
 
-需要安装 Node.js（满足 Vite 7 的要求：20.19+ 或 22.12+）和兼容 Django 5 的 Python 环境。下面以 Windows PowerShell 为例。
+Install Node.js compatible with Vite 7 (20.19+ on the Node 20 branch, or 22.12+) and a Python version compatible with Django 5. The commands below use Windows PowerShell.
 
-### 1. 启动后端
+### 1. Start the Backend
 
-在项目根目录运行：
+From the repository root:
 
 ```powershell
 cd backend
@@ -57,11 +57,11 @@ python -m venv .venv
 .\.venv\Scripts\python.exe manage.py runserver 8000
 ```
 
-管理后台：<http://localhost:8000/admin/>。使用创建的管理员账号登录，添加或维护曲库中的歌曲、MIDI 与歌词文件。
+Open <http://localhost:8000/admin/> and sign in with your administrator account to add or manage songs, MIDI files, and lyrics.
 
-### 2. 启动前端
+### 2. Start the Frontend
 
-打开另一个终端，在项目根目录运行：
+Open another terminal and run these commands from the repository root:
 
 ```powershell
 cd frontend
@@ -69,34 +69,34 @@ npm install
 npm run dev
 ```
 
-打开终端显示的地址，默认是 <http://localhost:5173>。开发环境默认连接 <http://localhost:8000> 的后端。
+Open the URL printed by Vite, usually <http://localhost:5173>. In development, the frontend connects to the backend at <http://localhost:8000> by default.
 
-如需连接其他后端，在 `frontend/.env.local` 中设置：
+To use a different backend, create `frontend/.env.local` with:
 
 ```dotenv
 VITE_API_BASE_URL=http://localhost:8000
 ```
 
-修改后重新启动前端开发服务器。生产构建也通过此变量配置 API 地址；未设置时，当前代码使用 `https://raku-sound.okamei.net`。
+Restart the development server after changing this value. Production builds also use this variable; when it is unset, the current code defaults to `https://raku-sound.okamei.net`.
 
-### 3. 开始演唱
+### 3. Start Singing
 
-允许浏览器访问麦克风，选择歌曲并加入预约列表，然后开始播放。可在设置中选择麦克风、校准延迟并调整音源。麦克风访问需要 HTTPS 或 localhost 环境。
+Allow microphone access, select a song, add it to the queue, and start playback. Use the settings to choose your microphone, calibrate latency, and configure the sound source. Microphone access requires HTTPS or localhost.
 
-### 构建前端
+### Build the Frontend
 
 ```powershell
 cd frontend
 npm run build
 ```
 
-构建产物位于 `frontend/dist/`。后端配置与 API 说明见 [backend/README.md](backend/README.md)。
+Build output is written to `frontend/dist/`. See [backend/README.md](backend/README.md) for backend setup and API details.
 
-## 项目结构
+## Project Structure
 
 ```text
-frontend/       React 前端、演唱界面与浏览器音频引擎
-backend/        Django API、曲库管理、用户与成绩服务
-docs/           README 使用的项目截图
-doc/            其他项目文档
+frontend/       React frontend, singing interface, and browser audio engine
+backend/        Django API, song management, accounts, and score services
+docs/           Project screenshots used in this README
+doc/            Additional project documentation
 ```
