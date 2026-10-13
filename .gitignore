@@ -28,6 +28,7 @@ src/soundfont/sc55-hi.sf2
 *.pyc
 prompt.txt
 /tmp
+/output/pdf/
 
 # Local song library sync scripts
 /sync-song-library.ps1
