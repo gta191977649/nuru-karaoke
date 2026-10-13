@@ -1,6 +1,7 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { SynthEngine } from './SynthEngine.js'
 import { getKaraokeStoreState, setKaraokeStoreState } from '../state/karaokeStore.js'
+import { useSettingsStore } from '../state/settingsStore.js'
 
 function createEngineWithDrums(...channels) {
   const engine = new SynthEngine()
@@ -107,6 +108,97 @@ function createEngineWithCurrentDrumApi(...channels) {
   }
   return { engine, setDrums }
 }
+
+describe('SynthEngine channel output controls', () => {
+  afterEach(() => {
+    useSettingsStore.setState({ guideMelodyEnabled: true })
+    setKaraokeStoreState({
+      enabledChannels: Array.from({ length: 16 }, () => true),
+      queue: [], queueIndex: -1,
+    })
+  })
+
+  function setup(channelCount = 32) {
+    const engine = new SynthEngine()
+    const setters = Array.from({ length: channelCount }, () => vi.fn())
+    engine._playbackRouting = 'direct'
+    engine._synth = {
+      midiChannels: setters.map((setSystemParameter) => ({ setSystemParameter })),
+      controllerChange: vi.fn(),
+    }
+    return { engine, setters }
+  }
+
+  it('mutes and unmutes the same channel across SC-88 MIDI ports without muting adjacent channels', () => {
+    const { engine, setters } = setup()
+    engine.setChannelEnabled(2, false)
+    expect(setters[2]).toHaveBeenLastCalledWith('isMuted', true)
+    expect(setters[18]).toHaveBeenLastCalledWith('isMuted', true)
+    expect(setters[1]).not.toHaveBeenCalled()
+    expect(setters[19]).not.toHaveBeenCalled()
+    expect(engine._synth.controllerChange.mock.calls).toEqual([[2, 120, 0], [18, 120, 0]])
+    expect(getKaraokeStoreState().enabledChannels[2]).toBe(false)
+
+    engine.setChannelEnabled(2, true)
+    expect(setters[2]).toHaveBeenLastCalledWith('isMuted', false)
+    expect(setters[18]).toHaveBeenLastCalledWith('isMuted', false)
+  })
+
+  it('restores output switches on MIDI ports added after the switch was disabled', () => {
+    const { engine } = setup(16)
+    engine.setChannelEnabled(4, false)
+    const addedSetters = Array.from({ length: 16 }, () => vi.fn())
+    engine._synth.midiChannels.push(...addedSetters.map((setSystemParameter) => ({ setSystemParameter })))
+
+    engine._applyChannelMuteState()
+
+    expect(addedSetters[4]).toHaveBeenCalledWith('isMuted', true)
+    expect(addedSetters[5]).toHaveBeenCalledWith('isMuted', false)
+  })
+
+  it('stores channel switches before the synth is initialized', () => {
+    const engine = new SynthEngine()
+    engine.setChannelEnabled(3, false)
+    expect(getKaraokeStoreState().enabledChannels[3]).toBe(false)
+  })
+
+  it('keeps channel 1 muted on every port when the global guide setting is OFF', () => {
+    useSettingsStore.setState({ guideMelodyEnabled: false })
+    const { engine, setters } = setup()
+    engine._applyChannelMuteState()
+    expect(setters[0]).toHaveBeenLastCalledWith('isMuted', true)
+    expect(setters[16]).toHaveBeenLastCalledWith('isMuted', true)
+    expect(setters[1]).toHaveBeenLastCalledWith('isMuted', false)
+    engine.setChannelEnabled(0, true)
+    expect(setters[0]).toHaveBeenLastCalledWith('isMuted', true)
+    expect(setters[16]).toHaveBeenLastCalledWith('isMuted', true)
+  })
+
+  it('retains a song guide OFF setting when channel mute state is reapplied', () => {
+    setKaraokeStoreState({ queue: [{ guideMelodyEnabled: false }], queueIndex: 0 })
+    const { engine, setters } = setup()
+    engine._applyChannelMuteState()
+    expect(setters[0]).toHaveBeenLastCalledWith('isMuted', true)
+    expect(setters[16]).toHaveBeenLastCalledWith('isMuted', true)
+  })
+
+  it('applies guide changes live while respecting a manually disabled channel', () => {
+    const { engine, setters } = setup()
+    engine._subscribeChannelMuteSettings()
+    try {
+      useSettingsStore.setState({ guideMelodyEnabled: false })
+      expect(setters[0]).toHaveBeenLastCalledWith('isMuted', true)
+      useSettingsStore.setState({ guideMelodyEnabled: true })
+      expect(setters[0]).toHaveBeenLastCalledWith('isMuted', false)
+      engine.setChannelEnabled(0, false)
+      useSettingsStore.setState({ guideMelodyEnabled: false })
+      useSettingsStore.setState({ guideMelodyEnabled: true })
+      expect(setters[0]).toHaveBeenLastCalledWith('isMuted', true)
+    } finally {
+      engine.dispose()
+    }
+  })
+})
 
 describe('SynthEngine drum-channel synchronization', () => {
   it('keeps detected non-default drum channels during activity reset', () => {

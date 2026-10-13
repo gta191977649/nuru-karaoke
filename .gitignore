@@ -25,3 +25,4 @@ dist-ssr
 src/soundfont/sc55-hi.sf2
 *.pyc
 prompt.txt
+/tmp

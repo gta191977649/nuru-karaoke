@@ -125,6 +125,22 @@ describe('XGOver55Engine', () => {
     expect(passthrough.getState().voiceFallbackCount).toBe(0)
   })
 
+  it('maps the XG WindChim used by Days.mid to an SC-55 bell instead of Telephone 1', () => {
+    const mapper = createXGOver55EventMapper(createXgMidi())
+    mapper({ type: 'cc', channel: 12, controller: 0, value: 64 })
+    mapper({ type: 'cc', channel: 12, controller: 32, value: 0 })
+    expect(mapper({ type: 'program', channel: 12, value: 69 })).toEqual([
+      { type: 'cc', channel: 12, controller: 0, value: 0 },
+      { type: 'cc', channel: 12, controller: 32, value: 0 },
+      { type: 'program', channel: 12, value: 112 },
+    ])
+    expect(mapper.getState().translationTimeline.at(-1)).toMatchObject({
+      source: 'WindChim',
+      target: 'SC-55 Tinkle Bell',
+      kind: 'voice-fallback',
+    })
+  })
+
   it('routes data-listed and unknown XG drum kits through safe SC-55 profiles', () => {
     const mapper = createXGOver55EventMapper(createXgMidi(), { drumBalanceProfile: 'off' })
     mapper({ type: 'cc', channel: 9, controller: 0, value: 127 })

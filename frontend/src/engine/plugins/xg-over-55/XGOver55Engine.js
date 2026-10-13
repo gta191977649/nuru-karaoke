@@ -139,6 +139,9 @@ function resolveMelodicVoice(msb, lsb, program) {
   if (msb === 0 && lsb === 3 && program === 6) {
     return { bankMSB: 0, bankLSB: 16, program, exact: true, sourceName, targetName: 'SC-55 Harpsichord w' }
   }
+  if (msb === 64 && lsb === 0 && program === 69) {
+    return { bankMSB: 0, bankLSB: 0, program: 112, exact: false, sourceName, targetName: 'SC-55 Tinkle Bell' }
+  }
   if (msb === 64) {
     const targetProgram = Math.max(120, Math.min(127, 120 + Math.floor(program / 16)))
     return { bankMSB: 0, bankLSB: 0, program: targetProgram, exact: false, sourceName, targetName: `SC-55 GM SFX ${targetProgram + 1}` }

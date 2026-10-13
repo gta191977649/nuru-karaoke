@@ -10,10 +10,11 @@ import { findActiveLyricIndex, parseLrc } from './lrc.js'
 import { getKaraokeAudioEngine } from './audioEngine.js'
 import { PLAYER_CONFIG, SYNTH_EFFECTS_CONFIG } from '../config.js'
 import { getKaraokeStoreState, setKaraokeStoreState } from '../state/karaokeStore.js'
+import { getSettingsStoreState, useSettingsStore } from '../state/settingsStore.js'
 import { AutoGainController } from './autoGainController.js'
 import { estimateMidiInitialGainDb } from './midiGainEstimator.js'
 import { setSynthChannelDrums } from './synthChannelDrums.js'
-import { setSynthChannelMuted } from './synthChannelMute.js'
+import { setSynthMidiChannelGroupMuted } from './synthChannelMute.js'
 import { getSynthMasterParameter, setSynthMasterParameter } from './synthMasterParameters.js'
 
 const DEFAULT_CONFIG = {
@@ -320,6 +321,7 @@ class SynthEngine {
     this._seq = null
     this._autoGainController = null
     this._autoGainEnabled = true
+    this._channelMuteSettingsUnsubscribe = null
 
     this._smfKnifeConfigText = ''
     this._smfKnifeConfigName = ''
@@ -472,8 +474,11 @@ class SynthEngine {
 
         this._applyDefaultEffects()
 
-        const { enabledChannels } = getKaraokeStoreState()
-        enabledChannels.forEach((enabled, i) => setSynthChannelMuted(synth, i, !enabled))
+        this._applyChannelMuteState()
+        this._subscribeChannelMuteSettings()
+        synth.eventHandler?.addEvent?.('channelAdded', 'player-channel-mute', () => {
+          this._applyChannelMuteState()
+        })
 
         this._initialized = true
         this._setState({
@@ -914,10 +919,7 @@ class SynthEngine {
         // ignore
       }
     }
-    const enabled = getKaraokeStoreState().enabledChannels || []
-    for (let ch = 0; ch < 16; ch++) {
-      setSynthChannelMuted(synth, ch, !enabled[ch])
-    }
+    this._applyChannelMuteState()
     // Reset internal instrument tracking to default state
     this._channelPrograms.forEach((state, channel) => {
       state.program = 0
@@ -1188,10 +1190,9 @@ class SynthEngine {
     })
     const playbackSessionId = (Number(getKaraokeStoreState().playbackSessionId) || 0) + 1
     this._setState({ queueIndex: i, playbackSessionId })
+    this._applyChannelMuteState()
     await this.loadMidiFromUrl(song.url, { autoPlay: false })
-    const channelZeroEnabled = getKaraokeStoreState().enabledChannels?.[0] !== false
-    const guideMelodyEnabled = song.guideMelodyEnabled !== false
-    setSynthChannelMuted(this._synth, 0, !(channelZeroEnabled && guideMelodyEnabled))
+    this._applyChannelMuteState()
 
     if (song.lrc) {
       try {
@@ -1468,6 +1469,8 @@ class SynthEngine {
   }
 
   dispose() {
+    this._channelMuteSettingsUnsubscribe?.()
+    this._channelMuteSettingsUnsubscribe = null
     this._loadGeneration += 1
     this._xgOver55Engine.dispose()
     this._gsOver55Engine.dispose()
@@ -1480,14 +1483,31 @@ class SynthEngine {
     this.setTransposition(next)
   }
 
+  _applyChannelMuteState(channelIndex = null) {
+    const { enabledChannels = [], queue = [], queueIndex } = getKaraokeStoreState()
+    const guideMelodyEnabled = getSettingsStoreState().guideMelodyEnabled !== false &&
+      queue[queueIndex]?.guideMelodyEnabled !== false
+    for (let channel = 0; channel < 16; channel++) {
+      if (channelIndex !== null && channel !== channelIndex) continue
+      const muted = enabledChannels[channel] === false || (channel === 0 && !guideMelodyEnabled)
+      setSynthMidiChannelGroupMuted(this._synth, channel, muted)
+    }
+  }
+
+  _subscribeChannelMuteSettings() {
+    this._channelMuteSettingsUnsubscribe?.()
+    this._channelMuteSettingsUnsubscribe = useSettingsStore.subscribe((state, previous) => {
+      if (state.guideMelodyEnabled !== previous.guideMelodyEnabled) this._applyChannelMuteState(0)
+    })
+  }
+
   setChannelEnabled(channelIndex, enabled) {
-    if (!this._synth) return
     const idx = Number(channelIndex)
     if (!Number.isInteger(idx) || idx < 0 || idx > 15) return
     const next = getKaraokeStoreState().enabledChannels.slice()
     next[idx] = Boolean(enabled)
-    setSynthChannelMuted(this._synth, idx, !next[idx])
     this._setState({ enabledChannels: next })
+    this._applyChannelMuteState(idx)
   }
 
   async loadLrcFromFile(file) {
