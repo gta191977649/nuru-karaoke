@@ -541,6 +541,17 @@
   overflow: hidden;
 }
 
+@media (max-width: 991.98px) {
+  .joyInfo {
+    height: auto;
+  }
+
+  .joyInfo__media {
+    flex: none;
+    aspect-ratio: 16 / 9;
+  }
+}
+
 .joyInfo__overlay {
   position: absolute;
   inset: 0;

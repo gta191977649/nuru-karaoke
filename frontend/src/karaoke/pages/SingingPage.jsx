@@ -3,7 +3,6 @@ import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } fr
 import { useShallow } from 'zustand/react/shallow'
 import { useKaraokeStore } from '../../state/karaokeStore.js'
 import { synthEngine } from '../../engine/SynthEngine.js'
-import { getLyricRows } from '../lyricRows.js'
 import { sharedPitchEngine, startSharedMic, stopSharedMic } from '../../engine/audio/pitch/sharedPitchEngine.js'
 import {
     findInterludeRanges,
@@ -11,7 +10,6 @@ import {
     groupNotesToSegments,
 } from '../../engine/audio/midi/noteUtils.js'
 import MelodyGuideCanvas from '../../components/MelodyGuideCanvas.jsx'
-import KeyChangeAlert from '../../components/KeyChangeAlert.jsx'
 import useKeyChangeAlertStore from '../../state/keyChangeAlertStore.js'
 import { useKaraokeReference } from '../hooks/useKaraokeReference.js'
 import { useKaraokePitchHistory } from '../hooks/useKaraokePitchHistory.js'
@@ -19,39 +17,12 @@ import { useKaraokeSongIntro } from '../hooks/useKaraokeSongIntro.js'
 import { useSingingTechnique } from '../hooks/useSingingTechnique.js'
 import { countValidatedTechniqueEvents } from '../scoring/scoringVisualUtils.js'
 import { useKaraokeScoring } from '../hooks/useKaraokeScoring.js'
-import RealtimeScoreCounter from '../../components/RealtimeScoreCounter.jsx'
+import { createSingingScene } from '../rendering/SingingScene.js'
 import { usePlayerScoreStore } from '../../state/playerScoreStore.js'
-import logoTitle from '../../assets/logo_title.png'
 import {
     normalizeMicrophoneDeviceKey,
     useSettingsStore,
 } from '../../state/settingsStore.js'
-import KaraokeBackgroundVideo from '../components/KaraokeBackgroundVideo.jsx'
-import { fitLyricFontSize } from '../lyricFit.js'
-
-function renderLyricSegments(segments, layer = 'base') {
-    const layerClass = layer === 'fill' ? 'karaokeRun--fill' : 'karaokeRun--base'
-    return segments.map((seg, idx) => {
-        const className = `karaokeRun ${layerClass}${seg.falsetto ? ' karaokeRun--falsetto' : ''}`
-        const rubyRtClass = `karaokeRubyRt karaokeRubyRt--${layer}${seg.falsetto ? ' karaokeRubyRt--falsetto' : ''}`
-        return seg.ruby ? (
-            <ruby
-                key={`${layer}-${seg.text}-${seg.ruby}-${seg.falsetto ? 'falsetto' : 'normal'}-${idx}`}
-                className={`karaokeRuby ${className}`}
-            >
-                {seg.text}
-                <rt className={rubyRtClass}>{seg.ruby}</rt>
-            </ruby>
-        ) : (
-            <span
-                key={`${layer}-${seg.text}-${seg.falsetto ? 'falsetto' : 'normal'}-${idx}`}
-                className={className}
-            >
-                {seg.text}
-            </span>
-        )
-    })
-}
 
 const medianNumber = (values) => {
     if (!values.length) return null
@@ -172,9 +143,6 @@ function SingingPage({ onFinish, showInterludePrompt = true }) {
     const [activeMicDeviceId, setActiveMicDeviceId] = useState('')
     const currentTimeRef = useRef(0)
     const transpositionRef = useRef(0)
-    const lyricsContainerRef = useRef(null)
-    const lyricsMeasureLeftRef = useRef(null)
-    const lyricsMeasureRightRef = useRef(null)
     const [scoreUpdateKey, setScoreUpdateKey] = useState(0)
     const micRmsGate = 0.01
     const microphoneLatencySec = useMemo(() => {
@@ -308,55 +276,6 @@ function SingingPage({ onFinish, showInterludePrompt = true }) {
     }, [pitchEngine, micRmsGate])
     // Live score now updates via onScoreChange from the scoring hook.
 
-    const { lineRowsTwo, measureLeftSegments, measureRightSegments } = useMemo(
-        () => getLyricRows(state.lrcEntries || [], state.activeLyricIndex ?? -1, state.karaokeProgress ?? 0),
-        [state.karaokeProgress, state.activeLyricIndex, state.lrcEntries],
-    )
-
-    useLayoutEffect(() => {
-        const measureOverflow = () => {
-            const container = lyricsContainerRef.current
-            const measurerLeft = lyricsMeasureLeftRef.current
-            const measurerRight = lyricsMeasureRightRef.current
-            if (!container || !measurerLeft || !measurerRight) return
-            const containerWidth = container.clientWidth
-            const leftWidth = measurerLeft.scrollWidth
-            const rightWidth = measurerRight.scrollWidth
-            const rightAvailableWidth = containerWidth * 0.9
-            const outlineWidth = Number.parseFloat(
-                getComputedStyle(container).getPropertyValue('--karaoke-outline-width'),
-            ) || 0
-            const safetyPx = outlineWidth * 2 + 8
-            const measureRows = [
-                { contentWidth: leftWidth, availableWidth: containerWidth },
-                { contentWidth: rightWidth, availableWidth: rightAvailableWidth },
-            ]
-            const baseFontSize = Number.parseFloat(getComputedStyle(measurerLeft).fontSize)
-            const fittedFontSize = fitLyricFontSize({ baseFontSize, rows: measureRows, safetyPx })
-            if (Number.isFinite(fittedFontSize) && fittedFontSize > 0) {
-                container.style.setProperty('--karaoke-adaptive-font-size', `${fittedFontSize}px`)
-            } else {
-                container.style.removeProperty('--karaoke-adaptive-font-size')
-            }
-        }
-
-        measureOverflow()
-        let disposed = false
-        document.fonts?.ready.then(() => {
-            if (!disposed) measureOverflow()
-        })
-        document.fonts?.addEventListener('loadingdone', measureOverflow)
-        window.addEventListener('resize', measureOverflow)
-        const observer = typeof ResizeObserver !== 'undefined' ? new ResizeObserver(measureOverflow) : null
-        if (lyricsContainerRef.current) observer?.observe(lyricsContainerRef.current)
-        return () => {
-            disposed = true
-            observer?.disconnect()
-            document.fonts?.removeEventListener('loadingdone', measureOverflow)
-            window.removeEventListener('resize', measureOverflow)
-        }
-    }, [measureLeftSegments, measureRightSegments, state.activeLyricIndex, state.lrcEntries])
-
     // Audio start logic
     useEffect(() => {
         if (!state.ready) return
@@ -469,131 +388,40 @@ function SingingPage({ onFinish, showInterludePrompt = true }) {
         setTechniqueCounts,
     ])
 
-    const titleVisualLength = Array.from(String(songInfo.title ?? '')).reduce(
-        (length, character) => length + (/^[\x20-\x7E]$/.test(character) ? 0.55 : 1),
-        0,
-    )
-    const titleSizeRem = Math.max(
-        3,
-        Math.min(5.5, 25 / Math.sqrt(Math.max(titleVisualLength, 1))),
-    )
+    const sceneStateRef = useRef(null)
+    useLayoutSceneState(sceneStateRef, {
+        ...state, reference, showSongInfo, songInfo, isScoring,
+        liveScore, liveScoreReady, scoreUpdateKey, karaokeBackgroundVideoEnabled,
+        showInterludePrompt, interludeDisplay, techniqueCountsRef,
+    })
 
     return (
-        <div className={`karaokePage${showSongInfo ? ' karaokePage--intro' : ''}`}>
-            {karaokeBackgroundVideoEnabled ? <KaraokeBackgroundVideo /> : null}
-            <RealtimeScoreCounter
-                key={state.playbackSessionId}
-                score={liveScore}
-                ready={liveScoreReady}
-                label="現在得点"
-                updateKey={scoreUpdateKey}
+        <div className="karaokePage karaokePage--webgl" role="img" aria-label={`演奏 ${songInfo.title || ''}`}>
+            <MelodyGuideCanvas
+                className="singingWebGL"
+                sceneFactory={createSingingScene}
+                sceneStateRef={sceneStateRef}
+                reference={reference}
+                historyRef={pitchHistoryRef}
+                pitchFrameHistoryRef={framePitchHistoryRef}
+                scoringVisualRef={scoringVisualRef}
+                lastPitchRef={lastPitchRef}
+                currentTimeRef={currentTimeRef}
+                transpositionRef={transpositionRef}
+                rmsGate={micRmsGate}
+                gateUserByTarget
+                forceUserOnScoring={isScoring}
+                techniqueEventsRef={techniqueEventsRef}
+                vibratoCandidateActive={micActive && Boolean(activeTechniques.vibrato)}
+                onTechniqueCountsChange={handleTechniqueCountsChange}
             />
-            <KeyChangeAlert />
-            <div className="karaokeSongIntro">
-                <div className="karaokeSongIntro__content">
-                    <div
-                        className="karaokeSongIntro__title"
-                        style={{ '--karaoke-title-size': `${titleSizeRem}rem` }}
-                    >
-                        {songInfo.title}
-                    </div>
-                    {songInfo.artist ? <div className="karaokeSongIntro__artist">♪{songInfo.artist}</div> : null}
-                </div>
-                <img
-                    src={logoTitle}
-                    alt="Logo"
-                    className="karaokeSongIntro__logo"
-                />
-            </div>
-            <div className="karaoke-stage">
-                <div className="karaoke-screen">
-                    <div className="top-section">
-                        <div className="info-container">
-                            {isScoring && (
-                                <div className="scoring-badge">
-                                    <span className="scoring-text">🎤 採点中</span>
-                                </div>
-                            )}
-                        </div>
-                        <div className="melody-guide">
-                            <MelodyGuideCanvas
-                                className="melodyGuideCanvas"
-                                reference={reference}
-                                historyRef={pitchHistoryRef}
-                                pitchFrameHistoryRef={framePitchHistoryRef}
-                                scoringVisualRef={scoringVisualRef}
-                                lastPitchRef={lastPitchRef}
-                                currentTimeRef={currentTimeRef}
-                                transpositionRef={transpositionRef}
-                                rmsGate={micRmsGate}
-                                gateUserByTarget
-                                forceUserOnScoring={isScoring}
-                                width={800}
-                                height={220}
-                                techniqueEventsRef={techniqueEventsRef}
-                                vibratoCandidateActive={micActive && Boolean(activeTechniques.vibrato)}
-                                onTechniqueCountsChange={handleTechniqueCountsChange}
-                                totalSections={6}
-                                currentSection={state.duration > 0
-                                    ? Math.min(6, Math.floor((state.currentTime / state.duration) * 6) + 1)
-                                    : 1}
-                            />
-                        </div>
-                    </div>
-
-                    <div className="bottom-section">
-                        <div className="lyrics-container" ref={lyricsContainerRef}>
-                            <span className="lyrics-measure" aria-hidden="true">
-                                <span className="text lyrics-measure__line lyrics-measure__line--two" ref={lyricsMeasureLeftRef}>
-                                    <span className="karaokeTextWrap">
-                                        <span className="karaokeTextBase">{renderLyricSegments(measureLeftSegments, 'base')}</span>
-                                    </span>
-                                </span>
-                                <span className="text lyrics-measure__line lyrics-measure__line--two" ref={lyricsMeasureRightRef}>
-                                    <span className="karaokeTextWrap">
-                                        <span className="karaokeTextBase">{renderLyricSegments(measureRightSegments, 'base')}</span>
-                                    </span>
-                                </span>
-                            </span>
-                            <div
-                                className={`lyrics-lines lyrics-lines--two${interludeDisplay.lyricsVisible ? ' lyrics-lines--visible' : ''}`}
-                            >
-                                {lineRowsTwo.map((row, idx) => (
-                                    <div className={`lyric-row ${row.align}`} key={`two-${row.align}-${idx}`}>
-                                        <span className="text">
-                                            <span
-                                                className="karaokeTextWrap"
-                                                style={{
-                                                    '--karaoke-progress': `${row.progress}%`,
-                                                }}
-                                            >
-                                                <span className="karaokeTextBase">{renderLyricSegments(row.segments, 'base')}</span>
-                                                <span className="karaokeTextFill" aria-hidden="true">
-                                                    {renderLyricSegments(row.segments, 'fill')}
-                                                </span>
-                                            </span>
-                                        </span>
-                                    </div>
-                                ))}
-                            </div>
-                            <div
-                                className={`interlude-prompt${showInterludePrompt && interludeDisplay.promptVisible ? ' interlude-prompt--visible' : ''}`}
-                                aria-label="間奏"
-                                aria-hidden={!showInterludePrompt || !interludeDisplay.promptVisible}
-                            >
-                                <span aria-hidden="true">間奏(</span>
-                                <span className="interlude-prompt__dot" aria-hidden="true">・</span>
-                                <span className="interlude-prompt__dot" aria-hidden="true">・</span>
-                                <span className="interlude-prompt__dot" aria-hidden="true">・</span>
-                                <span aria-hidden="true">)</span>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-            </div>
-
         </div>
     )
+}
+
+// Publish React-owned data after commit; animation frames never trigger a React render.
+function useLayoutSceneState(ref, value) {
+    useLayoutEffect(() => { ref.current = value })
 }
 
 export default SingingPage

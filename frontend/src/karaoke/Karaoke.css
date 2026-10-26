@@ -1822,3 +1822,15 @@
 .karaokeTransition--out {
   opacity: 0;
 }
+
+/* The singing page is one WebGL surface. Results keep their existing styles. */
+.karaokePage--webgl {
+  background: #000;
+}
+.singingWebGL,
+.singingWebGL > div,
+.singingWebGL canvas {
+  display: block;
+  width: 100%;
+  height: 100%;
+}

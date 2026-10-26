@@ -19,6 +19,7 @@ import { getUiAudioEngine } from './engine/audioEngine.js'
 import { getSettingsStoreState } from './state/settingsStore.js'
 import { resolveMicrophoneStatus } from './home/microphoneStatus.js'
 import { hasNextResultsSong, runKaraokeTransition } from './karaoke/resultsTransition.js'
+import { getDockTransform } from './karaoke/rendering/dockTransform.js'
 import './App.css'
 
 const TRANSITION_MS = UI_CONFIG.karaokeTransitionMs
@@ -149,8 +150,8 @@ function App({ onNavigate }) {
       const frameRect = frameRef.current.getBoundingClientRect()
       const baseRect = mainRef.current.getBoundingClientRect()
       const nextBase = {
-        left: baseRect.left - frameRect.left,
-        top: baseRect.top - frameRect.top,
+        left: baseRect.left - frameRect.left - frameRef.current.clientLeft,
+        top: baseRect.top - frameRect.top - frameRef.current.clientTop,
         width: baseRect.width,
         height: baseRect.height,
       }
@@ -175,12 +176,7 @@ function App({ onNavigate }) {
         return
       }
       const targetRect = karaokeTargetRef.current.getBoundingClientRect()
-      const nextTransform = {
-        x: targetRect.left - baseRect.left,
-        y: targetRect.top - baseRect.top,
-        sx: targetRect.width / baseRect.width,
-        sy: targetRect.height / baseRect.height,
-      }
+      const nextTransform = getDockTransform(baseRect, targetRect)
       setKaraokeTransform((current) => (
         valuesMatch(current.x, nextTransform.x)
         && valuesMatch(current.y, nextTransform.y)

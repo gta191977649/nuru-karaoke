@@ -1,5 +1,6 @@
 import { memo, useEffect, useRef, forwardRef, useState } from 'react'
 import { Application, Container, Graphics, Sprite, Text, TextStyle } from 'pixi.js'
+import { createSingingResize } from '../karaoke/rendering/singingResize.js'
 import { BloomFilter } from 'pixi-filters'
 import { getTargetNoteAtTick, mergeAdjacentNotesByPitch } from '../engine/audio/midi/referenceMelody.js'
 import { DEFAULT_CONFIG } from '../engine/audioEngine.js'
@@ -380,8 +381,13 @@ function MelodyGuideCanvas({
   debugUserMidi = null,
   debugF0Color = '#ffffff',
   debugSpectrogramHeight = 90,
+  // Optional full-page scene shares this renderer and ticker with the melody.
+  sceneFactory,
+  sceneStateRef,
 }) {
   const containerRef = useRef(null)
+  // Renderer ownership is fixed for this mount; live data flows through refs.
+  const initialRendererRef = useRef({ width, height, sceneFactory, sceneStateRef })
   const jitterHistoryRef = useRef([]) // normalized -1..1 for WaveformPixi
 
   // Refs for animation targets
@@ -670,6 +676,13 @@ function MelodyGuideCanvas({
 
   useEffect(() => {
     let active = true
+    const host = containerRef.current
+    const { width, height, sceneFactory, sceneStateRef } = initialRendererRef.current
+    const { particleConfig, glissandoUpCount, glissandoDownCount, kobushiCount, vibratoCount, techniqueEventsRef } = stateRef.current
+    let scene
+    let observer
+    let resizeScene
+    let surfaceResize
     const init = async () => {
       const root = containerRef.current
       if (!root) return
@@ -680,7 +693,7 @@ function MelodyGuideCanvas({
         backgroundAlpha: 0,
         antialias: true,
         autoDensity: true,
-        resolution: window.devicePixelRatio || 1,
+        resolution: Math.min(window.devicePixelRatio || 1, 2),
         powerPreference: 'high-performance',
         preference: 'webgl',
       })
@@ -701,6 +714,11 @@ function MelodyGuideCanvas({
       const user = new Graphics()
       const userGlowContainer = new Container()
       const userGlow = new Graphics()
+      const noteFillMask = new Graphics()
+      const noteFillLayer = new Container()
+      noteFillLayer.label = 'confirmed-note-fill'
+      noteFillLayer.addChild(userGlow)
+      noteFillLayer.mask = noteFillMask
       const vibratoWaves = new Graphics()
       const trail = new Graphics() // F0 Trail
       const techniqueIcons = new Container() // Technique Icons
@@ -720,12 +738,13 @@ function MelodyGuideCanvas({
           // Generate texture
           const texture = app.renderer.generateTexture(tempGfx)
           techniqueTextures[conf.id] = texture
+          tempGfx.destroy()
         }
       })
       // Stash textures in ref for access (or just closure since we are inside init)
       // actually we can just keep them here since ticker closes over this scope.
 
-      userGlowContainer.addChild(particleSystem.container, comboSystem.container, userGlow, trail)
+      userGlowContainer.addChild(particleSystem.container, comboSystem.container, trail)
       userGlowContainer.filters = [
         new BloomFilter({
           strength: 4,
@@ -733,7 +752,18 @@ function MelodyGuideCanvas({
           threshold: 0.2,
         }),
       ]
-      app.stage.addChild(bg, grid, notes, miss, solfegeLabels, user, userGlowContainer, vibratoWaves, playhead, techniqueIcons, debugTrace)
+      const melody = new Container()
+      melody.addChild(bg, grid, notes, miss, solfegeLabels, user, noteFillLayer, noteFillMask, userGlowContainer, vibratoWaves, playhead, techniqueIcons, debugTrace)
+      app.stage.addChild(melody)
+      scene = sceneFactory?.(app, melody, sceneStateRef)
+      if (scene) {
+        surfaceResize = createSingingResize(app, scene, root)
+        resizeScene = surfaceResize.schedule
+        window.addEventListener('resize', resizeScene)
+        observer = new ResizeObserver(resizeScene)
+        observer.observe(root)
+        surfaceResize.resize()
+      }
 
       pixiRef.current = {
         app,
@@ -744,11 +774,13 @@ function MelodyGuideCanvas({
         user,
         userGlowContainer,
         userGlow,
+        noteFillMask,
         vibratoWaves,
         vibratoWaveState: null,
         trail,
         techniqueIcons,
         techniqueSpritePool,
+        techniqueTextureCache: new Map(Object.entries(techniqueTextures)),
         solfegeLabels,
         solfegeLabelPool: [],
         confirmedNoteIds: new Set(),
@@ -777,8 +809,13 @@ function MelodyGuideCanvas({
         const state = pixiRef.current
         const { app: activeApp } = state
         if (!activeApp) return
-        const w = activeApp.screen.width
-        const h = activeApp.screen.height
+        if (scene) {
+          const display = root.getBoundingClientRect()
+          scene.fitViewport(display.width / display.height)
+          scene.update(activeApp.ticker.elapsedMS)
+        }
+        const w = scene?.melodyBounds.width ?? activeApp.screen.width
+        const h = scene?.melodyBounds.height ?? activeApp.screen.height
         if (!w || !h) return
         const deltaSec = activeApp.ticker.deltaMS / 1000
 
@@ -839,9 +876,15 @@ function MelodyGuideCanvas({
         const notesData = snap.reference?.notes || []
         const bps = snap.reference?.getBeatsPerSecond ? snap.reference.getBeatsPerSecond(songTimeSec) : 2
         const maxGapBeat = breakToleranceSec * (Number.isFinite(bps) ? bps : 2)
-        const scoringNotes = notesData.length
-          ? mergeAdjacentNotesByPitch(notesData, { maxGapBeat, pitchToleranceSemis: 0, useBeat: true })
-          : []
+        // Reference notes are immutable. Only tempo changes alter the merge gap.
+        if (state.mergeSource !== notesData || state.mergeGap !== maxGapBeat) {
+          state.mergeSource = notesData
+          state.mergeGap = maxGapBeat
+          state.mergedNotes = notesData.length
+            ? mergeAdjacentNotesByPitch(notesData, { maxGapBeat, pitchToleranceSemis: 0, useBeat: true })
+            : []
+        }
+        const scoringNotes = state.mergedNotes
         const bounds = getNotesBounds(notesData, transposition, snap.minMidi, snap.maxMidi)
         const lineCount = 12
         const lineStep = Math.max(1, lineCount - 1)
@@ -891,9 +934,10 @@ function MelodyGuideCanvas({
           state.bg.rect(0, 0, w, h)
           state.bg.fill()
           if (state.userGlowContainer) {
-            state.userGlowContainer.filterArea = activeApp.screen
+            // Pixi transforms filterArea by the container world matrix itself.
+            state.userGlowContainer.filterArea = scene?.melodyBounds ?? activeApp.screen
           }
-          state.particleSystem?.setBounds(activeApp.screen)
+          state.particleSystem?.setBounds(scene?.melodyBounds ?? activeApp.screen)
         }
         const needsGrid = needsResize || state.lastGrid.lineCount !== lineCount
         if (needsGrid) {
@@ -941,10 +985,17 @@ function MelodyGuideCanvas({
             if (requireInRange !== inRange) return
             const barW = Math.max(6, x1 - x0)
             state.notes.roundRect(x0, y - barH / 2, barW, barH, barRadius)
+            if (requireInRange) {
+              const inset = STROKE_WIDTH.melody / 2
+              state.noteFillMask.roundRect(x0 + inset, y - barH / 2 + inset,
+                Math.max(0, barW - inset * 2), barH - inset * 2,
+                Math.max(0, Math.min(barRadius, barW / 2) - inset))
+            }
           })
           state.notes.fill()
           state.notes.stroke()
         }
+        state.noteFillMask.clear()
         state.notes.clear()
         state.notes.setStrokeStyle({
           width: STROKE_WIDTH.melody,
@@ -954,6 +1005,7 @@ function MelodyGuideCanvas({
 
         drawMelodyNotes(COLORS.melodyFill, ALPHAS.melodyFill, true)
         drawMelodyNotes(COLORS.melodyOutFill, ALPHAS.melodyOutFill, false)
+        state.noteFillMask.fill(0xffffff)
 
         const candidateNote = getVibratoCandidateNote(
           snap.techniqueEventsRef?.current,
@@ -1047,6 +1099,7 @@ function MelodyGuideCanvas({
           : []
         const confirmedNoteIds = state.confirmedNoteIds || new Set()
         state.confirmedNoteIds = confirmedNoteIds
+        let confirmedBurstCount = 0
         for (const result of completedResults) {
           if (confirmedNoteIds.has(result.noteId)) continue
           const resultSegments = stableHitSegments.filter((segment) => segment.noteId === result.noteId)
@@ -1054,10 +1107,7 @@ function MelodyGuideCanvas({
           if (!firstSegment) continue
           confirmedNoteIds.add(result.noteId)
           if (firstSegment.t0Sec < visibleStart || firstSegment.t0Sec > visibleEnd) continue
-          const particleX = playheadX + (firstSegment.t0Sec - songTimeSec) * pixelsPerSec
-          const particleMidi = Number(result.note?.midi) + transposition
-          const { y: particleY } = midiToY(particleMidi)
-          state.particleSystem?.burst(particleX, particleY, 12)
+          confirmedBurstCount += 12
         }
         const scoringReference = snap.reference ? { ...snap.reference, notes: scoringNotes } : null
         const getTargetNoteAt = (t, opts = {}) => {
@@ -1184,12 +1234,14 @@ function MelodyGuideCanvas({
               const targetRef = { glissup: shakuriRef, kobushi: kobushiRef, glissdown: fallRef, vibrato: vibratoRef }[type]
               const targetX = { glissup: 60, kobushi: 170, glissdown: 280, vibrato: 390 }[type]
               if (config && targetRef && state.comboSystem) {
-                const startX = activeApp.screen.width * 0.7
+                const startX = w * 0.7
                 const startY = Number.isFinite(state.playheadDotY) ? state.playheadDotY : h / 2
-                state.comboSystem.spawnCombo(startX, startY, targetX, h - 30, config.color)
+                const destination = scene?.getTechniqueTarget(type) || { x: targetX, y: h - 30 }
+                state.comboSystem.spawnCombo(startX, startY, destination.x, destination.y, config.color)
                 const timer = setTimeout(() => {
                   comboHitTimersRef.current.delete(timer)
-                  triggerComboHit(targetRef, toCssColor(config.color))
+                  if (scene) scene.techniqueHit(type)
+                  else triggerComboHit(targetRef, toCssColor(config.color))
                 }, COMBO_TRAVEL_SEC * 1000)
                 comboHitTimersRef.current.add(timer)
                 console.log('[SingingTechnique] combo', { type, t: evt.t })
@@ -1450,8 +1502,13 @@ function MelodyGuideCanvas({
         )
         state.playheadDotY = playheadDotY
 
-        // Delayed confirmed-note feedback still controls its fill particles,
-        // but no longer controls the live F0 trail.
+        // Confirmation controls when feedback is allowed. Its position follows
+        // the live arrow, never a previous note's delayed wipe height.
+        const particleOrigin = Number.isFinite(playheadDotY)
+          ? { x: Math.round(playheadX) + 0.5, y: playheadDotY } : null
+        if (confirmedBurstCount > 0 && particleOrigin) {
+          state.particleSystem?.burst(particleOrigin.x, particleOrigin.y, confirmedBurstCount)
+        }
         let fillParticleX = null
         let fillParticleY = null
         let emitFillParticles = false
@@ -1479,9 +1536,9 @@ function MelodyGuideCanvas({
             animatedEndSec < segmentEnd - 1e-7
           ) {
             latestFillConfirmationSec = confirmedAtSec
-            fillParticleX = playheadX + (animatedEndSec - songTimeSec) * pixelsPerSec
-            fillParticleY = targetPoint.y
-            emitFillParticles = true
+            fillParticleX = particleOrigin?.x ?? null
+            fillParticleY = particleOrigin?.y ?? null
+            emitFillParticles = Boolean(particleOrigin)
           }
         }
 
@@ -1625,13 +1682,21 @@ function MelodyGuideCanvas({
     init()
     return () => {
       active = false
+      observer?.disconnect()
+      surfaceResize?.destroy()
+      if (resizeScene) window.removeEventListener('resize', resizeScene)
+      scene?.destroy()
       const app = pixiRef.current.app
       const particleSystem = pixiRef.current.particleSystem
       const comboSystem = pixiRef.current.comboSystem
       if (particleSystem) particleSystem.destroy()
       if (comboSystem) comboSystem.destroy()
-      if (app) app.destroy(true)
-      if (containerRef.current) containerRef.current.innerHTML = ''
+      if (app) {
+        for (const texture of pixiRef.current.techniqueTextureCache?.values() || []) texture.destroy(true)
+        for (const filter of pixiRef.current.userGlowContainer?.filters || []) filter.destroy()
+        app.destroy(true, { children: true })
+      }
+      if (host) host.innerHTML = ''
       pixiRef.current = {
         app: null,
         bg: null,
@@ -1660,9 +1725,9 @@ function MelodyGuideCanvas({
 
   useEffect(() => {
     const app = pixiRef.current.app
-    if (!app) return
+    if (!app || sceneFactory) return
     app.renderer.resize(width, height)
-  }, [width, height])
+  }, [width, height, sceneFactory])
 
   const resolvedF0Hz = Number.isFinite(debugF0Hz)
     ? debugF0Hz
@@ -1689,7 +1754,7 @@ function MelodyGuideCanvas({
   return (
     <div className={className} style={{ ...style, position: 'relative' }}>
       <div ref={containerRef} style={{ width: '100%', height: '100%' }} />
-      <KaraokeOverlay
+      {!sceneFactory && <KaraokeOverlay
         glissandoUpCount={validCounts.glissup}
         kobushiCount={validCounts.kobushi}
         glissandoDownCount={validCounts.glissdown}
@@ -1703,7 +1768,7 @@ function MelodyGuideCanvas({
         debugInfo={debugPanel}
         showDebug={debug}
         rmsGate={rmsGate}
-      />
+      />}
       {showDebugSpectrogram ? (
         <div
           style={{
