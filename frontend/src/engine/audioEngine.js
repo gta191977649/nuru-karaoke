@@ -1,3 +1,5 @@
+import { waitForPlayback } from './playbackWait.js'
+
 const DEFAULT_CONFIG = {
   sampleRate: 44100,
   windowSize: 2048,
@@ -53,7 +55,7 @@ function ensureAudioContext() {
 async function resumeAudio() {
   const ctx = ensureAudioContext()
   if (ctx.state !== 'running') {
-    await ctx.resume()
+    await waitForPlayback(ctx.resume(), 5000, 'オーディオを開始できませんでした。画面をタッチして、もう一度お試しください。')
   }
   return ctx
 }

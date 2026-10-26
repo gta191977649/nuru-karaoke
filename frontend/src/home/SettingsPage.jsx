@@ -1,5 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { Form, Spinner } from 'react-bootstrap'
+import { synthEngine } from '../engine/SynthEngine.js'
+import { useKaraokeStore } from '../state/karaokeStore.js'
 
 import {
   sharedPitchEngine,
@@ -24,6 +26,13 @@ import {
 } from '../state/settingsStore.js'
 
 function SettingsPage({ onBack, initialTab = 'playback' }) {
+  const engine = useKaraokeStore()
+  const [pendingSynth, setPendingSynth] = useState(null)
+  const synthLocked = engine.isPlaying || engine.synthSwitching || engine.synthBusy || !engine.ready
+  const changeSynth = async (id, exact = engine.smuExact) => {
+    setPendingSynth({ id, exact })
+    try { await synthEngine.switchBackend(id, exact); setPendingSynth(null) } catch { /* error is shown below */ }
+  }
   const guideMelodyEnabled = useSettingsStore((state) => state.guideMelodyEnabled)
   const autoGainEnabled = useSettingsStore((state) => state.autoGainEnabled)
   const karaokeBackgroundVideoEnabled = useSettingsStore(
@@ -312,6 +321,42 @@ function SettingsPage({ onBack, initialTab = 'playback' }) {
       <main className="settingsPage__content">
         {activeTab === 'playback' ? (
           <section className="settingsList" role="tabpanel">
+            <div className="settingsList__item">
+              <div className="settingsList__icon settingsList__icon--playback" aria-hidden="true">♫</div>
+              <div className="settingsList__body">
+                <label className="settingsList__label" htmlFor="settings-synth">シンセサイザー</label>
+                <div className="settingsList__description">
+                  {engine.isPlaying ? '切り替えるには再生を一時停止してください。' : '曲の一時停止中に切り替えると、最初から再生します。'}
+                  {' '}S-MU2000 の ROM は選択したときにダウンロードします。
+                </div>
+                {engine.synthSwitching ? <div role="status">
+                  <Spinner size="sm" /> {engine.status}
+                  {engine.synthProgress?.total > 0 ? <progress style={{ width: '100%' }}
+                    max={engine.synthProgress.total} value={engine.synthProgress.loaded || 0} /> : null}
+                </div> : null}
+                {engine.synthError ? <div role="alert">{engine.synthError}{' '}
+                  {pendingSynth ? <button type="button" disabled={synthLocked}
+                    onClick={() => changeSynth(pendingSynth.id, pendingSynth.exact)}>再試行</button> : null}
+                </div> : null}
+              </div>
+              <div className="settingsSelectWrap">
+                <Form.Select id="settings-synth" className="settingsSelect" disabled={synthLocked}
+                  value={engine.synthBackend} onChange={event => changeSynth(event.target.value)}>
+                  <option value="builtin">内藏シンセサイザー</option>
+                  <option value="smu2000">S-MU2000</option>
+                </Form.Select>
+            {engine.synthBackend === 'smu2000' ? <div className="mt-3">
+              <div className="mb-2">
+                <div className="settingsList__label">精密エミュレーション</div>
+                <div className="settingsList__description">OFF: 流暢モード / ON: 精密モード。精密モードは高性能な CPU が必要です。</div>
+              </div>
+              <Form.Check type="switch" id="settings-smu-exact" checked={engine.smuExact}
+                disabled={synthLocked} aria-label="精密エミュレーション"
+                onChange={event => changeSynth('smu2000', event.target.checked)} />
+            </div> : null}
+
+              </div>
+            </div>
             <div className="settingsList__item">
               <div className="settingsList__icon settingsList__icon--playback" aria-hidden="true">♪</div>
               <div className="settingsList__body">

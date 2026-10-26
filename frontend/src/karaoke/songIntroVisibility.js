@@ -35,4 +35,23 @@ function hasVisibleMelodyGuideNote(
   })
 }
 
-export { hasVisibleMelodyGuideNote }
+// Transport-derived visibility also restores the intro after replay/rewind.
+function shouldShowSongIntro(notes, currentTime, windowSec, playheadRatio) {
+  const time = Number(currentTime)
+  const window = Number(windowSec)
+  const ratio = Number(playheadRatio)
+  if (!Number.isFinite(time) || !Number.isFinite(window) || window <= 0
+    || !Number.isFinite(ratio) || ratio < 0 || ratio > 1) return false
+  if (!Array.isArray(notes)) return time <= 0
+  let firstStart = Infinity
+  for (const note of notes) {
+    const start = Number(note?.t0Sec)
+    const end = Number(note?.t1Sec)
+    if (Number.isFinite(start) && Number.isFinite(end) && end >= start) {
+      firstStart = Math.min(firstStart, start)
+    }
+  }
+  return firstStart > time + window * (1 - ratio)
+}
+
+export { hasVisibleMelodyGuideNote, shouldShowSongIntro }

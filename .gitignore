@@ -29,6 +29,9 @@ src/soundfont/sc55-hi.sf2
 prompt.txt
 /tmp
 /output/pdf/
+/frontend/public/smu2000/
+/frontend/public/builtin-synth/
+/frontend/src/soundfont/rom/
 
 # Local song library sync scripts
 /sync-song-library.ps1

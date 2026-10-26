@@ -26,6 +26,12 @@ const useSettingsStore = create(
     (set, get) => ({
       guideMelodyEnabled: true,
       autoGainEnabled: true,
+      synthBackend: 'builtin',
+      smuExact: false,
+      smuEqPreset: 2,
+      smuEqLocked: true,
+      setSmuEqPreset: (preset) => set({ smuEqPreset: Math.max(0, Math.min(4, Math.round(Number(preset) || 0))) }),
+      setSmuEqLocked: (locked) => set({ smuEqLocked: Boolean(locked) }),
       karaokeBackgroundVideoEnabled: false,
       microphoneDeviceId: '',
       microphoneLatencyByDevice: {},
@@ -74,6 +80,10 @@ const useSettingsStore = create(
       partialize: (state) => ({
         guideMelodyEnabled: state.guideMelodyEnabled,
         autoGainEnabled: state.autoGainEnabled,
+        synthBackend: state.synthBackend === 'smu2000' ? 'smu2000' : 'builtin',
+        smuExact: state.smuExact === true,
+        smuEqPreset: state.smuEqPreset,
+        smuEqLocked: state.smuEqLocked,
         karaokeBackgroundVideoEnabled: state.karaokeBackgroundVideoEnabled,
         microphoneDeviceId: state.microphoneDeviceId,
         microphoneLatencyByDevice: state.microphoneLatencyByDevice,

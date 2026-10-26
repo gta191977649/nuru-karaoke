@@ -12,6 +12,8 @@ import { useSettingsStore } from '../state/settingsStore.js'
 import MelodyGuideCanvas from '../components/MelodyGuideCanvas.jsx'
 import ParticlePreview from '../components/particles/ParticlePreview.jsx'
 import SoundCanvasLcd from '../components/SoundCanvasLcd.jsx'
+import Smu2000Lcd from '../components/Smu2000Lcd.jsx'
+import { SMU_EQ_PRESETS } from './backends/smuEq.js'
 import Spectrogram from '../components/Spectrogram.jsx'
 import SpectrumView from '../components/SpectrumView.jsx'
 import WaveformPixi from '../components/WaveformPixi.jsx'
@@ -230,6 +232,17 @@ const buildBeatMapData = (reference, opts = {}) => {
 
 function Synth({ onNavigateHome }) {
   const state = useKaraokeStore()
+  const isSmu = state.synthBackend === 'smu2000'
+  const smuEqPreset = useSettingsStore(settings => settings.smuEqPreset)
+  const smuEqLocked = useSettingsStore(settings => settings.smuEqLocked)
+  const setSmuEqPreset = useSettingsStore(settings => settings.setSmuEqPreset)
+  const setSmuEqLocked = useSettingsStore(settings => settings.setSmuEqLocked)
+  useEffect(() => {
+    const update = () => synthEngine.subscribeLcd(isSmu && document.visibilityState === 'visible')
+    update()
+    document.addEventListener('visibilitychange', update)
+    return () => { document.removeEventListener('visibilitychange', update); synthEngine.subscribeLcd(false) }
+  }, [isSmu, state.synthSession])
   const autoGainEnabled = useSettingsStore((settings) => settings.autoGainEnabled)
   const setAutoGainEnabled = useSettingsStore((settings) => settings.setAutoGainEnabled)
   const detectedStandard = state.midiMapState?.detectedStandard
@@ -879,7 +892,7 @@ function Synth({ onNavigateHome }) {
     return () => {
       active = false
     }
-  }, [state.ready, state.midiName, state.midiUrl, state.queueIndex])
+  }, [state.ready, state.midiName, state.midiUrl, state.queueIndex, state.playbackSessionId])
 
   const formatChannelList = (channels) => {
     if (!Array.isArray(channels)) return '—'
@@ -943,7 +956,7 @@ function Synth({ onNavigateHome }) {
           <div className="p-3 border rounded-3">
             <div className="d-flex justify-content-between align-items-center">
               <div>
-                <div className="fw-semibold">SoundFont</div>
+                <div className="fw-semibold">{isSmu ? `S-MU2000 / ${state.smuExact ? '精密' : '流暢'}` : 'SoundFont'}</div>
                 <div className="small text-muted">{state.soundFontName}</div>
               </div>
             </div>
@@ -1049,6 +1062,7 @@ function Synth({ onNavigateHome }) {
                 <Form.Check
                   type="switch"
                   id="midi-map-enabled"
+                  disabled={isSmu}
                   label="Enable auto-mapping"
                   checked={Boolean(state.enableMIDIStandardMapping)}
                   onChange={(e) => synthEngine.setEnableMIDIStandardMapping(e.currentTarget.checked)}
@@ -1136,10 +1150,28 @@ function Synth({ onNavigateHome }) {
         <Col xs={12}>
           <div className="p-3 border rounded-3">
             <div className="d-flex align-items-center justify-content-between mb-2">
-              <div className="fw-semibold">Sound Canvas LCD</div>
-              <div className="small text-muted">Channel Activity</div>
+              <div className="fw-semibold">{isSmu ? 'S-MU2000 LCD' : 'Sound Canvas LCD'}</div>
+              <div className="small text-muted">{isSmu ? 'Emulator LCD' : 'Channel Activity'}</div>
             </div>
-            <div className="sc-lcd">
+            {isSmu ? <>
+              <Smu2000Lcd frame={state.smuLcd} />
+              <div className="d-flex flex-wrap align-items-center gap-3 mt-3">
+                <label htmlFor="smu-master-eq" className="small">Master EQ</label>
+                <Form.Select id="smu-master-eq" size="sm" style={{ width: 150 }}
+                  disabled={!state.ready || state.synthSwitching}
+                  value={smuEqLocked ? smuEqPreset : (state.smuEqActualPreset ?? smuEqPreset)}
+                  onChange={event => {
+                    const preset = Number(event.target.value)
+                    setSmuEqPreset(preset)
+                    synthEngine.setSmuEq(preset, smuEqLocked)
+                  }}>
+                  {SMU_EQ_PRESETS.map((name, index) => <option key={name} value={index}>{name}</option>)}
+                </Form.Select>
+                <Form.Check type="switch" id="smu-eq-lock" label="EQ LOCK"
+                  checked={smuEqLocked} disabled={!state.ready || state.synthSwitching}
+                  onChange={event => setSmuEqLocked(event.target.checked)} />
+              </div>
+            </> : <div className="sc-lcd">
               <div className="sc-lcd__meta">
                 <div className="sc-lcd__metaLabel">POLY:{state.polyphonyCount ?? 0}</div>
                 <div className="sc-lcd__metaMarks">
@@ -1190,7 +1222,7 @@ function Synth({ onNavigateHome }) {
                 isPlaying={state.isPlaying}
                 hasActivity={hasLcdActivity}
               />
-            </div>
+            </div>}
 
           </div>
         </Col>
@@ -1217,7 +1249,7 @@ function Synth({ onNavigateHome }) {
               max={5.0}
               step={0.05}
               value={state.reverbGain}
-              disabled={!state.ready}
+              disabled={!state.ready || isSmu}
               onChange={(e) => synthEngine.setReverbGain(Number(e.currentTarget.value))}
             />
 
@@ -1227,7 +1259,7 @@ function Synth({ onNavigateHome }) {
               max={5.0}
               step={0.05}
               value={state.chorusGain}
-              disabled={!state.ready}
+              disabled={!state.ready || isSmu}
               onChange={(e) => synthEngine.setChorusGain(Number(e.currentTarget.value))}
             />
 

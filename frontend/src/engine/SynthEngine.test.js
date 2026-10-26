@@ -96,6 +96,26 @@ describe('queue playback audio lifecycle', () => {
 
     expect(calls).toEqual(['resume', 'load', 'resume', 'play'])
   })
+
+  it('keeps a failed reservation retryable without losing the queued song', async () => {
+    setKaraokeStoreState({ queue: [{ url: 'retry.mid' }], queueIndex: -1 })
+    const engine = new SynthEngine()
+    engine.ensureInitialized = vi.fn().mockResolvedValue()
+    engine.resumeAudio = vi.fn().mockResolvedValue()
+    engine.loadMidiFromUrl = vi.fn().mockRejectedValueOnce(new Error('download timeout')).mockResolvedValue()
+    engine.setTransposition = vi.fn()
+    engine._applyChannelMuteState = vi.fn()
+    engine.seek = vi.fn()
+    engine.play = vi.fn()
+
+    await expect(engine.playQueueIfIdle()).rejects.toThrow('download timeout')
+    expect(getKaraokeStoreState().queueIndex).toBe(-1)
+    expect(getKaraokeStoreState().queue).toEqual([{ url: 'retry.mid' }])
+    await engine.playQueueIfIdle()
+    expect(engine.loadMidiFromUrl).toHaveBeenCalledTimes(2)
+    expect(engine.play).toHaveBeenCalledTimes(1)
+    expect(getKaraokeStoreState().queueIndex).toBe(0)
+  })
 })
 
 function createEngineWithCurrentDrumApi(...channels) {

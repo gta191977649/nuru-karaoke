@@ -1,4 +1,4 @@
-import React from 'react'
+import { useRef, useState } from 'react'
 import { Button, Form } from 'react-bootstrap'
 import { synthEngine } from './SynthEngine.js'
 import { useKaraokeStore } from '../state/karaokeStore.js'
@@ -9,8 +9,26 @@ export default function SynthPlaybackControls() {
     const isPlaying = useKaraokeStore((s) => s.isPlaying)
     const duration = useKaraokeStore((s) => s.duration)
     const currentTime = useKaraokeStore((s) => s.currentTime)
+    const busy = useKaraokeStore((s) => s.synthSwitching || s.synthBusy)
+    const switching = useKaraokeStore(s => s.synthSwitching)
+    const [draft, setDraft] = useState(null)
+    const draftRef = useRef(null)
+    const editId = useRef(0)
+    const preview = value => {
+        editId.current++
+        draftRef.current = value
+        setDraft(value)
+    }
+    const commit = () => {
+        if (draftRef.current === null) return
+        const value = draftRef.current, generation = editId.current
+        draftRef.current = null
+        Promise.resolve(synthEngine.seek(value)).finally(() => {
+            if (generation === editId.current) setDraft(null)
+        })
+    }
 
-    const canPlay = Boolean(midiName) && ready
+    const canPlay = Boolean(midiName) && ready && !busy
 
     return (
         <div className="p-3 border rounded-3">
@@ -54,12 +72,17 @@ export default function SynthPlaybackControls() {
                 min={0}
                 max={Math.max(0, duration)}
                 step={0.01}
-                value={Math.min(currentTime, Math.max(0, duration))}
-                disabled={!canPlay || duration <= 0}
-                onChange={(e) => synthEngine.seek(Number(e.currentTarget.value))}
+                aria-label="Playback position"
+                value={Math.min(draft ?? currentTime, Math.max(0, duration))}
+                disabled={!ready || !midiName || switching || duration <= 0}
+                onChange={e => preview(Number(e.currentTarget.value))}
+                onPointerUp={commit}
+                onKeyUp={commit}
+                onBlur={commit}
+                onPointerCancel={() => { draftRef.current = null; setDraft(null) }}
             />
             <div className="small text-muted">
-                {currentTime.toFixed(2)} / {duration.toFixed(2)} s
+                {(draft ?? currentTime).toFixed(2)} / {duration.toFixed(2)} s
             </div>
         </div>
     )

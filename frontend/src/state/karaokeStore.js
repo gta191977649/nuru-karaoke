@@ -3,6 +3,13 @@ import { SYNTH_EFFECTS_CONFIG } from '../config.js'
 
 const initialEngineState = {
   ready: false,
+  synthBackend: 'builtin',
+  smuExact: false,
+  synthSwitching: false,
+  synthBusy: false,
+  synthError: '',
+  synthProgress: null,
+  smuLcd: null,
   status: 'Initializing…',
   engineLoadStage: 'starting',
   engineLoadError: '',

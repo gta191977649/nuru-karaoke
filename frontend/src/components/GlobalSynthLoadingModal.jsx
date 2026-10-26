@@ -8,12 +8,16 @@ const STAGE_MESSAGES = {
   'soundfont-download': '音色ライブラリをダウンロードしています…',
   'soundfont-load': '音色ライブラリを読み込んでいます…',
   player: 'プレーヤーを準備しています…',
+  'rom-download': 'S-MU2000 の ROM をダウンロードしています…',
+  'wasm-download': 'S-MU2000 を読み込んでいます…',
+  'smu-boot': 'S-MU2000 を起動しています…',
 }
 
 function GlobalSynthLoadingModal({ onRetry }) {
   const ready = useKaraokeStore((state) => state.ready)
   const stage = useKaraokeStore((state) => state.engineLoadStage)
   const error = useKaraokeStore((state) => state.engineLoadError)
+  const progress = useKaraokeStore((state) => state.synthProgress)
   const modalRef = useRef(null)
   const [retrying, setRetrying] = useState(false)
   const isError = stage === 'error'
@@ -26,6 +30,7 @@ function GlobalSynthLoadingModal({ onRetry }) {
     modalRef.current?.focus()
 
     const freezeKeyboard = (event) => {
+      if (event.target?.tagName === 'BUTTON') return
       if (isError && (event.key === 'Enter' || event.key === ' ')) {
         modalRef.current?.querySelector('button')?.click()
       }
@@ -79,6 +84,9 @@ function GlobalSynthLoadingModal({ onRetry }) {
               : STAGE_MESSAGES[stage] || 'シンセエンジンを準備しています…'}
           </p>
           {isError && error ? <p className="synthLoadingModal__detail">{error}</p> : null}
+          {!isError && progress?.total > 0 ? <p className="synthLoadingModal__detail">
+            {(progress.loaded / 1048576).toFixed(1)} / {(progress.total / 1048576).toFixed(1)} MB
+          </p> : null}
           {!isError ? (
             <div className="synthLoadingModal__progress" role="progressbar" aria-label="読み込み中">
               <span />

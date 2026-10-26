@@ -1,10 +1,8 @@
-import { Sequencer, WorkletSynthesizer } from 'spessasynth_lib'
+import { BuiltinBackend } from './backends/BuiltinBackend.js'
 import { BasicMIDI } from 'spessasynth_core'
 import { XGOver55Engine, buildTelemetry } from './plugins/xg-over-55/XGOver55Engine.js'
 import { GSOver55Engine } from './plugins/gs-over-55/GSOver55Engine.js'
 import { SC88Over55Engine } from './plugins/sc88-over-55/SC88Over55Engine.js'
-import processorUrl from 'spessasynth_lib/dist/spessasynth_processor.min.js?url'
-import defaultSoundFontUrl from '../soundfont/sc55.sf2'
 import { createMidiMapper } from './MidiMapper.js'
 import { findActiveLyricIndex, parseLrc } from './lrc.js'
 import { getKaraokeAudioEngine } from './audioEngine.js'
@@ -12,6 +10,8 @@ import { PLAYER_CONFIG, SYNTH_EFFECTS_CONFIG } from '../config.js'
 import { getKaraokeStoreState, setKaraokeStoreState } from '../state/karaokeStore.js'
 import { getSettingsStoreState, useSettingsStore } from '../state/settingsStore.js'
 import { AutoGainController } from './autoGainController.js'
+import { fetchPlaybackResource } from './playbackWait.js'
+import { SMU_GAIN_REFERENCE_DB } from './backends/smuGainCalibration.js'
 import { estimateMidiInitialGainDb } from './midiGainEstimator.js'
 import { setSynthChannelDrums } from './synthChannelDrums.js'
 import { setSynthMidiChannelGroupMuted } from './synthChannelMute.js'
@@ -313,6 +313,9 @@ function resolvePatchName(presetList, patch, channelIndex) {
 
 class SynthEngine {
   constructor() {
+    this._backend = null
+    this._switching = false
+    this._lcdSubscribed = false
     this._initialized = false
     this._initializing = null
 
@@ -392,6 +395,126 @@ class SynthEngine {
     setKaraokeStoreState(patch)
   }
 
+  async _createBackend(id, exact) {
+    let backend
+    const progress = (value) => this._setState({
+      engineLoadStage: value.stage, status: value.text,
+      synthProgress: value,
+    })
+    try {
+      if (id === 'smu2000') {
+        const { SmuBackend } = await import('./backends/SmuBackend.js')
+        backend = new SmuBackend({ exact,
+          eqPreset: getSettingsStoreState().smuEqPreset ?? 2,
+          eqLocked: getSettingsStoreState().smuEqLocked !== false,
+          onState: (patch) => {
+            if (this._backend !== backend) return
+            this._setState(patch)
+            if (patch.isPlaying) this._startClock()
+          },
+          onLcd: (frame) => { if (this._backend === backend) this._setState({ smuLcd: frame }) },
+        })
+      } else backend = new BuiltinBackend()
+      await backend.initialize(this._context, progress)
+      return backend
+    } catch (error) {
+      await Promise.resolve(backend?.dispose()).catch(() => {})
+      throw error
+    }
+  }
+
+  _publishBackend() {
+    const smu = this._backend?.id === 'smu2000'
+    this._setState({ synthBackend: smu ? 'smu2000' : 'builtin',
+      smuExact: smu ? this._backend.exact : getSettingsStoreState().smuExact === true,
+      synthSession: this._backend?.session || null, smuLcd: smu ? this._backend.latestLcd : null,
+      soundFontName: smu ? 'S-MU2000 ROM' : 'SC-55 SoundFont',
+    })
+    this._backend?.subscribeLcd?.(this._lcdSubscribed)
+  }
+
+  _estimateInitialGain() {
+    const options = this._backend?.id === 'smu2000'
+      ? { renderedReferenceDb: SMU_GAIN_REFERENCE_DB[this._backend.exact ? 'exact' : 'fast'] }
+      : {}
+    return estimateMidiInitialGainDb(this._referenceMidiData, options)?.gainDb ?? 0
+  }
+
+  subscribeLcd(enabled) {
+    this._lcdSubscribed = enabled
+    this._backend?.subscribeLcd?.(enabled)
+    if (!enabled) this._setState({ smuLcd: null })
+  }
+
+  async switchBackend(id, exact = getSettingsStoreState().smuExact === true) {
+    if (!['builtin', 'smu2000'].includes(id)) throw new Error('Unknown synthesizer')
+    if (this._switching || this._midiLoading || this._backend?.busy || getKaraokeStoreState().isPlaying) {
+      throw new Error('再生を一時停止してから切り替えてください。')
+    }
+    void this._context?.resume().catch(() => {})
+    this._switching = true
+    try { await this.ensureInitialized() } catch (error) { this._switching = false; throw error }
+    if (this._backend.id === id && (id !== 'smu2000' || this._backend.exact === exact)) {
+      this._switching = false
+      return
+    }
+    const previousState = { ...getKaraokeStoreState() }
+    const previousBackend = this._backend
+    const previous = Object.fromEntries([
+      '_backend', '_synth', '_seq', '_midiMapper', '_lastMidiBuffer', '_referenceMidiData',
+      '_playbackRouting', '_playbackTelemetry', '_telemetryPatchCursor', '_telemetryLastTime',
+      '_sequencerEventsBound', '_autoPlayOnNextSong',
+    ].map(key => [key, this[key]]))
+    const tracking = Object.fromEntries([
+      '_channelPrograms', '_channelInstrumentNames', '_midiChannelState',
+      '_channelActivityVelocity', '_channelActivityTime', '_drumChannelsApplied', '_activeNoteCounts',
+    ].map(key => [key, structuredClone(this[key])]))
+    const previousGain = this._autoGainController.initialGainDb ?? 0
+    let candidate
+    this._stopClock()
+    this._setState({ synthSwitching: true, synthError: '', synthProgress: null })
+    try {
+      candidate = await this._createBackend(id, exact)
+      this._backend = candidate
+      this._synth = candidate.synth
+      this._seq = candidate.transport
+      this._sequencerEventsBound = false
+      this._bindSequencerEvents()
+      if (previousState.midiName && previous._lastMidiBuffer) {
+        await this.loadMIDI({ buffer: previous._lastMidiBuffer.slice(0),
+          midiName: previousState.midiName, midiUrl: previousState.midiUrl, switching: true })
+      }
+      this._autoPlayOnNextSong = false
+      if (id === 'smu2000') {
+        candidate.systemParameters.keyShift = previousState.transposition || 0
+        await candidate.request('transpose', { value: previousState.transposition || 0 })
+      } else setSynthMasterParameter(this._synth, 'transposition', previousState.transposition || 0)
+      this._applyChannelMuteState()
+      previousBackend.output.disconnect()
+      candidate.output.connect(this._autoGainController.input)
+      candidate.activate?.()
+      this._autoGainController.setInitialGainDb(this._estimateInitialGain())
+      this._subscribeChannelMuteSettings()
+      this._setupMidiMapper()
+      this._publishBackend()
+      useSettingsStore.setState({ synthBackend: id, smuExact: exact })
+      this._setState({ ready: true, synthSwitching: false, synthBusy: false,
+        engineLoadStage: 'ready', status: '準備完了', transposition: previousState.transposition,
+        playbackSessionId: previousState.playbackSessionId + (previousState.midiName ? 1 : 0) })
+      this._switching = false
+      await Promise.resolve(previousBackend.dispose()).catch(() => {})
+      if (previousState.midiName) this.play()
+    } catch (error) {
+      Object.assign(this, previous, tracking)
+      this._switching = false
+      await Promise.resolve(candidate?.dispose()).catch(() => {})
+      this._autoGainController.setInitialGainDb(previousGain)
+      this._setState({ ...previousState, synthSwitching: false, synthBusy: false,
+        synthError: String(error.message || error), engineLoadStage: 'ready' })
+      throw error
+    }
+  }
+
   _cloneMidiChannelState() {
     return this._midiChannelState.map((entry) => ({ ...entry }))
   }
@@ -426,49 +549,33 @@ class SynthEngine {
       try {
         const audioEngine = getKaraokeAudioEngine()
         const context = audioEngine.ensureAudioContext()
-        await context.audioWorklet.addModule(processorUrl)
-
-        const synth = new WorkletSynthesizer(context)
-        await synth.isReady
-        const autoGainController = new AutoGainController(context, {
-          onMetrics: ({ enabled, gainDb, inputLevelDb, reductionDb }) => {
-            this._setState({
-              autoGainEnabled: enabled,
-              autoGainDb: gainDb,
-              autoGainInputDb: inputLevelDb,
-              autoGainReductionDb: reductionDb,
-            })
-          },
-        })
-        synth.connect(autoGainController.input)
-        autoGainController.connect(context.destination)
-        autoGainController.setEnabled(this._autoGainEnabled)
-
-        this._setState({
-          status: '音色ライブラリをダウンロードしています…',
-          engineLoadStage: 'soundfont-download',
-        })
-        const response = await fetch(defaultSoundFontUrl)
-        if (!response.ok) throw new Error(`SoundFont HTTP ${response.status}`)
-        const sfBuffer = await response.arrayBuffer()
-
-        this._setState({
-          status: '音色ライブラリを読み込んでいます…',
-          engineLoadStage: 'soundfont-load',
-        })
-        await synth.soundBankManager.addSoundBank(sfBuffer, 'main')
-
-        this._setState({
-          status: 'プレーヤーを準備しています…',
-          engineLoadStage: 'player',
-        })
-        const seq = new Sequencer(synth)
-        seq.loopCount = -1
-
         this._context = context
-        this._synth = synth
-        this._seq = seq
-        this._autoGainController = autoGainController
+        let backend
+        const selected = getSettingsStoreState().synthBackend || 'builtin'
+        try {
+          backend = await this._createBackend(selected, getSettingsStoreState().smuExact === true)
+        } catch (error) {
+          if (selected !== 'smu2000') throw error
+          this._setState({ synthError: `S-MU2000: ${error.message}` })
+          useSettingsStore.setState({ synthBackend: 'builtin' })
+          backend = await this._createBackend('builtin', false)
+        }
+        this._backend = backend
+        this._synth = backend.synth
+        this._seq = backend.transport
+        this._autoGainController = new AutoGainController(context, {
+          onMetrics: ({ enabled, gainDb, inputLevelDb, reductionDb }) => this._setState({
+            autoGainEnabled: enabled, autoGainDb: gainDb,
+            autoGainInputDb: inputLevelDb, autoGainReductionDb: reductionDb,
+          }),
+        })
+        this._fadeGain = context.createGain()
+        backend.output.connect(this._autoGainController.input)
+        this._autoGainController.connect(this._fadeGain)
+        this._fadeGain.connect(context.destination)
+        this._autoGainController.setEnabled(this._autoGainEnabled)
+        backend.activate?.()
+        this._publishBackend()
         this._bindSequencerEvents()
         this._setupMidiMapper()
 
@@ -476,7 +583,7 @@ class SynthEngine {
 
         this._applyChannelMuteState()
         this._subscribeChannelMuteSettings()
-        synth.eventHandler?.addEvent?.('channelAdded', 'player-channel-mute', () => {
+        this._synth.eventHandler?.addEvent?.('channelAdded', 'player-channel-mute', () => {
           this._applyChannelMuteState()
         })
 
@@ -489,6 +596,14 @@ class SynthEngine {
         })
       } catch (error) {
         this._initialized = false
+        await Promise.resolve(this._backend?.dispose()).catch(() => {})
+        this._backend = null
+        this._synth = null
+        this._seq = null
+        this._sequencerEventsBound = false
+        this._autoGainController?.setEnabled(false)
+        this._autoGainController?.disconnect()
+        this._fadeGain?.disconnect()
         this._setState({
           ready: false,
           status: 'シンセエンジンの読み込みに失敗しました',
@@ -507,7 +622,7 @@ class SynthEngine {
   }
 
   _applyDefaultEffects() {
-    if (!this._synth) return
+    if (!this._synth || this._backend?.id === 'smu2000') return
     try {
       if (Number.isFinite(DEFAULT_CONFIG.reverb)) {
         setSynthMasterParameter(this._synth, 'reverbGain', DEFAULT_CONFIG.reverb)
@@ -594,7 +709,7 @@ class SynthEngine {
           karaokeProgress = Math.min(1, Math.max(0, currentTime / duration))
         }
 
-        const isPlaying = !seq.paused && !seq.isFinished
+        const isPlaying = !seq.paused && !seq.isFinished && !this._backend?.busy
         const patch = {
           currentTime,
           duration,
@@ -647,6 +762,7 @@ class SynthEngine {
   }
 
   _bgSyncDrums(drumChannels) {
+    if (this._backend?.id === 'smu2000') return
     if (!this._synth || !drumChannels) return
     try {
       drumChannels.forEach((isDrum, channel) => {
@@ -669,6 +785,7 @@ class SynthEngine {
   _setupMidiMapper(routing = this._playbackRouting) {
     if (!this._seq || !this._synth || !this._midiMapper) return
     // Sync initial state
+    if (this._backend?.id === 'smu2000') return
     this._bgSyncDrums(this._midiMapper.getState().drumChannels)
 
     if (routing === 'direct') {
@@ -689,7 +806,7 @@ class SynthEngine {
     this._seq.eventHandler.addEvent('songChange', 'sync-playback-state', () => {
       const duration = this._seq?.duration || 0
       this._setState({ currentTime: 0, duration })
-      if (this._autoPlayOnNextSong) {
+      if (this._autoPlayOnNextSong && !this._switching) {
         this._autoPlayOnNextSong = false
         this.play()
       }
@@ -724,7 +841,7 @@ class SynthEngine {
   }
 
   _handleMidiOutputMessage(message) {
-    if (!this._synth) return
+    if (!this._synth || this._ignoreMidiOutput) return
     const event = parseMidiMessage(message, this._midiEvent)
     const events = this._midiMapper ? this._midiMapper(event) : [event]
 
@@ -871,6 +988,7 @@ class SynthEngine {
   }
 
   panic() {
+    if (this._backend?.id === 'smu2000') { this._backend.stopAll(); return }
     if (!this._synth) return
     const synth = this._synth
     const sendController =
@@ -959,10 +1077,23 @@ class SynthEngine {
     return this._referenceMidiData
   }
 
-  async loadMIDI({ buffer, midiName, midiUrl = '' }) {
+  async loadMIDI(options) {
+    if (this._switching && !options.switching) throw new Error('シンセ切り替え中です')
+    this._midiLoading = true
+    try { return await this._loadMIDI(options) } finally { this._midiLoading = false }
+  }
+
+  async _loadMIDI({ buffer, midiName, midiUrl = '' }) {
     const loadGeneration = ++this._loadGeneration
     await this.ensureInitialized()
     if (loadGeneration !== this._loadGeneration) return null
+    this._stopClock()
+    this._setState({ isPlaying: false })
+    if (this._backend?.id === 'builtin') {
+      this._ignoreMidiOutput = true
+      try { await this._backend.beginLoad() } finally { this._ignoreMidiOutput = false }
+      if (loadGeneration !== this._loadGeneration) return null
+    }
     this._setState({
       midiMapState: {
         ...(getKaraokeStoreState().midiMapState || {}),
@@ -985,11 +1116,32 @@ class SynthEngine {
             )
       if (referenceBuffer instanceof ArrayBuffer) {
         this._referenceMidiData = BasicMIDI.fromArrayBuffer(referenceBuffer, midiName)
-        const gainEstimate = estimateMidiInitialGainDb(this._referenceMidiData)
-        this._autoGainController?.setInitialGainDb(gainEstimate?.gainDb ?? 0)
+        this._autoGainController?.setInitialGainDb(this._estimateInitialGain())
       }
     } catch (error) {
       console.warn('[SynthEngine] Failed to cache reference MIDI data', error)
+    }
+
+    if (this._backend?.id === 'smu2000') {
+      if (!this._referenceMidiData) throw new Error('MIDI データを解析できませんでした。')
+      this._lastMidiBuffer = buffer.slice(0)
+      this._backend.referenceMidi = this._referenceMidiData
+      const detector = createMidiMapper(buffer).getState()
+      this._midiMapper = createMidiMapper(buffer)
+      this._midiMapper.setEnabled(false)
+      this._playbackRouting = 'direct'
+      this._playbackTelemetry = buildTelemetry(this._referenceMidiData)
+      this._telemetryPatchCursor = 0
+      this._telemetryLastTime = -1
+      await this._backend.prepare(buffer, midiName)
+      this._autoPlayOnNextSong = false
+      this._resetChannelActivity()
+      this._resetPolyphony()
+      this._applyChannelMuteState()
+      this._setState({ midiUrl, midiName, duration: this._seq.duration, currentTime: 0,
+        isPlaying: false, playbackFinished: false, status: `MIDI loaded: ${midiName}`,
+        midiMapState: withPlaybackMapState({ ...detector, drumChannels: null }, 'direct') })
+      return buffer
     }
 
     this._rebuildMidiMapper(buffer)
@@ -1101,10 +1253,9 @@ class SynthEngine {
   }
 
   async loadMidiFromUrl(url) {
+    if (this._switching) throw new Error('シンセ切り替え中です')
     this._setState({ status: `Loading MIDI: ${url}` })
-    const response = await fetch(url)
-    if (!response.ok) throw new Error(`MIDI HTTP ${response.status}`)
-    const buffer = await response.arrayBuffer()
+    const buffer = await fetchPlaybackResource(url)
     const midiName = url.split('/').pop() || url
     return this.loadMIDI({ buffer, midiName, midiUrl: url })
   }
@@ -1172,6 +1323,7 @@ class SynthEngine {
   }
 
   async playQueueFrom(index = 0) {
+    if (this._switching || this._backend?.busy) return
     // An explicit new playback abandons any failed results-page retry.
     if (!this._isAdvancingResults) this._resultsQueueAdvanced = false
     await this.ensureInitialized()
@@ -1190,32 +1342,38 @@ class SynthEngine {
     })
     const playbackSessionId = (Number(getKaraokeStoreState().playbackSessionId) || 0) + 1
     this._setState({ queueIndex: i, playbackSessionId })
-    this._applyChannelMuteState()
-    await this.loadMidiFromUrl(song.url, { autoPlay: false })
-    this._applyChannelMuteState()
+    try {
+      this._applyChannelMuteState()
+      await this.loadMidiFromUrl(song.url, { autoPlay: false })
+      this._applyChannelMuteState()
 
-    if (song.lrc) {
-      try {
-        const res = await fetch(song.lrc)
-        if (res.ok) {
-          const text = await res.text()
+      if (song.lrc) {
+        try {
+          const data = await fetchPlaybackResource(song.lrc, 8000)
+          const text = new TextDecoder().decode(data)
           setKaraokeStoreState({
             lrcName: song.lrcName || song.lrc.split('/').pop() || 'lyrics.lrc',
             lrcEntries: parseLrc(text),
           })
+        } catch {
+          // ignore
         }
-      } catch {
-        // ignore
       }
+      if (Number.isFinite(song.lrc_offset)) this.setLyricOffsetMs(song.lrc_offset)
+      this.seek(0)
+      // Loading/converting the MIDI and fetching lyrics can leave the shared
+      // AudioContext idle long enough for a browser to suspend it. This is most
+      // visible on the results-page timeout because there is no fresh user
+      // gesture to wake audio. Resume again at the actual playback boundary.
+      await this.resumeAudio()
+      this.play()
+    } catch (error) {
+      // A failed reservation must remain retryable instead of looking active.
+      if (getKaraokeStoreState().playbackSessionId === playbackSessionId) {
+        this._setState({ queueIndex: -1, isPlaying: false })
+      }
+      throw error
     }
-    if (Number.isFinite(song.lrc_offset)) this.setLyricOffsetMs(song.lrc_offset)
-    this.seek(0)
-    // Loading/converting the MIDI and fetching lyrics can leave the shared
-    // AudioContext idle long enough for a browser to suspend it. This is most
-    // visible on the results-page timeout because there is no fresh user
-    // gesture to wake audio. Resume again at the actual playback boundary.
-    await this.resumeAudio()
-    this.play()
 
   }
 
@@ -1232,7 +1390,16 @@ class SynthEngine {
   }
 
   play() {
-    if (!this._seq) return
+    if (!this._seq || this._switching || this._backend?.busy) return
+    if (this._backend?.id === 'smu2000') {
+      this._backend.play().then((started) => {
+        if (!started) return
+        this._prevFinished = false
+        this._setState({ isPlaying: true, playbackFinished: false })
+        this._startClock()
+      }).catch(() => {})
+      return
+    }
     this._seq.play()
     this._prevFinished = false
     this._setState({ isPlaying: true, playbackFinished: false })
@@ -1240,16 +1407,17 @@ class SynthEngine {
   }
 
   pause() {
-    if (!this._seq) return
+    if (!this._seq || this._switching || this._backend?.busy) return
     this._seq.pause()
     this._setState({ isPlaying: false })
     this._stopClock()
   }
 
   stop() {
-    if (!this._seq || !this._synth) return
+    if (!this._seq || !this._synth || this._switching) return
     this._seq.pause()
-    this._seq.currentTime = 0
+    if (this._backend?.id === 'smu2000') void this._backend.stop().catch(() => {})
+    else this._seq.currentTime = 0
     this._synth.stopAll(true)
     this._resetChannelActivity()
     this._resetPolyphony()
@@ -1259,6 +1427,7 @@ class SynthEngine {
   }
 
   async advanceFromResults() {
+    if (this._switching) return
     if (this._isAdvancingResults) return
     this._isAdvancingResults = true
     try {
@@ -1331,13 +1500,14 @@ class SynthEngine {
   }
 
   async stopAndAdvance(options = {}) {
+    if (this._switching) return
     await this.ensureInitialized()
     if (!this._synth || !this._seq) return
     if (this._isStopping) return
 
     this._isStopping = true
     const fadeMs = Math.max(0, Number(options.fadeMs ?? PLAYER_CONFIG.stopFadeMs))
-    const startGain = Number(getSynthMasterParameter(this._synth, 'masterGain')) || 1
+    const startGain = this._fadeGain?.gain.value ?? 1
 
     try {
       if (fadeMs > 0) {
@@ -1346,7 +1516,7 @@ class SynthEngine {
           const step = (now) => {
             const t = Math.min(1, (now - start) / fadeMs)
             const nextGain = startGain * (1 - t)
-            setSynthMasterParameter(this._synth, 'masterGain', nextGain)
+            this._fadeGain?.gain.setValueAtTime(nextGain, this._context.currentTime)
             if (t >= 1) resolve()
             else requestAnimationFrame(step)
           }
@@ -1354,11 +1524,11 @@ class SynthEngine {
 
         })
       } else {
-        setSynthMasterParameter(this._synth, 'masterGain', 0)
+        this._fadeGain?.gain.setValueAtTime(0, this._context.currentTime)
       }
 
       this.stop()
-      setSynthMasterParameter(this._synth, 'masterGain', startGain)
+      this._fadeGain?.gain.setValueAtTime(startGain, this._context.currentTime)
       await new Promise((resolve) => setTimeout(resolve, fadeMs))
       await this._advanceQueue({ autoPlayNext: true })
       const { queueIndex } = getKaraokeStoreState()
@@ -1394,19 +1564,26 @@ class SynthEngine {
   }
 
   seek(timeSeconds) {
-    if (!this._seq) return
+    if (!this._seq || this._switching) return
+    if (this._backend?.id === 'smu2000') {
+      return this._backend.seek(Math.max(0, Number(timeSeconds) || 0)).then(() => {
+        this._setState({ currentTime: this._seq.currentTime, playbackFinished: false })
+        if (!this._seq.paused) this._startClock()
+      }).catch(() => {})
+    }
     this._seq.currentTime = Math.max(0, Number(timeSeconds) || 0)
+    this._setState({ currentTime: this._seq.currentTime, playbackFinished: false })
   }
 
   setReverbGain(value) {
-    if (!this._synth) return
+    if (!this._synth || this._backend?.id === 'smu2000') return
     const v = Math.max(0, Number(value) || 0)
     setSynthMasterParameter(this._synth, 'reverbGain', v)
     this._setState({ reverbGain: v })
   }
 
   setChorusGain(value) {
-    if (!this._synth) return
+    if (!this._synth || this._backend?.id === 'smu2000') return
     const v = Math.max(0, Number(value) || 0)
     setSynthMasterParameter(this._synth, 'chorusGain', v)
     this._setState({ chorusGain: v })
@@ -1422,6 +1599,8 @@ class SynthEngine {
         : {}),
     })
   }
+
+  setSmuEq(preset, locked) { this._backend?.setEq?.(preset, locked) }
 
   setSmfKnifeMapping(text, name = '') {
     const sourceText = String(text || '')
@@ -1450,13 +1629,14 @@ class SynthEngine {
   }
 
   setTransposition(semitones) {
-    if (!this._synth) return
+    if (!this._synth || this._switching || this._backend?.busy) return
     const v = Number(semitones) || 0
     setSynthMasterParameter(this._synth, 'transposition', v)
     this._setState({ transposition: v })
   }
 
   setEnableMIDIStandardMapping(enabled) {
+    if (this._backend?.id === 'smu2000') return
     const next = Boolean(enabled)
     this._midiMapper?.setEnabled(next)
     this._setState({ enableMIDIStandardMapping: next })
@@ -1476,6 +1656,15 @@ class SynthEngine {
     this._gsOver55Engine.dispose()
     this._sc88Over55Engine.dispose()
     this._stopClock()
+    void Promise.resolve(this._backend?.dispose()).catch(() => {})
+    this._autoGainController?.setEnabled(false)
+    this._autoGainController?.disconnect()
+    this._fadeGain?.disconnect()
+    this._backend = null
+    this._seq = null
+    this._synth = null
+    this._initialized = false
+    this._sequencerEventsBound = false
   }
 
   shiftTransposition(deltaSemitones) {
@@ -1490,7 +1679,8 @@ class SynthEngine {
     for (let channel = 0; channel < 16; channel++) {
       if (channelIndex !== null && channel !== channelIndex) continue
       const muted = enabledChannels[channel] === false || (channel === 0 && !guideMelodyEnabled)
-      setSynthMidiChannelGroupMuted(this._synth, channel, muted)
+      if (this._backend?.id === 'smu2000') this._backend.setChannelMuted(channel, muted)
+      else setSynthMidiChannelGroupMuted(this._synth, channel, muted)
     }
   }
 

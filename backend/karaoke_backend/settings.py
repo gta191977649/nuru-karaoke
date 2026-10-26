@@ -78,6 +78,9 @@ STATIC_ROOT = Path(os.getenv('STATIC_ROOT', str(BASE_DIR / 'staticfiles')))
 STATICFILES_STORAGE = 'whitenoise.storage.CompressedManifestStaticFilesStorage'
 MEDIA_URL = '/media/'
 MEDIA_ROOT = Path(os.getenv('MEDIA_ROOT', str(BASE_DIR / 'media')))
+SMU2000_ROM_DIR = os.getenv(
+    'SMU2000_ROM_DIR', str(BASE_DIR.parent / 'frontend' / 'src' / 'soundfont' / 'rom'),
+)
 
 DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 
